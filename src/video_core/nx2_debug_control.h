@@ -25,7 +25,7 @@ namespace VideoCore::Nx2Debug {
 /// debug server's `switch` method, so one session can A/B it.
 [[nodiscard]] inline int EnvSwitch(const char* name) {
     const char* value = std::getenv(name);
-    return value == nullptr ? 0 : value[0] - '0';
+    return value == nullptr ? 0 : std::atoi(value); // whole number: EDEN_NX2_DMA_SNAPSHOT=10
 }
 /// The switch's value, read from the environment on first use (-1: not read yet). Static
 /// initialization ran before the frontend applied nx2_switches.txt, so those settings were lost.

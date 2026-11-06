@@ -1460,7 +1460,10 @@ void Maxwell3D::FrontDmaRead(VideoCommon::GpuSplit& split, FrontState& fs, u32 m
                     }
                     memory_manager.ReadBlockUnsafe(source, snap_words.data(), read_bytes);
                 }
-                if (((hits + misses) & 0x3ffff) == 0) {
+                static auto last_log = std::chrono::steady_clock::now();
+                if (const auto now = std::chrono::steady_clock::now();
+                    now - last_log >= std::chrono::seconds{5}) {
+                    last_log = now;
                     LOG_INFO(HW_GPU,
                              "DMA snapshot: {} reads skipped the drain, {} drained, {} differed, "
                              "{} reads of listed reports (drained path); misses: {} new page, {} "
