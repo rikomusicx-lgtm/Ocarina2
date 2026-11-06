@@ -61,6 +61,10 @@ inline std::atomic<int> g_loop_skip{-1};
 /// reads), 10 = on and verify every skipped read against the drained path, 0 = off.
 inline std::atomic<int> g_dma_snapshot{-1};
 
+/// EDEN_NX2_HOST_PACE: the host frame pacer (vk_host_pacer.h). 1 = on (default), 0 = only
+/// measure how long each frame was shown.
+inline std::atomic<int> g_host_pace{-1};
+
 /// The live switch called `name`, or null.
 [[nodiscard]] inline std::atomic<int>* FindSwitch(std::string_view name) {
     if (name == "EDEN_NX2_DMA_WAIT_WRITERS") {
@@ -77,6 +81,9 @@ inline std::atomic<int> g_dma_snapshot{-1};
     }
     if (name == "EDEN_NX2_LOOP_SKIP") {
         return &g_loop_skip;
+    }
+    if (name == "EDEN_NX2_HOST_PACE") {
+        return &g_host_pace;
     }
     return nullptr;
 }
