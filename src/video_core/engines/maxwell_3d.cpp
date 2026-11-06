@@ -1376,7 +1376,8 @@ void Maxwell3D::FrontDmaRead(VideoCommon::GpuSplit& split, FrontState& fs, u32 m
     // (GpuSplit::MayBeWrittenSince) and the query cache lists no report there. 10 also drains,
     // reads again and logs differences.
     const int snapshot_mode =
-        VideoCore::Nx2Debug::SwitchValue(VideoCore::Nx2Debug::g_dma_snapshot, "EDEN_NX2_DMA_SNAPSHOT");
+        VideoCore::Nx2Debug::SwitchValue(VideoCore::Nx2Debug::g_dma_snapshot, "EDEN_NX2_DMA_SNAPSHOT",
+                                         9);
     const auto flush_queries = [&](GPUVAddr begin, size_t bytes) {
         split.Run(
             [memory = &memory_manager, begin, bytes] {
