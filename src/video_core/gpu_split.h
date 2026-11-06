@@ -3,9 +3,12 @@
 
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <atomic>
+#include <cstdlib>
 #include <cstring>
+#include <deque>
 #include <functional>
 #include <memory>
 #include <thread>
@@ -46,6 +49,78 @@ inline constexpr std::array<const char*, static_cast<size_t>(DrainSite::Count)> 
     "other",       "fetch drain",     "acquire",    "semaphore flush", "fence release",
     "list writers", "list sync",      "list flush", "macro dma read",  "macro dma flush",
     "gp sync fence", "map",           "front start", "front verify",
+};
+
+/// Front-thread-only record of the GPU-VA ranges that work still queued in the ring may write.
+/// A front read that overlaps none of them needs no wait; one that overlaps waits only until the
+/// newest overlapping entry has run. Positions are ring word positions (the value of
+/// `write_position` right after the writing entry was committed), so they compare directly with
+/// the back's `consumed`. The back never touches this; it only publishes `consumed`.
+class PendingWriteTracker {
+public:
+    /// Size meaning "this entry may write anywhere": a barrier for every later read.
+    static constexpr u64 UnknownExtent = ~u64{0};
+
+    struct Stats {
+        u64 checks{};
+        u64 skipped{}; ///< Nothing pending overlaps: no wait needed
+        u64 partial{}; ///< Needs a wait, but only up to an older position than the newest entry
+        u64 full{};    ///< Needs everything queued
+    };
+
+    /// Front: right after committing an entry that may write [gpu_va, gpu_va + size).
+    void NoteWrite(u64 position, GPUVAddr gpu_va, u64 size) {
+        if (size == UnknownExtent) {
+            last_unknown = position;
+            return;
+        }
+        pending.push_back({position, gpu_va, size});
+        if (pending.size() > MaxPending) [[unlikely]] {
+            // Too many to scan: collapse them into one barrier (always safe, just coarser).
+            last_unknown = pending.back().position;
+            pending.clear();
+        }
+    }
+
+    /// Front: the position the back must have consumed before the front reads
+    /// [gpu_va, gpu_va + size), or 0 when no wait is needed.
+    u64 RequiredPosition(GPUVAddr gpu_va, u64 size, u64 consumed_now, u64 newest_position) {
+        while (!pending.empty() && pending.front().position <= consumed_now) {
+            pending.pop_front();
+        }
+        ++stats.checks;
+        u64 need = last_unknown > consumed_now ? last_unknown : 0;
+        for (const Entry& entry : pending) {
+            if (entry.position > need && entry.begin < gpu_va + size &&
+                gpu_va < entry.begin + entry.size) {
+                need = entry.position;
+            }
+        }
+        if (need == 0) {
+            ++stats.skipped;
+        } else if (need < newest_position) {
+            ++stats.partial;
+        } else {
+            ++stats.full;
+        }
+        return need;
+    }
+
+    [[nodiscard]] const Stats& GetStats() const {
+        return stats;
+    }
+
+private:
+    struct Entry {
+        u64 position;
+        u64 begin;
+        u64 size;
+    };
+    static constexpr size_t MaxPending = 4096;
+
+    std::deque<Entry> pending;
+    u64 last_unknown{};
+    Stats stats;
 };
 
 // Splits the GPU thread in two (NX2_GPU_THREAD_SPLIT.md). The GPU thread (the front) takes the
@@ -158,9 +233,11 @@ public:
     /// Waits until the back executed everything sent so far.
     void Drain(DrainSite site = DrainSite::Other);
 
-    /// Compute or copy work was just sent: what can write GPU-written command lists.
+    /// Compute or copy work was just sent: what can write GPU-written command lists. Also a
+    /// barrier for range-aware waits: where these write is not known to the front.
     void NoteWriter() {
         last_writer_position = write_position;
+        write_tracker.NoteWrite(write_position, 0, PendingWriteTracker::UnknownExtent);
     }
     /// Waits until the back executed the compute and copy work sent so far (not what came after).
     /// Returns whether any of it was still queued.
@@ -174,6 +251,55 @@ public:
     /// Waits until the back executed the work sent before the last NoteSync. Returns whether any
     /// of it was still queued.
     bool WaitForSync();
+
+    // --- Range-aware waits (EDEN_NX2_RANGE_SYNC) ---------------------------------------------
+    //
+    // Front thread only. Call NoteMemoryWrite right AFTER committing an entry that writes guest
+    // memory the front can name (a decoded semaphore release, a copy or inline-upload
+    // destination); entries whose destination is not known must call NoteWriter() (barrier).
+    // Every kind of entry that can write guest memory must do one or the other before
+    // EDEN_NX2_RANGE_SYNC=1 is safe: an unmarked writer lets a read skip a wait it needed.
+    //
+    // Without EDEN_NX2_RANGE_SYNC=1 WaitForRange is stats-only: it computes what it would have
+    // done, counts it (RangeSyncStats), then drains as before.
+
+    /// The entry just committed may write [gpu_va, gpu_va + size).
+    void NoteMemoryWrite(GPUVAddr gpu_va, u64 size) {
+        write_tracker.NoteWrite(write_position, gpu_va, size);
+    }
+
+    /// Waits for the back as far as a front read of [gpu_va, gpu_va + size) needs. Returns whether
+    /// it waited at all. Replaces a Drain(site) at the read sites that name their range
+    /// (MacroDmaRead, Acquire); the cache flush sites (MacroDmaFlush, SemaphoreFlush) still need
+    /// the full Drain because the back's caches hold GPU-written data the front cannot see.
+    bool WaitForRange(GPUVAddr gpu_va, u64 size, DrainSite site) {
+        if (on_back_thread || !active) {
+            return false;
+        }
+        const u64 need = write_tracker.RequiredPosition(
+            gpu_va, size, consumed.load(std::memory_order_acquire), write_position);
+        if (!RangeSyncEnabled()) {
+            Drain(site);
+            return true;
+        }
+        if (need == 0) {
+            return false;
+        }
+        Publish();
+        WaitFor(need, site);
+        return true;
+    }
+
+    [[nodiscard]] const PendingWriteTracker::Stats& RangeSyncStats() const {
+        return write_tracker.GetStats();
+    }
+    [[nodiscard]] static bool RangeSyncEnabled() {
+        static const bool enabled = [] {
+            const char* const value = std::getenv("EDEN_NX2_RANGE_SYNC");
+            return value != nullptr && value[0] == '1';
+        }();
+        return enabled;
+    }
 
 private:
     friend struct GpuSplitTestAccess;
@@ -252,6 +378,8 @@ private:
     /// Words between publishes: small right after a drain, while the back has nothing to do.
     size_t publish_every{PublishEvery};
     Tegra::Engines::EngineInterface* front_engine{};
+    /// Ranges the queued entries may still write (front thread only).
+    PendingWriteTracker write_tracker;
 
     // Back side.
     Tegra::Engines::EngineInterface* back_engine{};
