@@ -139,6 +139,14 @@ public:
         return false;
     }
 
+    /// Whether the query cache still lists a report in the range (pending host results, or
+    /// written and not unregistered yet). Takes only the query cache mutex: callable from the
+    /// split front. Conservative (true) where not implemented.
+    [[nodiscard]] virtual bool HasCachedReports([[maybe_unused]] DAddr addr,
+                                                [[maybe_unused]] u64 size) {
+        return true;
+    }
+
     /// Notify rasterizer that any caches of the specified region should be invalidated
     virtual void InvalidateRegion(DAddr addr, u64 size,
                                   VideoCommon::CacheType which = VideoCommon::CacheType::All) = 0;

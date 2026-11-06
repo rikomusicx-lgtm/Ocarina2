@@ -473,9 +473,15 @@ void DmaPusher::CallMethod(u32 argument) {
         const auto engine_type = subchannel_type[dma_state.subchannel];
         const bool writer = split.Active() &&
                             IsMemoryWriter(*subchannel, engine_type, dma_state.method);
+        // Copies and blits (MaxwellDMA / Fermi2D) are GPU work the front's reads still wait for.
+        const bool memory_writer = split.Active() &&
+                                   (engine_type == Engines::EngineTypes::KeplerMemory ||
+                                    engine_type == Engines::EngineTypes::Fermi2D);
         SCOPE_EXIT {
             if (writer) {
                 split.NoteWriter();
+            } else if (memory_writer) {
+                split.NoteUnrangedWriter();
             }
         };
         if (split.Active()) {
@@ -531,9 +537,15 @@ void DmaPusher::CallMultiMethod(const u32* base_start, u32 num_methods) {
         const auto engine_type = subchannel_type[dma_state.subchannel];
         const bool writer = split.Active() &&
                             IsMemoryWriter(*subchannel, engine_type, dma_state.method);
+        // Copies and blits (MaxwellDMA / Fermi2D) are GPU work the front's reads still wait for.
+        const bool memory_writer = split.Active() &&
+                                   (engine_type == Engines::EngineTypes::KeplerMemory ||
+                                    engine_type == Engines::EngineTypes::Fermi2D);
         SCOPE_EXIT {
             if (writer) {
                 split.NoteWriter();
+            } else if (memory_writer) {
+                split.NoteUnrangedWriter();
             }
         };
         if (split.Active()) {
