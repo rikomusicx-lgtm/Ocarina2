@@ -1,0 +1,122 @@
+diff --git a/src/joystick/hidapi/SDL_hidapi_switch2.c b/src/joystick/hidapi/SDL_hidapi_switch2.c
+index 773405c..1e22210 100644
+--- a/src/joystick/hidapi/SDL_hidapi_switch2.c
++++ b/src/joystick/hidapi/SDL_hidapi_switch2.c
+@@ -107,6 +107,9 @@ typedef struct
+     Uint16 rumble_lo_freq;
+     Uint32 rumble_error;
+     bool rumble_updated;
++    bool rumble_hd;
++    Uint16 rumble_hd_data[8];
++    Uint64 rumble_hd_expiration;
+ 
+     Switch2_StickCalibration left_stick;
+     Switch2_StickCalibration right_stick;
+@@ -624,9 +627,10 @@ static bool HIDAPI_DriverSwitch2_RumbleJoystick(SDL_HIDAPI_Device *device, SDL_J
+ {
+     SDL_DriverSwitch2_Context *ctx = (SDL_DriverSwitch2_Context *)device->context;
+ 
+-    if (low_frequency_rumble != ctx->rumble_lo_amp || high_frequency_rumble != ctx->rumble_hi_amp) {
++    if (ctx->rumble_hd || low_frequency_rumble != ctx->rumble_lo_amp || high_frequency_rumble != ctx->rumble_hi_amp) {
+         ctx->rumble_lo_amp = low_frequency_rumble;
+         ctx->rumble_hi_amp = high_frequency_rumble;
++        ctx->rumble_hd = false;
+         ctx->rumble_updated = true;
+     }
+ 
+@@ -654,9 +658,29 @@ static bool HIDAPI_DriverSwitch2_SetJoystickLED(SDL_HIDAPI_Device *device, SDL_J
+     return SDL_Unsupported();
+ }
+ 
++/* HD rumble: 8 Uint16, high frequency, high amplitude, low frequency, low amplitude for the
++ * left motor, then the same for the right one. Frequencies are the controller's 10-bit codes,
++ * amplitudes are 0-65535 like SDL_RumbleGamepad() and go out as their top 10 bits.
++ * A Joy-Con uses the set for its side. Plain rumble calls turn this off again. Like
++ * SDL_RumbleGamepad(), an effect stops on its own 2 seconds after the last call.
++ */
+ static bool HIDAPI_DriverSwitch2_SendJoystickEffect(SDL_HIDAPI_Device *device, SDL_Joystick *joystick, const void *data, int size)
+ {
+-    return SDL_Unsupported();
++    SDL_DriverSwitch2_Context *ctx = (SDL_DriverSwitch2_Context *)device->context;
++    const Uint16 *values = (const Uint16 *)data;
++
++    if (device->product_id == USB_PRODUCT_NINTENDO_SWITCH2_GAMECUBE_CONTROLLER ||
++        size != (int)sizeof(ctx->rumble_hd_data)) {
++        return SDL_Unsupported();
++    }
++
++    SDL_memcpy(ctx->rumble_hd_data, values, sizeof(ctx->rumble_hd_data));
++    ctx->rumble_hd = (values[1] || values[3] || values[5] || values[7]);
++    ctx->rumble_hd_expiration = SDL_GetTicks() + 2000;
++    ctx->rumble_lo_amp = 0;
++    ctx->rumble_hi_amp = 0;
++    ctx->rumble_updated = true;
++    return true;
+ }
+ 
+ static bool HIDAPI_DriverSwitch2_SetJoystickSensorsEnabled(SDL_HIDAPI_Device *device, SDL_Joystick *joystick, bool enabled)
+@@ -1037,9 +1061,24 @@ static void EncodeHDRumble(Uint16 high_freq, Uint16 high_amp, Uint16 low_freq, U
+     rumble_data[4] = (Uint8)(low_amp >> 8);
+ }
+ 
++static void EncodeHDRumbleMotor(const Uint16 *values, Uint8 rumble_data[16])
++{
++    // Three 5 ms samples per report, all the same here
++    for (int i = 0; i < 3; ++i) {
++        EncodeHDRumble(values[0], values[1], values[2], values[3], &rumble_data[1 + i * 5]);
++    }
++}
++
+ static bool UpdateRumble(SDL_DriverSwitch2_Context *ctx)
+ {
+-    if (!ctx->rumble_updated && !ctx->rumble_lo_amp && !ctx->rumble_hi_amp) {
++    if (ctx->rumble_hd && SDL_GetTicks() >= ctx->rumble_hd_expiration) {
++        ctx->rumble_hd = false;
++        ctx->rumble_updated = true;
++    }
++
++    bool active = (ctx->rumble_hd || ctx->rumble_lo_amp || ctx->rumble_hi_amp);
++
++    if (!ctx->rumble_updated && !active) {
+         return true;
+     }
+ 
+@@ -1071,6 +1110,29 @@ static bool UpdateRumble(SDL_DriverSwitch2_Context *ctx)
+                 ctx->rumble_error -= rumble_max;
+             }
+         }
++    } else if (ctx->rumble_hd) {
++        const Uint16 *left = &ctx->rumble_hd_data[0];
++        const Uint16 *right = &ctx->rumble_hd_data[4];
++        rumble_data[0x01] = 0x50 | (ctx->rumble_seq & 0xf);
++        switch (ctx->device->product_id) {
++        case USB_PRODUCT_NINTENDO_SWITCH2_JOYCON_LEFT:
++        case USB_PRODUCT_NINTENDO_SWITCH2_JOYCON_RIGHT:
++            if (ctx->device->parent) {
++                interval *= 2;
++            }
++            rumble_data[0] = 0x1;
++            EncodeHDRumbleMotor(ctx->device->product_id == USB_PRODUCT_NINTENDO_SWITCH2_JOYCON_RIGHT ? right : left, &rumble_data[0x01]);
++            break;
++        case USB_PRODUCT_NINTENDO_SWITCH2_PRO:
++            rumble_data[0] = 0x2;
++            EncodeHDRumbleMotor(left, &rumble_data[0x01]);
++            rumble_data[0x11] = rumble_data[0x01];
++            EncodeHDRumbleMotor(right, &rumble_data[0x11]);
++            break;
++        default:
++            EncodeHDRumbleMotor(left, &rumble_data[0x01]);
++            break;
++        }
+     } else {
+         // Rumble can get so strong that it might be dangerous to the controller...
+         // This is a game controller, not a massage device, so let's clamp it somewhat
+@@ -1095,7 +1157,7 @@ static bool UpdateRumble(SDL_DriverSwitch2_Context *ctx)
+     }
+     ctx->rumble_seq++;
+     ctx->rumble_updated = false;
+-    if (!ctx->rumble_lo_amp && !ctx->rumble_hi_amp) {
++    if (!active) {
+         ctx->rumble_timestamp = 0;
+     } else {
+         if (!ctx->rumble_timestamp) {

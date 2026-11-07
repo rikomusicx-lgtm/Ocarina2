@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <numbers>
 #include "common/logging.h"
 #include "common/math_util.h"
@@ -27,6 +28,17 @@ Common::UUID GetGUID(SDL_Joystick* joystick) {
 }
 
 using GamepadBindings = std::vector<SDL_GamepadBinding>;
+
+// Switch 2 HD rumble frequency codes are 10 Hz * 2^(code / 96), the same for both motors
+// (measured on a Switch 2 Pro Controller through its IMU)
+u16 Switch2FrequencyCode(f32 hz) {
+    const f32 code = 96.0f * std::log2(std::max(hz, 10.0f) / 10.0f);
+    return static_cast<u16>(std::min(code + 0.5f, 1023.0f));
+}
+
+u16 Switch2Amplitude(f32 amplitude) {
+    return static_cast<u16>(std::clamp(amplitude, 0.0f, 1.0f) * 0xFFFF);
+}
 
 SDL_GamepadBinding EmptyBinding() {
     SDL_GamepadBinding binding{};
@@ -232,7 +244,30 @@ public:
         return false;
     }
 
+    bool IsSwitch2Pro() const {
+        constexpr Uint16 nintendo_vendor_id = 0x057E;
+        constexpr Uint16 switch2_pro_product_id = 0x2069;
+        return sdl_controller && SDL_GetGamepadVendor(sdl_controller.get()) == nintendo_vendor_id &&
+               SDL_GetGamepadProduct(sdl_controller.get()) == switch2_pro_product_id;
+    }
+
+    // The two motors arrive in separate calls; SDL takes both in one effect
+    bool Switch2RumblePlay(bool right, const Common::Input::VibrationStatus& vibration) {
+        std::scoped_lock lock{switch2_rumble_mutex};
+        const std::size_t offset = right ? 4 : 0;
+        switch2_rumble[offset + 0] = Switch2FrequencyCode(vibration.high_frequency);
+        switch2_rumble[offset + 1] = Switch2Amplitude(vibration.high_amplitude);
+        switch2_rumble[offset + 2] = Switch2FrequencyCode(vibration.low_frequency);
+        switch2_rumble[offset + 3] = Switch2Amplitude(vibration.low_amplitude);
+        return SDL_SendGamepadEffect(sdl_controller.get(), switch2_rumble.data(),
+                                     static_cast<int>(sizeof(switch2_rumble)));
+    }
+
     bool HasHDRumble() const {
+        if (IsSwitch2Pro()) {
+            return true;
+        }
+
         constexpr Uint16 valve_vendor_id = 0x28DE;
         const auto is_known_hd_type = [](SDL_GamepadType type) {
             return type == SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO ||
@@ -405,6 +440,9 @@ private:
     std::unique_ptr<SDL_Joystick, decltype(&SDL_CloseJoystick)> sdl_joystick;
     std::unique_ptr<SDL_Gamepad, decltype(&SDL_CloseGamepad)> sdl_controller;
     mutable std::mutex mutex;
+
+    std::mutex switch2_rumble_mutex;
+    std::array<u16, 8> switch2_rumble{};
 
     u64 last_motion_update{};
     static constexpr std::size_t InitialMotionRestartThreshold = 200;
@@ -789,6 +827,13 @@ Common::Input::DriverResult SDLDriver::SetVibration(
     const PadIdentifier& identifier, const Common::Input::VibrationStatus& vibration) {
     const auto joystick =
         GetSDLJoystickByGUID(identifier.guid.RawString(), static_cast<int>(identifier.port));
+
+    // Switch 2 Pro Controller: frequencies and amplitudes go to the pad as they are
+    if (joystick && joystick->IsSwitch2Pro() &&
+        joystick->Switch2RumblePlay(identifier.pad == 1, vibration)) {
+        return Common::Input::DriverResult::Success;
+    }
+
     const auto process_amplitude_exp = [](f32 amplitude, f32 factor) {
         return (amplitude + std::pow(amplitude, factor)) * 0.5f * 0xFFFF;
     };
