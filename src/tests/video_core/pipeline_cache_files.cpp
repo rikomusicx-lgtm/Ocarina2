@@ -95,7 +95,7 @@ TEST_CASE("Task and mesh disk environments roundtrip all translation state and r
     VideoCommon::LoadPipelines(
         {}, path, VideoCommon::VulkanPipelineCacheVersion,
         [](std::ifstream&, VideoCommon::FileEnvironment) { FAIL("Unexpected compute record"); },
-        [&](std::ifstream& file, std::vector<VideoCommon::FileEnvironment> envs) {
+        [&](std::ifstream& file, std::vector<VideoCommon::FileEnvironment> envs, std::streampos) {
             const std::array stages{Shader::Stage::Task, Shader::Stage::Mesh,
                                     Shader::Stage::Fragment};
             REQUIRE(read < stages.size());
@@ -142,7 +142,7 @@ TEST_CASE("Compatible v52 pipelines migrate without changing or discarding the o
     VideoCommon::LoadPipelines(
         {}, current, VideoCommon::VulkanPipelineCacheVersion,
         [](std::ifstream&, VideoCommon::FileEnvironment) { FAIL("Unexpected compute record"); },
-        [&](std::ifstream& file, std::vector<VideoCommon::FileEnvironment> restored) {
+        [&](std::ifstream& file, std::vector<VideoCommon::FileEnvironment> restored, std::streampos) {
             REQUIRE(restored.size() == 1);
             REQUIRE(restored.front().ShaderStage() == Shader::Stage::Fragment);
             u64 restored_key{};
@@ -197,7 +197,7 @@ TEST_CASE("Truncated mesh state is rejected before a pipeline can be queued",
     VideoCommon::LoadPipelines(
         {}, path, VideoCommon::VulkanPipelineCacheVersion,
         [](std::ifstream&, VideoCommon::FileEnvironment) { FAIL("Unexpected compute record"); },
-        [](std::ifstream&, std::vector<VideoCommon::FileEnvironment>) {
+        [](std::ifstream&, std::vector<VideoCommon::FileEnvironment>, std::streampos) {
             FAIL("Incomplete mesh state reached pipeline creation");
         });
     REQUIRE_FALSE(std::filesystem::exists(path));
@@ -217,7 +217,7 @@ TEST_CASE("Cancelled mesh loading preserves its disk cache and queues no work",
     VideoCommon::LoadPipelines(
         stop.get_token(), path, VideoCommon::VulkanPipelineCacheVersion,
         [](std::ifstream&, VideoCommon::FileEnvironment) { FAIL("Unexpected compute record"); },
-        [](std::ifstream&, std::vector<VideoCommon::FileEnvironment>) {
+        [](std::ifstream&, std::vector<VideoCommon::FileEnvironment>, std::streampos) {
             FAIL("Cancelled load reached pipeline creation");
         });
     REQUIRE(ReadAll(path) == before);
