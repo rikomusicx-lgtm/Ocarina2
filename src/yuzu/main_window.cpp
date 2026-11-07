@@ -2008,7 +2008,8 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
                "Vulkan, 1x resolution, GPU Low, asynchronous shaders, BC3, conservative VRAM, "
                "GPU video decoding, bilinear scaling, no AA or post-processing, reactive "
                "flushing off, the built-in Dynamic FPS patch, and preflushing GPU-written "
-               "memory for fewer frame stalls. Max Resolution stays on by default so the game "
+               "memory for fewer frame stalls. Built-in optical-flow frame generation (2x, "
+               "capped at 60 Hz) is enabled. Max Resolution stays on by default so the game "
                "renders at 1080p.\n\n"
                "These settings apply until Lichii is closed. Your saved settings are not "
                "changed."),
