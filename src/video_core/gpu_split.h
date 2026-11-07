@@ -13,6 +13,7 @@
 #include <memory>
 #include <thread>
 #include <type_traits>
+#include <unordered_map>
 
 #include "common/common_types.h"
 
@@ -496,6 +497,7 @@ private:
     };
     std::array<PendingWrite, 8192> pending_writes{};
     u64 pending_write_count{};
+    std::unordered_map<u64, u64> async_writes; ///< Front: 16-byte slot -> ring position
     u64 last_sync_position{};
     u64 published_local{};
     u64 consumed_cache{};
