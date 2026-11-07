@@ -1035,11 +1035,40 @@ ButtonBindings SDLDriver::GetDefaultButtonBinding(
         srr_button = SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1;
     }
 
+    auto a_button = SDL_GAMEPAD_BUTTON_EAST;
+    auto b_button = SDL_GAMEPAD_BUTTON_SOUTH;
+    auto x_button = SDL_GAMEPAD_BUTTON_NORTH;
+    auto y_button = SDL_GAMEPAD_BUTTON_WEST;
+
+    // GameCube pads are laid out differently, go by the printed letters
+    auto* gamepad = joystick->GetSDLGameController();
+    if (gamepad && SDL_GetGamepadType(gamepad) == SDL_GAMEPAD_TYPE_GAMECUBE) {
+        for (int i = SDL_GAMEPAD_BUTTON_SOUTH; i <= SDL_GAMEPAD_BUTTON_NORTH; i++) {
+            const auto button = static_cast<SDL_GamepadButton>(i);
+            switch (SDL_GetGamepadButtonLabel(gamepad, button)) {
+            case SDL_GAMEPAD_BUTTON_LABEL_A:
+                a_button = button;
+                break;
+            case SDL_GAMEPAD_BUTTON_LABEL_B:
+                b_button = button;
+                break;
+            case SDL_GAMEPAD_BUTTON_LABEL_X:
+                x_button = button;
+                break;
+            case SDL_GAMEPAD_BUTTON_LABEL_Y:
+                y_button = button;
+                break;
+            default:
+                break;
+            }
+        }
+    }
+
     return {
-        std::pair{Settings::NativeButton::A, SDL_GAMEPAD_BUTTON_EAST},
-        {Settings::NativeButton::B, SDL_GAMEPAD_BUTTON_SOUTH},
-        {Settings::NativeButton::X, SDL_GAMEPAD_BUTTON_NORTH},
-        {Settings::NativeButton::Y, SDL_GAMEPAD_BUTTON_WEST},
+        std::pair{Settings::NativeButton::A, a_button},
+        {Settings::NativeButton::B, b_button},
+        {Settings::NativeButton::X, x_button},
+        {Settings::NativeButton::Y, y_button},
         {Settings::NativeButton::LStick, SDL_GAMEPAD_BUTTON_LEFT_STICK},
         {Settings::NativeButton::RStick, SDL_GAMEPAD_BUTTON_RIGHT_STICK},
         {Settings::NativeButton::L, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER},

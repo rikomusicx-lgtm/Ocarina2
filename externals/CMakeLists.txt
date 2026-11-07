@@ -141,7 +141,20 @@ if(ENABLE_CUBEB)
     endif()
 endif()
 
-if (NOT YUZU_USE_BUNDLED_SDL3)
+# The CI SDL3 has no libusb, so no Switch 2 controller driver
+if (NOT YUZU_USE_BUNDLED_SDL3 OR WIN32)
+    if (WIN32)
+        set(SDL_SHARED OFF)
+        set(SDL_STATIC ON)
+        set(SDL_TEST_LIBRARY OFF)
+        set(SDL_HIDAPI_LIBUSB ON)
+        # linked, not loaded at runtime, so the MinGW packaging step copies libusb-1.0.dll
+        set(SDL_HIDAPI_LIBUSB_SHARED OFF)
+        # our Findlibusb.cmake would shadow SDL's FindLibUSB.cmake
+        set(_module_path ${CMAKE_MODULE_PATH})
+        list(REMOVE_ITEM CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/CMakeModules/find)
+    endif()
+
     if (NOT WIN32)
         # Yuzu itself needs: Atomic Audio Events Joystick Haptic Sensor Threads Timers
         # Since 2.0.18 Atomic+Threads required for HIDAPI/libusb (see https://github.com/libsdl-org/SDL/issues/5095)
@@ -163,6 +176,10 @@ if (NOT YUZU_USE_BUNDLED_SDL3)
     endif()
 
     AddJsonPackage(sdl3)
+
+    if (WIN32)
+        set(CMAKE_MODULE_PATH ${_module_path})
+    endif()
 else()
     message(STATUS "Using bundled SDL3")
     AddJsonPackage(sdl3-ci)
