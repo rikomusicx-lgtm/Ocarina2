@@ -6,7 +6,6 @@
 #include <exception>
 #include <memory>
 #include <mutex>
-#include <ranges>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -84,9 +83,7 @@ public:
         started = true;
         workers.reset(new Common::ThreadWorker(threads, "VkPipelinePrebuild", {},
                                                Common::ThreadPlacement::Background));
-        // Newest first: the cache file appends, so the end holds what the latest sessions
-        // found, which the game is likelier to need soon than its oldest entries.
-        for (auto& task : std::views::reverse(tasks)) {
+        for (auto& task : tasks) {
             workers->QueueWork(std::move(task));
         }
         tasks.clear();
