@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <cstdlib>
 #include "core/hle/service/cmif_types.h"
 #include "core/hle/service/nx2_stub_interface.h"
 #include "core/hle/service/service.h"
@@ -29,8 +30,14 @@ private:
     // The reply is 12 bytes; only the first word (the scale) is known. The other two used to be
     // left to the message buffer's leftovers.
     Result GetCurrentGraphicsScale(Out<u32> out_scale, Out<u32> out_unknown1, Out<u32> out_unknown2) {
-        LOG_WARNING(Service_AM, "(STUBBED) called, returning 10");
-        *out_scale = 10;
+        // EDEN_NX2_GRAPHICS_SCALE=<10|20|30> overrides the reported scale for A/B testing; the
+        // game reads it once at boot to pick its internal render scale.
+        u32 scale = 10;
+        if (const char* forced = std::getenv("EDEN_NX2_GRAPHICS_SCALE")) {
+            scale = static_cast<u32>(std::strtoull(forced, nullptr, 0));
+        }
+        LOG_WARNING(Service_AM, "(STUBBED) called, returning {}", scale);
+        *out_scale = scale;
         *out_unknown1 = 0;
         *out_unknown2 = 0;
         R_SUCCEED();
