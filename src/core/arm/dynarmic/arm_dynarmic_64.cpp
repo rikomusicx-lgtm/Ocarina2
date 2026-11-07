@@ -369,12 +369,14 @@ void ArmDynarmic64::MakeJit(Common::PageTable* page_table, std::size_t address_s
             return value == nullptr || value[0] != '0';
         }();
         if (allow_inline) {
-            config.inline_cntpct_tsc_base = Common::g_wall_clock.base_rdtsc;
+            // This fork's x86_64 WallClock reads raw RDTSC in both paths (GetUptime returns it
+            // unanchored), so the inline-TSC epoch base is zero and matches GetCNTPCT exactly.
+            config.inline_cntpct_tsc_base = 0;
             config.inline_cntpct_tsc_factor =
                 Common::g_wall_clock.cntpct_rdtsc_factor.load(std::memory_order_relaxed);
             if (ShouldPauseCntpctSpins()) {
                 config.inline_cntpct_last_ptr = &m_cb->m_last_cntpct;
-                config.inline_cntpct_spin_ticks = m_cb->m_spin_ticks;
+                config.inline_cntpct_spin_ticks = static_cast<std::uint32_t>(m_cb->m_spin_ticks);
             }
         }
     }

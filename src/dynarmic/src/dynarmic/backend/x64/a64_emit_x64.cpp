@@ -566,8 +566,11 @@ void A64EmitX64::EmitA64GetCNTPCT(A64EmitContext& ctx, IR::Inst* inst) {
         code.rdtsc();
         code.shl(rdx_reg, 32);
         code.or_(rax_reg, rdx_reg);
-        code.mov(tmp, conf.inline_cntpct_tsc_base);
-        code.sub(rax_reg, tmp);
+        code.mul(tmp);
+        if (conf.inline_cntpct_tsc_base != 0) {
+            code.mov(tmp, conf.inline_cntpct_tsc_base);
+            code.sub(rax_reg, tmp);
+        }
         code.mov(tmp, conf.inline_cntpct_tsc_factor);
         code.mul(tmp);
         if (conf.inline_cntpct_last_ptr != nullptr && conf.inline_cntpct_spin_ticks != 0) {
