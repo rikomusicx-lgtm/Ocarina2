@@ -147,20 +147,31 @@ void MeshEpilogue(EmitContext& ctx) {
         }
     }
     const u32 primitive_lines{static_cast<u32>(mesh.primitive_lines.size())};
+    const u32 primitive_index_count{mesh.topology == 0 ? 1U : mesh.topology == 1 ? 2U : 3U};
     for (u32 first = 0; first < mesh.max_primitives; first += threads) {
         const Id primitive{ctx.OpIAdd(ctx.U32[1], invocation, ctx.Const(first))};
         If(ctx, ctx.OpULessThan(ctx.U1, primitive, count), [&] {
-            // Vertex indices: map bytes 4 + 3 * primitive.
-            const Id byte{ctx.OpIAdd(ctx.U32[1], ctx.OpIMul(ctx.U32[1], primitive, ctx.Const(3U)),
+            // Vertex indices: map bytes 4 + indices-per-primitive * primitive.
+            const Id byte{ctx.OpIAdd(ctx.U32[1],
+                                     ctx.OpIMul(ctx.U32[1], primitive, ctx.Const(primitive_index_count)),
                                      ctx.Const(4U))};
             std::array<Id, 3> indices;
-            for (u32 element = 0; element < 3; ++element) {
+            for (u32 element = 0; element < primitive_index_count; ++element) {
                 const Id address{ctx.OpIAdd(ctx.U32[1], byte, ctx.Const(element))};
                 indices[element] = ctx.OpLoad(ctx.U32[1], SharedWord(ctx, ctx.mesh_map, address));
             }
-            const Id output_indices{ctx.TypePointer(spv::StorageClass::Output, ctx.U32[3])};
-            ctx.OpStore(ctx.OpAccessChain(output_indices, ctx.mesh_primitive_indices, primitive),
-                        ctx.OpCompositeConstruct(ctx.U32[3], std::span<const Id>(indices)));
+            if (primitive_index_count == 1) {
+                const Id output_index{ctx.TypePointer(spv::StorageClass::Output, ctx.U32[1])};
+                ctx.OpStore(ctx.OpAccessChain(output_index, ctx.mesh_primitive_indices, primitive),
+                            indices[0]);
+            } else {
+                const Id vector_type{primitive_index_count == 2 ? ctx.U32[2] : ctx.U32[3]};
+                const Id output_indices{ctx.TypePointer(spv::StorageClass::Output, vector_type)};
+                ctx.OpStore(ctx.OpAccessChain(output_indices, ctx.mesh_primitive_indices, primitive),
+                            ctx.OpCompositeConstruct(vector_type,
+                                                     std::span<const Id>(indices.data(),
+                                                                         primitive_index_count)));
+            }
             CopyLines(ctx, primitive, ctx.mesh_primitive_base, primitive_lines,
                       ctx.mesh_primitive_targets);
         });

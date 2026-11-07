@@ -26,6 +26,20 @@ EDEN_NX2_FENCE_BATCH=1
 #EDEN_NX2_FRAMES_AHEAD=2
 
 # --- Workarounds / Debug ---
+# Independent floating-point knobs for the 3050. Lowers geometry cost of the built-in tessellation:
+# EDEN_NX2_TESS_SCALE multiplies every tessellation factor the hull shader writes (0..1; keep at
+# least 0.5 to avoid visible LOD pop). Try 0.5 if Death Mountain walls hurt the frame rate.
+#EDEN_NX2_TESS_SCALE=0.5
+#
+# On desktop Vulkan the scheduler submits native-tiled work every 4096 draws (MoltenVK keeps 128).
+# Lowering this batches fewer draws per submit at the cost of more submissions.
+#EDEN_NX2_FLUSH_DRAWS=4096
+#
+# Unattended/headless launches: apply the Ocarina 60 FPS preset (with Max Resolution) without
+# asking at the boot dialog, and enable the built-in Dynamic FPS and Max Resolution patches.
+# Useful for test harnesses and automated benchmarking; has no effect on other games.
+#EDEN_NX2_OOT_PRESET=1
+#
 # Terrain/indirect drawing fix for Donkey Kong Bananza: enabled by default. Set to 0 only to leave to GPU.
 #EDEN_NX2_RESETFIX=0
 

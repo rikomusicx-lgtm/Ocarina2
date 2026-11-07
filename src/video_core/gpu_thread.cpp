@@ -6,6 +6,9 @@
 
 #include <chrono>
 #include <thread>
+#if defined(ARCHITECTURE_x86_64)
+#include <immintrin.h>
+#endif
 
 #include "common/assert.h"
 #include "common/dkb_cpu_trace.h"
@@ -19,6 +22,7 @@
 #include "video_core/gpu.h"
 #include "video_core/gpu_thread.h"
 #include "video_core/gpu_split.h"
+#include "video_core/nx2.h"
 #include "video_core/nx2_profile.h"
 #include "video_core/host1x/host1x.h"
 #include "video_core/renderer_base.h"
@@ -55,11 +59,17 @@ void ThreadManager::StartThread(VideoCore::RendererBase& renderer, Core::Fronten
         Common::PinCurrentThread(Common::PinnedRole::GpuFront);
         Common::SetCurrentThreadToPerformanceCores();
         system.RegisterHostThread();
+        // A guest semaphore write on another thread wakes this one from its pending sleep.
+        Tegra::Nx2SemaphoreWaiters::Get().SetWakeEvent(&state.pending_wake);
+        SCOPE_EXIT {
+            Tegra::Nx2SemaphoreWaiters::Get().SetWakeEvent(nullptr);
+        };
 
         auto current_context = context.Acquire();
         CommandDataContainer next;
         // When a pending channel last moved or a command arrived (see the polling below).
         auto last_progress = std::chrono::steady_clock::now();
+        u32 idle_polls = 0;
         namespace Profile = VideoCommon::Nx2Profile;
         auto& split = VideoCommon::GpuSplit::Get();
         while (!stop_token.stop_requested()) {
@@ -67,24 +77,71 @@ void ThreadManager::StartThread(VideoCore::RendererBase& renderer, Core::Fronten
             split.MaybeStart(system);
             if (scheduler.HasPendingChannels()) {
                 // Suspended channels wait on semaphores the CPU releases: poll them meanwhile.
+                bool progressed = false;
                 {
                     Profile::Scope scope{Profile::Zone::ResumePending};
-                    scheduler.ResumePending(system.GPU());
+                    progressed = scheduler.ResumePending(system.GPU());
+                }
+                if (progressed) {
+                    state.idle_on_pending.store(false, std::memory_order_release);
+                    last_progress = std::chrono::steady_clock::now();
+                    idle_polls = 0;
                 }
                 if (!state.queue.TryPop(next)) {
-                    // The CPU usually releases the semaphore soon after: poll for half a
-                    // millisecond before sleeping, or every wait also waits out a host sleep
-                    // (title 1 waits ~25 times a second).
+                    if (!scheduler.HasPendingChannels()) {
+                        state.idle_on_pending.store(false, std::memory_order_release);
+                        continue;
+                    }
+                    if (!state.idle_on_pending.load(std::memory_order_relaxed) &&
+                        state.queue.Empty()) {
+                        state.idle_on_pending.store(true, std::memory_order_seq_cst);
+                        if (!state.queue.Empty()) {
+                            state.idle_on_pending.store(false, std::memory_order_release);
+                            continue;
+                        }
+                        std::shared_ptr<Common::Event> to_wake;
+                        {
+                            std::scoped_lock lk{state.pending_idle_mutex};
+                            to_wake = state.pending_idle_wake.lock();
+                        }
+                        if (to_wake) {
+                            to_wake->Set();
+                        }
+                    }
                     Profile::Scope scope{Profile::Zone::PendingSleep};
-                    if (std::chrono::steady_clock::now() - last_progress <
-                        std::chrono::microseconds{500}) {
+                    // The CPU usually releases the semaphore soon after: pause-poll for up to
+                    // 2 ms at Normal priority, then sleep on pending_wake (a new command or a
+                    // latched semaphore wakes immediately) instead of a 1 ms kernel sleep.
+                    const auto idle_for = std::chrono::steady_clock::now() - last_progress;
+                    if (idle_polls == 0) {
+                        ++idle_polls;
+#if defined(ARCHITECTURE_x86_64)
+                        for (u32 i = 0; i < 256; ++i) {
+                            _mm_pause();
+                        }
+#else
                         std::this_thread::yield();
+#endif
+                    } else if (idle_for < std::chrono::milliseconds{2}) {
+                        ++idle_polls;
+                        Common::SetCurrentThreadPriority(Common::ThreadPriority::Normal);
+#if defined(ARCHITECTURE_x86_64)
+                        for (u32 i = 0; i < 256; ++i) {
+                            _mm_pause();
+                        }
+#endif
+                        std::this_thread::yield();
+                        Common::SetCurrentThreadPriority(Common::ThreadPriority::Critical);
                     } else {
-                        std::this_thread::sleep_for(std::chrono::milliseconds{1});
+                        state.pending_wake.WaitFor(std::chrono::milliseconds{1});
                     }
                     continue;
                 }
+                idle_polls = 0;
+                state.idle_on_pending.store(false, std::memory_order_release);
             } else {
+                idle_polls = 0;
+                state.idle_on_pending.store(false, std::memory_order_release);
                 Profile::Scope scope{Profile::Zone::Idle};
                 state.queue.PopWait(next, stop_token);
             }
@@ -195,6 +252,7 @@ u64 ThreadManager::PushCommand(CommandData&& command_data, bool block, bool is_a
     std::unique_lock lk(state.write_lock);
     const u64 fence{++state.last_fence};
     state.queue.EmplaceWait(std::move(command_data), fence, block);
+    state.pending_wake.Set();
 
     if (block) {
         state.cv.wait(lk, thread.get_stop_token(), [this, fence] {
@@ -208,6 +266,7 @@ u64 ThreadManager::PushCommand(CommandData&& command_data, bool block, bool is_a
 void ThreadManager::NotifyShutdown() {
     if (thread.joinable()) {
         thread.request_stop();
+        state.pending_wake.Set();
         thread.join();
     }
     VideoCommon::GpuSplit::Get().Stop();

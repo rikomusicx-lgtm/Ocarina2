@@ -11,6 +11,7 @@
 
 #include "common/bit_field.h"
 #include "common/common_types.h"
+#include "common/thread.h"
 #include "core/hle/service/nvdrv/nvdata.h"
 #include "video_core/cdma_pusher.h"
 #include "video_core/framebuffer_config.h"
@@ -224,6 +225,11 @@ public:
 
     /// Whether a channel is suspended on a semaphore acquire (callable from any thread).
     [[nodiscard]] bool HasSuspendedChannels() const;
+
+    /// Whether the GPU thread is parked on a guest semaphore acquire with nothing queued.
+    [[nodiscard]] bool IsIdleOnPendingSemaphore() const;
+    void SetPendingIdleWake(const std::shared_ptr<Common::Event>& event);
+    void WakePendingChannels();
 
     [[nodiscard]] bool UseNvdec() const;
 

@@ -11,6 +11,7 @@
 #include <span>
 
 #include "common/assert.h"
+#include "common/game_presets.h"
 #include "common/hex_util.h"
 #include "common/logging.h"
 #include "common/settings.h"
@@ -529,16 +530,17 @@ std::vector<u8> PatchManager::PatchNSO(const std::vector<u8>& nso, const std::st
         if (patch.title_id != title_id || patch.module != name) {
             continue;
         }
+        const bool oot_env = Settings::EnvOotPresetEnabled();
         const bool enabled_by_oot_preset =
             patch.name == "Max Resolution (built-in)" &&
-            Settings::values.oot_max_resolution_preset_enabled;
+            (Settings::values.oot_max_resolution_preset_enabled || oot_env);
         const bool disabled_for_oot_fps_preset =
             patch.name == "Max Resolution (built-in)" &&
-            Settings::values.oot_dynamic_fps_preset_enabled &&
-            !Settings::values.oot_max_resolution_preset_enabled;
+            (Settings::values.oot_dynamic_fps_preset_enabled || oot_env) &&
+            !Settings::values.oot_max_resolution_preset_enabled && !oot_env;
         const bool dynamic_fps_enabled_by_oot_preset =
             patch.name == "Dynamic FPS by Dark (built-in)" &&
-            Settings::values.oot_dynamic_fps_preset_enabled;
+            (Settings::values.oot_dynamic_fps_preset_enabled || oot_env);
         if (disabled_for_oot_fps_preset) {
             LOG_INFO(Loader,
                      "    - Skipping \"{}\": the Ocarina 60 FPS preset leaves dynamic resolution "

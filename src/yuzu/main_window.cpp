@@ -2002,6 +2002,13 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
     }
     if (title_id == Settings::OcarinaOfTimeProgramId && !asked_oot_performance_settings) {
         asked_oot_performance_settings = true;
+        if (Settings::EnvOotPresetEnabled()) {
+            // EDEN_NX2_OOT_PRESET=1: apply the 60 FPS dialog as accepted without showing it
+            // (unattended/headless launches and test harnesses). Max Resolution stays on.
+            use_oot_performance_settings = true;
+            use_oot_max_resolution = true;
+            LOG_INFO(Config, "OOT 60 FPS settings forced by EDEN_NX2_OOT_PRESET=1");
+        } else {
         QMessageBox oot_settings_dialog(
             QMessageBox::Question, tr("Ocarina of Time 60 FPS settings"),
             tr("Use the 60 FPS settings for Ocarina of Time?\n\n"
@@ -2024,6 +2031,7 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
             use_oot_performance_settings && max_resolution_checkbox->isChecked();
         LOG_INFO(Config, "OOT 60 FPS settings accepted: {}, Max Resolution: {}",
                  use_oot_performance_settings, use_oot_max_resolution);
+        }
     }
     if (Settings::ApplyOcarinaOfTimePerformancePreset(Settings::values, title_id,
                                                       use_oot_performance_settings,

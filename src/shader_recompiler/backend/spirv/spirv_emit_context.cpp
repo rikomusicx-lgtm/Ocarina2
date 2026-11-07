@@ -1859,7 +1859,8 @@ void EmitContext::DefineMesh(const IR::Program& program) {
     mesh_attribute_words = (std::max)(
         mesh_primitive_base + Common::DivCeil(mesh_info.max_primitives, 32U) * primitive_lines * 32,
         1U);
-    mesh_map_bytes = 4 + 3 * mesh_info.max_primitives;
+    const u32 primitive_index_count{mesh_info.topology == 0 ? 1U : mesh_info.topology == 1 ? 2U : 3U};
+    mesh_map_bytes = 4 + primitive_index_count * mesh_info.max_primitives;
     mesh_shared_u32 = TypePointer(spv::StorageClass::Workgroup, U32[1]);
     mesh_attributes = DefineVariable(*this, TypeArray(U32[1], Const(mesh_attribute_words)),
                                      std::nullopt, spv::StorageClass::Workgroup);
@@ -1873,9 +1874,16 @@ void EmitContext::DefineMesh(const IR::Program& program) {
 
     const Id vertex_count{Const(mesh_info.max_vertices)};
     const Id primitive_count{Const(mesh_info.max_primitives)};
+    const Id primitive_index_type{mesh_info.topology == 0   ? U32[1]
+                                  : mesh_info.topology == 1 ? U32[2]
+                                                             : U32[3]};
+    const spv::BuiltIn primitive_indices_builtin{
+        mesh_info.topology == 0   ? spv::BuiltIn::PrimitivePointIndicesEXT
+        : mesh_info.topology == 1 ? spv::BuiltIn::PrimitiveLineIndicesEXT
+                                  : spv::BuiltIn::PrimitiveTriangleIndicesEXT};
     mesh_primitive_indices =
-        DefineVariable(*this, TypeArray(U32[3], primitive_count),
-                       spv::BuiltIn::PrimitiveTriangleIndicesEXT, spv::StorageClass::Output);
+        DefineVariable(*this, TypeArray(primitive_index_type, primitive_count),
+                       primitive_indices_builtin, spv::StorageClass::Output);
     std::array<Id, IR::NUM_GENERICS> generics[2]{};
     Id point_size{}, primitive_layer{}, primitive_viewport{}, primitive_id_output{};
     const auto per_primitive_builtin = [&](Id& variable, spv::BuiltIn builtin) {

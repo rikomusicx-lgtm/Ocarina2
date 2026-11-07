@@ -1863,6 +1863,9 @@ private:
         constexpr u64 AvailableSlots = 0x7fff;
         TipcReplyWords(ctx, {static_cast<u32>(AvailableSlots),
                              static_cast<u32>(AvailableSlots >> 32), 0, 0, 0, 0});
+        // Wake the GPU thread if it is parked on a guest semaphore; the present just pushed
+        // work that usually precedes the fence this frame's reply covers.
+        system.GPU().WakePendingChannels();
     }
 
     // The console's compositor frees a buffer only once its frame's GPU fence has passed, which
@@ -2058,6 +2061,11 @@ private:
             return true;
         }
         auto& syncpoints = system.Host1x().GetSyncpointManager();
+        if (unless_gpu_waits && system.GPU().IsIdleOnPendingSemaphore()) {
+            // The GPU thread is parked on a guest semaphore only this thread releases; this
+            // frame's fence can't finish before the present returns.
+            return false;
+        }
         const auto start = std::chrono::steady_clock::now();
         // Long enough to cover shader/pipeline compile stalls: a game that gets more than a few
         // command buffers ahead misses the equal-value gates its other channels acquire.
@@ -2086,6 +2094,9 @@ private:
             while (!wake->done && system.IsPoweredOn() &&
                    std::chrono::steady_clock::now() < deadline) {
                 if (unless_gpu_waits) {
+                    if (system.GPU().IsIdleOnPendingSemaphore()) {
+                        return false;
+                    }
                     gpu_waited |= system.GPU().HasSuspendedChannels();
                     if (gpu_waited &&
                         std::chrono::steady_clock::now() - start > std::chrono::milliseconds{3}) {

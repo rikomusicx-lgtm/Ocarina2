@@ -2,9 +2,18 @@
 
 #pragma once
 
+#include <cstdlib>
 #include "common/settings.h"
 
 namespace Settings {
+
+inline bool EnvOotPresetEnabled() {
+    static const bool enabled = [] {
+        const char* value = std::getenv("EDEN_NX2_OOT_PRESET");
+        return value != nullptr && value[0] != '\0' && value[0] != '0';
+    }();
+    return enabled;
+}
 
 inline constexpr u64 MarioKartWorldProgramId = 0x0400C3F00006E000ULL;
 inline constexpr u64 OcarinaOfTimeProgramId = 0x0400486024DEC000ULL;

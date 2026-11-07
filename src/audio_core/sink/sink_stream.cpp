@@ -214,10 +214,11 @@ void SinkStream::ProcessAudioOutAndRender(std::span<s16> output_buffer, std::siz
             if (!queue.TryPop(playing_buffer)) {
                 lk.unlock();
                 for (size_t i = frames_written; i < num_frames; i++) {
-                    if (type == StreamType::Sysmix) {
-                        std::memset(&output_buffer[i * frame_size], 0, frame_size_bytes);
-                    } else {
+                    if (type == StreamType::Out) {
                         std::memcpy(&output_buffer[i * frame_size], last_frame.data(), frame_size_bytes);
+                    } else {
+                        // Repeated DC during long underruns is an audible buzz; silence instead.
+                        std::memset(&output_buffer[i * frame_size], 0, frame_size_bytes);
                     }
                 }
                 frames_written = num_frames;

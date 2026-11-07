@@ -89,6 +89,9 @@ private:
 
     std::mutex guard;
     u64 last_action_id{};
+    /// Waiters across both predicate waits and registered actions. Increments take the lock
+    /// (or notify) only when nonzero, so syncpoint bumps with no one waiting cost one RMW.
+    std::atomic<u64> pending_waiters{};
     std::condition_variable wait_guest_cv;
     std::condition_variable wait_host_cv;
 };
