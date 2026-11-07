@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <bit>
+#include <cstdlib>
 #include <tuple>
 #include <utility>
 
@@ -13,6 +14,18 @@
 
 namespace Shader::Backend::SPIRV {
 namespace {
+/// EDEN_NX2_TESS_SCALE=<0..1> scales the tessellation factors the hull shader writes (default
+/// 1: unchanged). This game is tessellation-heavy and GPU-bound; lowering the factor cuts
+/// subdivisions on terrain/grass/rocks at the cost of a flatter surface.
+float TessScale() {
+    static const float scale = [] {
+        if (const char* value = std::getenv("EDEN_NX2_TESS_SCALE")) {
+            return static_cast<float>(std::strtof(value, nullptr));
+        }
+        return 1.0f;
+    }();
+    return scale;
+}
 template <typename... Args>
 Id AttrPointer(EmitContext& ctx, Id pointer_type, Id vertex, Id base, Args&&... args) {
     switch (ctx.stage) {
@@ -483,6 +496,15 @@ void EmitSetPatch(EmitContext& ctx, IR::Patch patch, Id value) {
             throw NotImplementedException("Patch {}", patch);
         }
     }()};
+    // Scale the tessellation factors if requested, keeping at least one subdivision
+    if (patch <= IR::Patch::TessellationLodInteriorV) {
+        const float scale = TessScale();
+        if (scale != 1.0f) {
+            const Id fscale = ctx.Const(scale);
+            const Id one = ctx.Const(1.0f);
+            value = ctx.OpFMax(ctx.F32[1], ctx.OpFMul(ctx.F32[1], value, fscale), one);
+        }
+    }
     ctx.OpStore(pointer, value);
 }
 
