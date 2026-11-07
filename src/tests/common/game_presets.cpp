@@ -51,6 +51,45 @@ void CheckPreferences(const Settings::Values& settings, bool global = false) {
 }
 } // namespace
 
+TEST_CASE("OOT 60 FPS preset restores Max Resolution and enables frame generation", "[game_presets]") {
+    auto settings = std::make_unique<Settings::Values>();
+    settings->frame_gen.SetValue(false);
+    settings->frame_gen_target_rate.SetValue(0);
+    REQUIRE(Settings::ApplyOcarinaOfTimePerformancePreset(
+        *settings, Settings::OcarinaOfTimeProgramId, true, true));
+    CHECK(settings->frame_gen.GetValue());
+    CHECK(settings->frame_gen_type.GetValue() == Settings::FrameGenType::Fsr3);
+    CHECK(settings->frame_gen_multiplier.GetValue() == 2);
+    CHECK(settings->frame_gen_target_rate.GetValue() == 60);
+    CHECK(settings->oot_dynamic_fps_preset_enabled);
+    CHECK(settings->oot_preflush_preset_enabled);
+    CHECK(settings->oot_max_resolution_preset_enabled);
+    for (const auto& restore : settings->linkage.restore_functions) {
+        restore();
+    }
+    CHECK_FALSE(settings->frame_gen.GetValue());
+    CHECK(settings->frame_gen_target_rate.GetValue() == 0);
+}
+
+TEST_CASE("Declining the OOT 60 FPS preset changes nothing", "[game_presets]") {
+    auto settings = std::make_unique<Settings::Values>();
+    settings->frame_gen.SetValue(false);
+    settings->frame_gen_target_rate.SetValue(0);
+    CHECK_FALSE(Settings::ApplyOcarinaOfTimePerformancePreset(
+        *settings, Settings::OcarinaOfTimeProgramId, false, true));
+    CHECK_FALSE(settings->frame_gen.GetValue());
+    CHECK(settings->frame_gen_target_rate.GetValue() == 0);
+    CHECK_FALSE(settings->oot_max_resolution_preset_enabled);
+}
+
+TEST_CASE("OOT 60 FPS preset does not change unrelated games", "[game_presets]") {
+    auto settings = std::make_unique<Settings::Values>();
+    settings->frame_gen.SetValue(false);
+    CHECK_FALSE(Settings::ApplyOcarinaOfTimePerformancePreset(
+        *settings, Settings::MarioKartWorldProgramId, true, true));
+    CHECK_FALSE(settings->frame_gen.GetValue());
+}
+
 TEST_CASE("Display filter defaults use ScaleForce and FXAA", "[game_presets]") {
     auto settings = std::make_unique<Settings::Values>();
     CHECK(settings->scaling_filter.GetDefault() == Settings::ScalingFilter::ScaleForce);

@@ -2000,6 +2000,38 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
         Settings::UpdateGPUAccuracy();
         LOG_INFO(Config, "Applied recommended MKW settings after per-game configuration");
     }
+    if (title_id == Settings::OcarinaOfTimeProgramId && !asked_oot_performance_settings) {
+        asked_oot_performance_settings = true;
+        QMessageBox oot_settings_dialog(
+            QMessageBox::Question, tr("Ocarina of Time 60 FPS settings"),
+            tr("Use the 60 FPS settings for Ocarina of Time?\n\n"
+               "Vulkan, 1x resolution, GPU Low, asynchronous shaders, BC3, conservative VRAM, "
+               "GPU video decoding, bilinear scaling, no AA or post-processing, reactive "
+               "flushing off, the built-in Dynamic FPS patch, and preflushing GPU-written "
+               "memory for fewer frame stalls. Built-in optical-flow frame generation (2x, "
+               "capped at 60 Hz) is enabled. Max Resolution stays on by default so the game "
+               "renders at 1080p.\n\n"
+               "These settings apply until Lichii is closed. Your saved settings are not "
+               "changed."),
+            QMessageBox::Yes | QMessageBox::No, this);
+        auto* max_resolution_checkbox =
+            new QCheckBox(tr("Force Max Resolution (1080p, recommended)"),
+                          &oot_settings_dialog);
+        max_resolution_checkbox->setChecked(true);
+        oot_settings_dialog.setCheckBox(max_resolution_checkbox);
+        use_oot_performance_settings = oot_settings_dialog.exec() == QMessageBox::Yes;
+        use_oot_max_resolution =
+            use_oot_performance_settings && max_resolution_checkbox->isChecked();
+        LOG_INFO(Config, "OOT 60 FPS settings accepted: {}, Max Resolution: {}",
+                 use_oot_performance_settings, use_oot_max_resolution);
+    }
+    if (Settings::ApplyOcarinaOfTimePerformancePreset(Settings::values, title_id,
+                                                      use_oot_performance_settings,
+                                                      use_oot_max_resolution)) {
+        QtCommon::system->ApplySettings();
+        Settings::UpdateGPUAccuracy();
+        LOG_INFO(Config, "Applied Ocarina of Time 60 FPS settings after per-game configuration");
+    }
     Settings::LogSettings();
 
     if (UISettings::values.select_user_on_boot && !user_flag_cmd_line) {

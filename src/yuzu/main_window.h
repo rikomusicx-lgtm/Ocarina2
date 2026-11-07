@@ -508,6 +508,9 @@ private:
     MultiplayerState* multiplayer_state = nullptr;
     bool use_recommended_mkw_settings = false;
     bool asked_recommended_mkw_settings = false;
+    bool use_oot_performance_settings = false;
+    bool use_oot_max_resolution = false;
+    bool asked_oot_performance_settings = false;
 
     GRenderWindow* render_window = nullptr;
     GameList* game_list = nullptr;

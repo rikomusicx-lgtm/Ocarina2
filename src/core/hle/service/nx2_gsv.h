@@ -39,6 +39,7 @@
 #include "core/frontend/framebuffer_layout.h"
 #include "core/perf_stats.h"
 #include "video_core/gpu.h"
+#include "video_core/nx2_perf.h"
 #include "video_core/framebuffer_config.h"
 #include "core/core_timing.h"
 #include "core/hle/kernel/k_client_session.h"
@@ -1933,22 +1934,41 @@ private:
             m_frame_trace.forced = forced_interval;
         }
         if (!Settings::values.use_speed_limit.GetValue() || Settings::SpeedLimit() == 0) {
+            VideoCommon::Nx2Perf::g_guest_frame_interval_ns.store(0, std::memory_order_relaxed);
             return;
         }
         if (timing != std::exchange(m_swap_word, timing)) {
             LOG_INFO(Service, "nx2:vi2 present #{} swap interval {} at {} Hz (word 12 = {:#x})",
                      m_presents, swap_interval, refresh_rate, timing);
         }
-        const auto interval = std::chrono::nanoseconds{
+        auto interval = std::chrono::nanoseconds{
             100'000'000'000LL * swap_interval / refresh_rate / Settings::SpeedLimit()};
+        // Genlock: with the host frame pacer on, a frame period within 1% of a whole number of
+        // display refreshes becomes exactly that many measured refreshes (a "120 Hz" display at
+        // 119.98 Hz: 33.3389 ms instead of 33.3333). On the game's own clock its frames drifted
+        // against the display and missed their refresh about once a minute (a 41 ms frame, then
+        // a short one). The game runs at most 1% slower.
+        if (const long long host_refresh =
+                VideoCommon::Nx2Perf::g_host_refresh_ns.load(std::memory_order_relaxed);
+            host_refresh > 0) {
+            const long long refreshes =
+                (interval.count() + host_refresh / 2) / host_refresh;
+            const long long locked = refreshes * host_refresh;
+            if (refreshes >= 1 && std::abs(locked - interval.count()) * 100 < interval.count()) {
+                interval = std::chrono::nanoseconds{locked};
+            }
+        }
+        VideoCommon::Nx2Perf::g_guest_frame_interval_ns.store(interval.count(),
+                                                              std::memory_order_relaxed);
         if (trace) {
             m_frame_trace.target_ms = std::chrono::duration<double, std::milli>(interval).count();
         }
         const auto now = std::chrono::steady_clock::now();
-        const auto pacing = m_present_pacer.Advance(now, interval);
+        auto pacing = m_present_pacer.Advance(now, interval);
         if (trace) {
             m_frame_trace.deadline_reset = pacing.reset;
         }
+        AlignPhaseToDisplay(interval, now, pacing.deadline);
         if (now < pacing.deadline) {
             // Sleep this service thread in the guest kernel. It runs on guest core 3, and a host
             // sleep held that core for the whole wait: game threads scheduled there ran only
@@ -1967,6 +1987,68 @@ private:
             }
         }
     }
+
+    // At 30 FPS and below the host frame pacer (vk_host_pacer.h) presents frames as soon as they
+    // are rendered. Move this game's frames (at most 0.5 ms a frame, later only while it sleeps
+    // here anyway) until each is ready ~6 ms before a display refresh: it is shown at that
+    // refresh, evenly spaced (genlock keeps the phase), with little wait. If moving them stops
+    // bringing them closer, leave the phase alone for a minute (an earlier version, steered by
+    // the time frames were held, held 60 FPS at 57-58).
+    void AlignPhaseToDisplay(std::chrono::nanoseconds interval,
+                             std::chrono::steady_clock::time_point now,
+                             std::chrono::steady_clock::time_point& deadline) {
+        using namespace std::chrono_literals;
+        const long long ahead =
+            VideoCommon::Nx2Perf::g_host_phase_ns.load(std::memory_order_relaxed);
+        const long long refresh =
+            VideoCommon::Nx2Perf::g_host_refresh_ns.load(std::memory_order_relaxed);
+        if (interval < 25ms || ahead < 0 || refresh <= 0) {
+            m_phase = {};
+            return;
+        }
+        // Positive: ready too early (waits for the refresh); negative: too close to it (a
+        // little jitter moves it to the next one).
+        double error = static_cast<double>(ahead) - 6e6;
+        if (error > static_cast<double>(refresh) / 2) {
+            error -= static_cast<double>(refresh);
+        }
+        m_phase.error_ema += (error - m_phase.error_ema) * 0.2;
+        if (m_phase.frames == 0) {
+            m_phase.error_ema = m_phase.window_error = error;
+        }
+        if (++m_phase.frames % 60 == 0) {
+            if (m_phase.window_shift > 3e6 && std::abs(m_phase.error_ema) > 2e6 &&
+                std::abs(m_phase.error_ema) > std::abs(m_phase.window_error) - 1e6) {
+                m_phase.backoff = 1800;
+                LOG_INFO(Service, "nx2:vi2 frame phase: moving frames {:.1f} ms did not bring them "
+                         "closer to the refreshes ({:.1f} -> {:.1f} ms off); not moving them for 60 s",
+                         m_phase.window_shift / 1e6, m_phase.window_error / 1e6,
+                         m_phase.error_ema / 1e6);
+            }
+            m_phase.window_shift = 0;
+            m_phase.window_error = m_phase.error_ema;
+        }
+        if (m_phase.backoff > 0) {
+            --m_phase.backoff;
+            return;
+        }
+        const double slack = static_cast<double>((deadline - now).count());
+        const double shift =
+            std::clamp(m_phase.error_ema * 0.2, -0.5e6, (std::min)(0.5e6, slack - 2e6));
+        if (std::abs(m_phase.error_ema) > 1e6 && std::abs(shift) > 1e4) {
+            const auto step = std::chrono::nanoseconds{static_cast<s64>(shift)};
+            m_present_pacer.Shift(step);
+            deadline += step;
+            m_phase.window_shift += std::abs(shift);
+        }
+    }
+    struct PhaseAlign {
+        double error_ema{};
+        double window_shift{};
+        double window_error{};
+        u64 frames{};
+        u32 backoff{};
+    } m_phase;
 
     /// Waits until the fence is reached. With `unless_gpu_waits`, gives up after a few ms once a
     /// GPU channel was seen suspended on a semaphore (it may be one this thread releases later).

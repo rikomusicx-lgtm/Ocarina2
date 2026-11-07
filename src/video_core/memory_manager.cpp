@@ -629,8 +629,27 @@ bool MemoryManager::IsMemoryDirty(GPUVAddr gpu_addr, size_t size,
 }
 
 size_t MemoryManager::MaxContinuousRange(GPUVAddr gpu_addr, size_t size) const {
-    // Native storage buffers ask this for up to 8 MiB on each bind, ~90,000 times a second in
-    // Ocarina's Kokiri village: answer from the runs kept at map time instead of walking pages.
+    struct CacheEntry {
+        size_t owner{};
+        GPUVAddr address{};
+        size_t size{};
+        size_t result{};
+        u64 serial{};
+    };
+    // Native storage buffers ask this for up to 8 MiB on each bind, ~220,000 times a second in
+    // Ocarina's Kokiri Forest. The 4096-entry direct-mapped cache catches the repeated binds; the
+    // run snapshot below still answers misses without walking the page table.
+    thread_local std::array<CacheEntry, 4096> cache{};
+    const u64 serial = map_serial.load(std::memory_order_acquire);
+    const u64 hash = (gpu_addr ^ static_cast<u64>(size)) * 0x9E3779B97F4A7C15ULL;
+    CacheEntry& entry = cache[hash >> 52];
+    const size_t owner = unique_identifier + 1;
+    const bool verify = VideoCommon::Nx2Perf::Verify();
+    if (!verify && entry.owner == owner && entry.serial == serial && entry.address == gpu_addr &&
+        entry.size == size) {
+        return entry.result;
+    }
+
     size_t result = 0;
     if (IsWithinGPUAddressRange(gpu_addr) && size <= address_space_size - gpu_addr) {
         const auto& runs = CurrentSnapshot().runs;
@@ -641,7 +660,8 @@ size_t MemoryManager::MaxContinuousRange(GPUVAddr gpu_addr, size_t size) const {
             result = (std::min<size_t>)(size, std::prev(it)->end - gpu_addr);
         }
     }
-    if (VideoCommon::Nx2Perf::Verify()) {
+    entry = {owner, gpu_addr, size, result, serial};
+    if (verify) {
         const size_t expected = MaxContinuousRangeUncached(gpu_addr, size);
         static std::atomic<u32> logged{};
         if (expected != result && logged.fetch_add(1, std::memory_order_relaxed) < 64) {
