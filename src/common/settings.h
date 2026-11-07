@@ -964,6 +964,11 @@ struct Values {
     // Per-game overrides
     bool use_squashed_iterated_blend;
 
+    // Ocarina of Time 60 FPS preset. Runtime only: the dialog applies these until Lichii closes.
+    bool oot_max_resolution_preset_enabled{};
+    bool oot_dynamic_fps_preset_enabled{};
+    bool oot_preflush_preset_enabled{};
+
 };
 
 extern Values values;

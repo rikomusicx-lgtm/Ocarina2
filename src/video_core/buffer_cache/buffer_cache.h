@@ -282,13 +282,18 @@ std::optional<VideoCore::RasterizerDownloadArea> BufferCache<P>::GetFlushArea(DA
     area->preemtive = !IsRegionGpuModified(device_addr_start_aligned,
                                            device_addr_end_aligned - device_addr_start_aligned);
     // A preflushable mark persists and downloads later GPU writes at every fence. Native titles
-    // instead keep read traps and flush on demand, unless EDEN_NX2_PREFLUSH=1 opts them into
-    // preflushing too (Ocarina of Time: far fewer Finish stalls, but some flicker).
-    static const bool nx2_preflush = [] {
+    // instead keep read traps and flush on demand. Ocarina of Time is the exception: preflushing
+    // removed most of its Finish stalls (upstream measured Kokiri Forest 26 -> 38-41 FPS on an
+    // RTX 5060), so it is on by default there. EDEN_NX2_PREFLUSH=0/1 overrides the choice for A/B.
+    static const int nx2_preflush = [] {
         const char* value = std::getenv("EDEN_NX2_PREFLUSH");
-        return value != nullptr && value[0] == '1';
+        return value == nullptr ? -1 : (value[0] == '1' ? 1 : 0);
     }();
-    const bool preflush = nx2_preflush || !Tegra::g_nx2_ampere.load(std::memory_order_relaxed);
+    const bool preflush =
+        nx2_preflush >= 0
+            ? nx2_preflush == 1
+            : Settings::values.oot_preflush_preset_enabled ||
+                  !Tegra::g_nx2_ampere.load(std::memory_order_relaxed);
     if (!area->preemtive) {
         if (Nx2DownloadTrace::g_enabled) [[unlikely]] {
             Nx2DownloadTrace::Marked(device_addr_start_aligned,

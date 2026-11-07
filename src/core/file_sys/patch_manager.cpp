@@ -529,9 +529,33 @@ std::vector<u8> PatchManager::PatchNSO(const std::vector<u8>& nso, const std::st
         if (patch.title_id != title_id || patch.module != name) {
             continue;
         }
-        if (std::find(disabled.cbegin(), disabled.cend(), patch.name) != disabled.cend()) {
+        const bool enabled_by_oot_preset =
+            patch.name == "Max Resolution (built-in)" &&
+            Settings::values.oot_max_resolution_preset_enabled;
+        const bool disabled_for_oot_fps_preset =
+            patch.name == "Max Resolution (built-in)" &&
+            Settings::values.oot_dynamic_fps_preset_enabled &&
+            !Settings::values.oot_max_resolution_preset_enabled;
+        const bool dynamic_fps_enabled_by_oot_preset =
+            patch.name == "Dynamic FPS by Dark (built-in)" &&
+            Settings::values.oot_dynamic_fps_preset_enabled;
+        if (disabled_for_oot_fps_preset) {
+            LOG_INFO(Loader,
+                     "    - Skipping \"{}\": the Ocarina 60 FPS preset leaves dynamic resolution "
+                     "enabled",
+                     patch.name);
+            continue;
+        }
+        if (std::find(disabled.cbegin(), disabled.cend(), patch.name) != disabled.cend() &&
+            !enabled_by_oot_preset && !dynamic_fps_enabled_by_oot_preset) {
             LOG_INFO(Loader, "    - Skipping \"{}\": disabled in Add-Ons", patch.name);
             continue;
+        }
+        if (enabled_by_oot_preset) {
+            LOG_INFO(Loader, "    - Enabling \"{}\" for the Ocarina 60 FPS preset", patch.name);
+        }
+        if (dynamic_fps_enabled_by_oot_preset) {
+            LOG_INFO(Loader, "    - Enabling \"{}\" for the Ocarina 60 FPS preset", patch.name);
         }
         if (patch.build_id != build_id) {
             LOG_INFO(Loader, "    - Skipping \"{}\": build id {} is not {}", patch.name, build_id,
