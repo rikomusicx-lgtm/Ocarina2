@@ -248,7 +248,9 @@ public:
     void NoteMemoryWriter() {
         last_memory_writer_position = write_position;
     }
-    /// Waits until the back executed every NoteWriter and NoteMemoryWriter work sent so far.
+    /// Waits until the back executed every NoteWriter and NoteUnrangedWriter work sent so far.
+    /// Includes writers queued after the last host sync: their page marks may be the only
+    /// evidence a range was written, and are not authoritative before this wait returns.
     bool WaitForMemoryWriters();
     /// memory-writing work whose range the front does not note was just sent (KeplerMemory
     /// and Fermi2D methods, syncpoint operations). Ends every macro DMA read snapshot.
@@ -516,6 +518,8 @@ private:
     void* idle_argument{};
     alignas(64) std::atomic<bool> hook_requested{};
     std::atomic<bool> back_running{};
+    /// True when no back thread is active or after BackLoop exits; cleared before thread launch.
+    std::atomic<bool> back_exited{true};
 
     // 128 bytes: x86 spatial prefetchers pull 64-byte lines in pairs. back_waiting and wake are
     // always touched together by both threads, so they share a block.

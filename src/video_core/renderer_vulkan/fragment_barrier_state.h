@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <utility>
+
 namespace Vulkan {
 
 class FragmentBarrierState {
@@ -17,6 +19,10 @@ public:
 
     void Reset() {
         pending = false;
+    }
+
+    bool Take() {
+        return std::exchange(pending, false);
     }
 
 private:
