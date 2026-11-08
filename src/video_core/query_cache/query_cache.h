@@ -283,9 +283,23 @@ void QueryCacheBase<Traits>::CounterReport(GPUVAddr addr, QueryType counter_type
     u8* pointer = impl->device_memory.template GetPointer<u8>(cpu_addr);
     u8* pointer_timestamp = impl->device_memory.template GetPointer<u8>(cpu_addr + 8);
     bool is_synced = (Settings::IsGPUFenceBehaviorDefault() ? !Settings::IsGPULevelHigh() : !Settings::IsGPUFenceBehaviorBalanced() && !Settings::IsGPUFenceBehaviorAccurate()) && is_fence;
+    // Without delayed fence operations only fence-flagged reports wait for the host GPU to write.
+    // Four-word releases stay waited for: a CPU copy of one after the acquire would miss the
+    // timestamp the fence writes.
+    const bool delayed_release = is_fence && counter_type == QueryType::Payload && !has_timestamp &&
+                                 (Settings::IsGPUFenceBehaviorDefault()
+                                      ? !Settings::IsGPULevelHigh()
+                                      : !Settings::IsGPUFenceBehaviorBalanced() &&
+                                            !Settings::IsGPUFenceBehaviorAccurate());
     std::function<void()> operation([this, is_synced, streamer, query_base = query, query_location,
                                      pointer, pointer_timestamp, cpu_addr, addr,
-                                     asid = gpu_memory->GetID(), counter_type] {
+                                     asid = gpu_memory->GetID(), counter_type, delayed_release,
+                                     payload] {
+        SCOPE_EXIT {
+            if (delayed_release) {
+                Tegra::Nx2SemaphoreWaiters::Get().OnDelayedReleaseDone(cpu_addr, payload);
+            }
+        };
         if (True(query_base->flags & QueryFlagBits::IsInvalidated)) {
             if (const u64 trace = QueryTrace::Sample(QueryTrace::Event::Discard)) {
                 LOG_INFO(HW_GPU,
@@ -339,6 +353,9 @@ void QueryCacheBase<Traits>::CounterReport(GPUVAddr addr, QueryType counter_type
         }
     });
     if (is_fence) {
+        if (delayed_release) {
+            Tegra::Nx2SemaphoreWaiters::Get().OnDelayedRelease(cpu_addr, payload);
+        }
         impl->rasterizer.SignalFence(std::move(operation));
     } else {
         if (!Settings::IsGPULevelHigh() && counter_type == QueryType::Payload) {
