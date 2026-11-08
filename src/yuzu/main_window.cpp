@@ -100,6 +100,18 @@ u64 HostDedicatedVramBytes() {
     return 0;
 #endif
 }
+
+// On cards with ~6 GB of VRAM the Max Resolution patch (full render scale) blows the
+// upscaler's budget, so leave the game's dynamic resolution active (console behavior).
+// Bigger cards keep the full-scale default. EDEN_NX2_OOT_MAX_RESOLUTION=1 forces it on
+// and =0 forces it off.
+bool HostOotMaxResolutionDefault() {
+    if (const char* value = std::getenv("EDEN_NX2_OOT_MAX_RESOLUTION"); value && *value) {
+        return value[0] == '1';
+    }
+    const u64 host_vram = HostDedicatedVramBytes();
+    return host_vram == 0 || host_vram > (u64{6500} << 20);
+}
 } // Anonymous namespace
 
 #include "util/clickable_label.h"
@@ -2139,18 +2151,18 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
         asked_oot_performance_settings = true;
         if (Settings::EnvOotPresetEnabled()) {
             // EDEN_NX2_OOT_PRESET=1: apply the 60 FPS dialog as accepted without showing it
-            // (unattended/headless launches and test harnesses). Max Resolution defaults on;
-            // a patch disabled in Add-Ons stays off (patch_manager honors the Add-Ons list).
+            // (unattended/headless launches and test harnesses). Max Resolution uses the same
+            // host-VRAM default as the dialog; EDEN_NX2_OOT_MAX_RESOLUTION=1 forces it on.
             use_oot_performance_settings = true;
-            use_oot_max_resolution = true;
-            LOG_INFO(Config, "OOT 60 FPS settings forced by EDEN_NX2_OOT_PRESET=1");
+            use_oot_max_resolution = HostOotMaxResolutionDefault();
+            LOG_INFO(Config, "OOT 60 FPS settings forced by EDEN_NX2_OOT_PRESET=1 (Max Resolution: {})",
+                     use_oot_max_resolution);
         } else {
         // On cards with ~6 GB of VRAM the Max Resolution patch (full render scale) blows
         // the budget: DLSS declines every frame and the game's own upscaler runs at the
         // full output size instead. Default the checkbox off there and let the game's
         // dynamic resolution scale, like the console does; DLSS then has room to run.
-        const u64 host_vram = HostDedicatedVramBytes();
-        const bool max_resolution_default = host_vram == 0 || host_vram > (u64{6500} << 20);
+        const bool max_resolution_default = HostOotMaxResolutionDefault();
         QMessageBox oot_settings_dialog(
             QMessageBox::Question, tr("Ocarina of Time 60 FPS settings"),
             tr("Use the 60 FPS settings for Ocarina of Time?\n\n"
