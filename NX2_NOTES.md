@@ -275,3 +275,50 @@ Offline shader check: `nx2work/lowertest/lowertest.exe C:/dev/shaders_title1 [-a
 5. Upstream-worthy pieces independent of Switch 2: MSVC 14.51 build fixes, eden-cli SDL3
    lifetime fixes and `_setmaxstdio`, ExeFS loader fixes, FAC/FAH offset fix, GetPseudoDeviceId
    without NACP.
+
+---
+
+## 2026-11-08 - build-119 (Ocarina of Time 3050, update #3)
+
+Live-session findings on the owner's PC (Ryzen 5 3600, RTX 3050 6 GB, 24 GB RAM, Windows 11,
+meta-virtual desktop, displays 1920x1080) while the game sat in Kokiri: ~12-14 FPS, p50 frame
+~68-79 ms, 3D engine ~66% busy, whole GPU ~88% busy at 63 W, VRAM 5008/6144 MiB (82%), host CPU mostly waiting (GPU back thread ~22% busy, front ~5%; 104 threads, ~1.9 cores average).
+Presents were 3840x2160 from a 2560x1440 render.
+
+DLSS Super Resolution declined EVERY frame: 'NVIDIA DLSS recording failed at stage 4 (Streamline
+result 39)' = eWarnOutOfVRAM (39 is the 40th sl::Result; the plugin printed 'Exceeded VRAM budget'
+on the same timestamp). Every frame then ran the game's own HMMA upscaler instead of DLSS - the
+most expensive thing the game can do on this card. Root cause: output 3840x2160 + render
+2560x1440 on a 6 GB card, with the OOT preset forcing the Max Resolution built-in patch (full
+render scale) - the user's own Add-Ons disable of 'Max Resolution (built-in)' was being overridden
+by the preset/env force. Fixes in build-119:
+
+- patch_manager: the per-game Add-Ons list now wins over the OOT preset and EDEN_NX2_OOT_PRESET=1
+  for built-in patches (user-disabled patches stay off; previously the preset force re-applied).
+  With the user's existing disable in place, the game boots on its dynamic-resolution path (the
+  console's own behavior under GPU load) instead of forced full scale.
+- yuzu dialog: 'Force Max Resolution' checkbox now defaults off when the host adapter reports
+  <= 6.5 GB dedicated VRAM (DXGI query), text no longer advertises frame generation, DLSS SR is
+  described honestly. Bigger cards keep the full-scale default.
+- Vulkan: 'Patch topology not used with tessellation' warning demoted to Debug (the game logs it
+  for every pipeline build; thousands of lines per boot). DLSS failure log line no longer claims
+  FSR 3.1 - the path takes the game's upscaler.
+- Frame generation stays OFF: code default frame_gen=false, preset forces false. The 60 FPS
+  dialog text no longer claims FG is enabled.
+
+Shader-build-time investigation on this machine: the disk pipeline cache is healthy (13 .bin blobs,
+~1 GB; only 2 pipelines built live in the session; keys are stable via
+static_assert(has_unique_object_representations_v); cache version is manual (54), not bumped per
+build, so caches survive updates). Runtime builds are ~2-4 ms; the remaining user-visible cost is
+first-run/cold-cache driver compiles. Keep the user/cache/shader folder across updates; the
+preloader (most-recently-used, seek-based) handles warm starts.
+
+1080p note: the game chose 3840x2160 as its SR output from its own graphics setting; the emulator
+cannot shrink that from outside. For 1080p output, set the game's graphics option to 1080p
+(docked, as on a real 1080p TV) - DLSS then upscales/presents at 1080p natively. Unverified as of
+this writing; the build above has NOT been measured in gameplay yet.
+
+Build machinery on this PC: build dir C:\Users\rikom\ocarina2-build, MSVC 14.51.36231 + VS2026 Build Tools, Qt 6.11.1 via CPM repo cache (.cache/cpm), Ninja, configured by
+vcvars64. Do NOT run a bare cmake configure without vcvars64: CMAKE_SYSTEM_PROCESSOR is then NOT
+detected ('Target architecture: GENERIC') and the OpenSSL CI package fatals ('Unsupported platform
+for CI package'). working configure = ocarina2-configure.cmd; this round passes LICHII_BUILD_TAG=build-119.
