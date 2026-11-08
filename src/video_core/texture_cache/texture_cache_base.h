@@ -48,6 +48,7 @@
 #include "video_core/texture_cache/image_info.h"
 #include "video_core/texture_cache/image_view_base.h"
 #include "video_core/texture_cache/render_targets.h"
+#include "video_core/texture_cache/stale_pages.h"
 #include "video_core/texture_cache/types.h"
 #include "video_core/textures/texture.h"
 #include "video_core/textures/unswizzle_worker.h"
@@ -878,23 +879,19 @@ private:
     /// guest memory stale (the GPU's data is gone). Its whole pages are marked here and kept
     /// tracked, so CPU writes, unmaps and write-backs clear them. An image made entirely on marked
     /// pages starts without an upload: the upload would only copy stale bytes the GPU overwrites.
+    /// Switch 2 titles only: the buffer cache feeds Nx2MayBeGpuWritten for them alone.
     void MarkStale(const ImageBase& image);
     void ClearStale(DAddr addr, size_t size);
     void ClearStaleImage(const ImageBase& image);
     /// Clears every device range [gpu_addr, gpu_addr + size) maps to.
     void ClearStaleGpu(GPUVAddr gpu_addr, size_t size);
-    [[nodiscard]] bool IsAllStale(DAddr addr, size_t size) const;
-    void UpdateStaleTracking(u64 run_begin, u64 run_pages, s32 delta);
     // Off here unless EDEN_NX2_TC_SKIP_STALE=1: no gain at an Ocarina of Time Hyrule Field save
     // (fresh launches, walking 1% low 40.2 off vs 36.5 on); #463 measured +20% in Castle Town.
     bool tc_skip_stale{[] {
         const char* value = std::getenv("EDEN_NX2_TC_SKIP_STALE");
         return value != nullptr && value[0] == '1';
     }()};
-    /// Device memory pages (Core::Memory::YUZU_PAGEBITS), not this cache's 1 MiB lookup pages.
-    static constexpr u64 STALE_PAGE_BITS = 12;
-    std::vector<u64> stale_bits; ///< One bit per device page
-    u64 stale_page_count{};
+    StalePages stale_pages;
     u64 tc_stale_skips{};        ///< Uploads skipped (last 600 frames)
     u64 tc_stale_skip_bytes{};
     u64 tc_stale_gpu_written{};  ///< Stale but buffer-written pages: uploaded after all
