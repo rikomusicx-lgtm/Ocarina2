@@ -1299,7 +1299,8 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
                     GraphicsPipelineCacheKey key;
                     file.read(reinterpret_cast<char*>(&key), sizeof(key));
                     const auto pipeline_record{
-                        read_record(file, static_cast<u64>(static_cast<std::streamoff>(record.position)))};
+                        VideoCommon::ReadPipelineRecord(
+                            file, static_cast<u64>(static_cast<std::streamoff>(record.position)))};
                     queue_graphics(key, std::move(envs), pipeline_record);
                     ++queued_graphics;
                     --skipped_pipelines;
