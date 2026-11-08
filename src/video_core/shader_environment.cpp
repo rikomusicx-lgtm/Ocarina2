@@ -1524,7 +1524,6 @@ static void ReadPipelines(
             if (stop_loading.stop_requested()) {
                 return;
             }
-            const auto record_position = record_begin;
             u32 num_envs{};
             file.read(reinterpret_cast<char*>(&num_envs), sizeof(num_envs));
             if (num_envs == 0 || num_envs > Maxwell::MaxShaderProgram) {
@@ -1542,7 +1541,7 @@ static void ReadPipelines(
             if (compute) {
                 load_compute(file, std::move(envs.front()));
             } else {
-                load_graphics(file, std::move(envs), record_position);
+                load_graphics(file, std::move(envs), std::streampos{record_begin});
             }
         }
     } catch (const std::bad_alloc& e) {
