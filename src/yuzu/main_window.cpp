@@ -58,6 +58,50 @@
 #include "configuration/configure_per_game.h"
 #include "configuration/configure_tas.h"
 
+#ifdef _WIN32
+#include <dxgi1_4.h>
+#include <algorithm>
+// dxgi pulls in the Windows headers, whose CreateDirectory/CreateFile macros would rewrite
+// the VFS wrappers below. Undo them here; the wrappers exist because of these defines.
+#ifdef CreateDirectory
+#undef CreateDirectory
+#endif
+#ifdef CreateFile
+#undef CreateFile
+#endif
+#pragma comment(lib, "dxgi.lib")
+#endif
+
+namespace {
+// Dedicated video memory of the adapter with the most of it, in bytes; 0 when it can't be
+// queried (non-Windows, or DXGI refused to say). Used to keep the 60 FPS preset off
+// VRAM-tight cards' Max Resolution path, where DLSS can't fit either.
+u64 HostDedicatedVramBytes() {
+#ifdef _WIN32
+    IDXGIFactory1* factory = nullptr;
+    if (FAILED(CreateDXGIFactory1(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(&factory)))) {
+        return 0;
+    }
+    u64 best = 0;
+    for (UINT index = 0;; ++index) {
+        IDXGIAdapter1* adapter = nullptr;
+        if (factory->EnumAdapters1(index, &adapter) == DXGI_ERROR_NOT_FOUND) {
+            break;
+        }
+        DXGI_ADAPTER_DESC1 desc{};
+        if (SUCCEEDED(adapter->GetDesc1(&desc)) && (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) == 0) {
+            best = std::max<u64>(best, desc.DedicatedVideoMemory);
+        }
+        adapter->Release();
+    }
+    factory->Release();
+    return best;
+#else
+    return 0;
+#endif
+}
+} // Anonymous namespace
+
 #include "util/clickable_label.h"
 #include "util/controller_navigation.h"
 #include "util/overlay_dialog.h"
@@ -2095,27 +2139,31 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
         asked_oot_performance_settings = true;
         if (Settings::EnvOotPresetEnabled()) {
             // EDEN_NX2_OOT_PRESET=1: apply the 60 FPS dialog as accepted without showing it
-            // (unattended/headless launches and test harnesses). Max Resolution stays on.
+            // (unattended/headless launches and test harnesses). Max Resolution defaults on;
+            // a patch disabled in Add-Ons stays off (patch_manager honors the Add-Ons list).
             use_oot_performance_settings = true;
             use_oot_max_resolution = true;
             LOG_INFO(Config, "OOT 60 FPS settings forced by EDEN_NX2_OOT_PRESET=1");
         } else {
+        // On cards with ~6 GB of VRAM the Max Resolution patch (full render scale) blows
+        // the budget: DLSS declines every frame and the game's own upscaler runs at the
+        // full output size instead. Default the checkbox off there and let the game's
+        // dynamic resolution scale, like the console does; DLSS then has room to run.
+        const u64 host_vram = HostDedicatedVramBytes();
+        const bool max_resolution_default = host_vram == 0 || host_vram > (u64{6500} << 20);
         QMessageBox oot_settings_dialog(
             QMessageBox::Question, tr("Ocarina of Time 60 FPS settings"),
             tr("Use the 60 FPS settings for Ocarina of Time?\n\n"
                "Vulkan, 1x resolution, GPU Low, asynchronous shaders, BC3, conservative VRAM, "
                "GPU video decoding, bilinear scaling, no AA or post-processing, reactive "
-               "flushing off, the built-in Dynamic FPS patch, and preflushing GPU-written "
-               "memory for fewer frame stalls. Built-in optical-flow frame generation (2x, "
-               "capped at 60 Hz) is enabled. Max Resolution stays on by default so the game "
-               "renders at 1080p.\n\n"
+               "flushing off, the built-in Dynamic FPS patch, and DLSS Super Resolution for "
+               "the game's upscale pass when DLSS fits in VRAM. Frame generation stays off.\n\n"
                "These settings apply until Lichii is closed. Your saved settings are not "
-               "changed."),
+               "changed. Patches you disabled in Add-Ons stay disabled."),
             QMessageBox::Yes | QMessageBox::No, this);
         auto* max_resolution_checkbox =
-            new QCheckBox(tr("Force Max Resolution (1080p, recommended)"),
-                          &oot_settings_dialog);
-        max_resolution_checkbox->setChecked(true);
+            new QCheckBox(tr("Force Max Resolution (full render scale)"), &oot_settings_dialog);
+        max_resolution_checkbox->setChecked(max_resolution_default);
         oot_settings_dialog.setCheckBox(max_resolution_checkbox);
         use_oot_performance_settings = oot_settings_dialog.exec() == QMessageBox::Yes;
         use_oot_max_resolution =
