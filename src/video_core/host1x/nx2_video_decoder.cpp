@@ -1,11 +1,14 @@
 // SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstring>
 #include <optional>
 #include <set>
+#include <thread>
 #include <utility>
 
 #include "common/logging.h"
@@ -20,6 +23,7 @@ extern "C" {
 #pragma GCC diagnostic ignored "-Wconversion"
 #endif
 
+#include <libavutil/hwcontext.h>
 #include <libswscale/swscale.h>
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -48,6 +52,12 @@ std::optional<NvdecCommon::VideoCodec> CodecFromMime(std::string_view mime) {
         return NvdecCommon::VideoCodec::H264;
     }
     return std::nullopt;
+}
+
+// dav1d defaults to a thread per host thread. A 1080p60 movie needs a few, and the emulator's
+// own threads need the rest.
+int Dav1dThreads() {
+    return static_cast<int>(std::clamp(std::thread::hardware_concurrency() / 2, 2U, 8U));
 }
 
 } // namespace
@@ -136,7 +146,10 @@ struct Nx2VideoDecoder::Impl {
             AVCodecContext* codec_context = context->GetCodecContext();
             codec_context->flags &= ~AV_CODEC_FLAG_LOW_DELAY;
             codec_context->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
-            codec_context->thread_count = 4;
+            // dav1d defaults to a thread per host thread; cap it (upstream #879).
+            codec_context->thread_count = std::string_view{decoder->GetCodec()->name} == "libdav1d"
+                                              ? Dav1dThreads()
+                                              : 4;
         }
         open = context->OpenContext(*decoder);
         using_hardware = open && use_gpu;
@@ -205,6 +218,7 @@ struct Nx2VideoDecoder::Impl {
 
 Nx2VideoDecoder::Nx2VideoDecoder(std::string_view mime) : impl{std::make_unique<Impl>()} {
     impl->name = std::string{mime};
+    const auto start = std::chrono::steady_clock::now();
     const auto codec = CodecFromMime(mime);
     if (!codec) {
         LOG_ERROR(HW_GPU, "nx2 video: no decoder for codec \"{}\"", mime);
@@ -216,7 +230,11 @@ Nx2VideoDecoder::Nx2VideoDecoder(std::string_view mime) : impl{std::make_unique<
     if (!impl->open) {
         impl->Open(*codec, false);
     }
-    LOG_INFO(HW_GPU, "nx2 video: decoder for \"{}\" {}", mime, impl->open ? "open" : "failed to open");
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - start)
+                        .count();
+    LOG_INFO(HW_GPU, "nx2 video: decoder for \"{}\" {} (opened in {} ms)", mime,
+             impl->open ? "open" : "failed to open", ms);
 }
 
 Nx2VideoDecoder::~Nx2VideoDecoder() = default;
