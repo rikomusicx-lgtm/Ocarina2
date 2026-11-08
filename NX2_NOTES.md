@@ -322,3 +322,66 @@ Build machinery on this PC: build dir C:\Users\rikom\ocarina2-build, MSVC 14.51.
 vcvars64. Do NOT run a bare cmake configure without vcvars64: CMAKE_SYSTEM_PROCESSOR is then NOT
 detected ('Target architecture: GENERIC') and the OpenSSL CI package fatals ('Unsupported platform
 for CI package'). working configure = ocarina2-configure.cmd; this round passes LICHII_BUILD_TAG=build-119.
+
+## 2026-11-08 - build-120 (Ocarina of Time 3050, update #4)
+
+Live-session findings on the owner's PC (Ryzen 5 3600, RTX 3050 6 GB, 24 GB RAM, Windows 11,
+meta-virtual desktop, displays 1920x1080) while the game sat in Kokiri, and the fixes argued
+from them. Frame rate: ~18 FPS, mean frame 55 ms, p50 54.8, p90 57.5, min 49.9; ~180 render
+passes a second (about 10 per frame).
+
+Where the time goes (Task Manager-style counters + the live debug server + EDEN_NX2_GPU_PROFILE):
+
+- 3D engine 68% busy, whole GPU ~90% busy at 64 W, SM clocks 1987/2130 MHz (not power or
+  thermal limited), VRAM 4263/6144 MiB used (4.66 GiB reported available at device creation).
+  This is the game's own HMMA upscaler at the 4K output size - the most expensive thing the
+  game can run on this card - plus the 1440p scene render. The GPU is not FLOP-limited; it is
+  busy but slow, waiting on a serialized, emulator-bound submission stream.
+- Host CPU ~586% (about 5.9 of 12 logical CPUs), 105 threads, 26,769 page faults a second
+  (soft), ~4.1 GB private working set; the GPU back thread is ~52% busy, the split back half
+  waits ~340 ms/s for the front, and fence traffic is 4,280 fences a second.
+- The engine parses ~85k methods per frame (~1.54M/s, ~138 ms/s on the back thread), ~1.19M 3D
+  register writes a second, binds stage buffers ~48k/s, and copies ~552 MB a second of
+  GPU-written buffers back to the CPU in ~44,300 copies (skinning/collision data the game
+  reads after compute passes; inherent to the game's design, not a bug to chase blindly).
+- Pipeline building is not the mid-game bottleneck: runtime builds ran 2-4 ms each, zero draws
+  held for unbuilt pipelines, ~64 builds per 10 s at scene transitions. The cost is boot time
+  and the rejected-every-boot class below.
+
+In this session DLSS declined every frame with a different signature than build-118/119:
+"NVIDIA DLSS recording failed at stage 4 (Streamline result 15)" = eErrorNGXFailed, with the
+plugin line "NGX create feature failed 0xbad0000d" = NVSDK_NGX_Result_FAIL_OutOfGPUMemory,
+at the game's 3840x2160 output (it comes from the game's own graphics option; the emulator
+cannot shrink it from outside). DLSS was then disabled for the rest of the session by the
+one-shot failure latch. Fixes in build-120:
+
+- vk_streamline_dlss: a failed evaluation is no longer terminal. The upscaler latches the
+  failure, reports Failed() (the caller keeps the game's upscaler for that frame), and retries
+  after 10 s; a later, lighter scene can adopt DLSS without a restart. A failed frame still
+  falls back exactly as before (the output is cleared for that frame only).
+- Frame generation is removed in its entirety. No code path, setting, toggle or UI remains:
+  the LSFG/FSR3 chains and their shaders, the frame_gen* settings, the present-frame
+  storage-image plumbing (Frame::storage_view/storage_capable, NeedsStorage, MaxExtraFrames),
+  the FIFO-forced pacing branch and the LSFG extra-frame image clamp, the Qt status toggle and
+  its Advanced-tab page, the OOT preset's force-off line, the Android settings catalog /
+  quick settings / Lossless Scaling manager / system-info row / setup step, the
+  LosslessScalingHelper, every Frame Generation string and array (7 languages), the lossless
+  user-directory path, and the fsr3 probe tools.
+- Shader disk cache version 54 -> 55. The foliage-culling environment fix in build-119 let the
+  codegen ask about storage-pointer tables that blobs written before that fix never recorded,
+  so 18 pipelines failed every boot with "Uncached storage pointer classification"
+  (deterministic, same hashes, every launch since the fix). One cold rebuild happens now; the
+  blobs record the complete tables afterwards.
+- GUI (small, as asked): the window title and the About dialog name the build plainly
+  ("Lichii build-120"); the Midnight Purple theme's panel surface is slightly darker; the
+  OOT 60 FPS preset text no longer mentions frame generation. The title no longer carries the
+  compiler id.
+
+Docked gameplay remains the target and the OOT preset stays docked with DLSS on.
+Not verified as of this writing: the Hyrule Field crash, the cutscene audio fixes, and any
+gameplay at all with build-120 - the 30 FPS bar in Kokiri / main menu / cutscenes is NOT yet
+met on this machine (~18 FPS at the game's 4K output with the game's upscaler). The path to
+native-with-DLSS is in-game: set the graphics output to 1080p (a real docked TV) and leave
+"Force Max Resolution" unchecked (the build-119 default on <= 6.5 GB cards); the game then
+renders dynamically and DLSS upscales to 1080p. Do not publish the release until this is
+measured.

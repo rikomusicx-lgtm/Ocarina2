@@ -6,6 +6,20 @@ New entries go under `## [Unreleased]`; `tools/ci/bump-version.sh` turns them in
 
 ## [Unreleased]
 
+- Remove frame generation in its entirety: the LSFG/FSR3 interpolation chains and their
+  settings, the present-frame storage-image plumbing, the status-bar toggle and the
+  Advanced-tab page (Windows), and the Android quick settings / Lossless Scaling manager /
+  setup step / system-info row / strings. No frame interpolation exists anywhere in the
+  build; presentation paces with FIFO/Mailbox/Immediate only.
+- NVIDIA DLSS: a failed evaluation no longer disables DLSS for the rest of the session. The
+  upscaler latches the failure, falls back to the game's upscaler for the frame as before,
+  and retries every 10 seconds; a lighter scene can adopt DLSS without a restart.
+- Shader disk cache version 55: stale blobs from before the foliage-culling fix missed
+  storage-pointer tables the current codegen needs, so 18 pipelines were rejected every
+  boot. One rebuild happens now.
+- Window title and About dialog name the build (Lichii build-N); Midnight Purple theme is a
+  touch darker.
+
 - Reduce Ocarina of Time GPU submission and timing overhead, apply inherited title settings before
   initialization, and preserve explicit per-game choices across global configuration reloads.
 - Fix split-GPU startup waits, syncpoint callback registration races, and deferred fragment-barrier
