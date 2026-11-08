@@ -14,6 +14,21 @@ endfunction()
 
 get_timestamp(BUILD_DATE)
 
+# Local release builds: release packaged from a commit tagged like build-118 picks the tag
+# up as the build number instead of requiring CI to pass LICHII_BUILD_TAG.
+if (NOT LICHII_BUILD_TAG)
+    execute_process(
+        COMMAND git describe --exact-match --tags HEAD
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE exact_tag
+        ERROR_QUIET
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if (exact_tag MATCHES "^build-[0-9]+$")
+        set(LICHII_BUILD_TAG "${exact_tag}")
+        message(STATUS "[GetSCMRev] LICHII_BUILD_TAG taken from the tag on HEAD: ${exact_tag}")
+    endif()
+endif()
+
 if (LICHII_BUILD_TAG MATCHES "^build-[0-9]+$")
     set(BUILD_VERSION "${LICHII_BUILD_TAG}")
     set(IS_DEV_BUILD false)
