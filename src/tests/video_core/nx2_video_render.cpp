@@ -7,6 +7,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "common/settings.h"
 #include "video_core/host1x/ffmpeg.h"
 #include "video_core/host1x/nx2_video_decoder.h"
 
@@ -18,6 +19,21 @@ namespace {
 using Tegra::Host1x::Nx2Picture;
 using Tegra::Host1x::Nx2PictureFormat;
 using Tegra::Host1x::Nx2VideoDecoder;
+
+/// These tests exercise the NV12 render and scaler paths, not hardware selection, and the CI
+/// runner has no GPU: with NVDEC emulation set to GPU a stub D3D11VA device is created and the
+/// hardware path segfaults inside FFmpeg on such machines. Pin CPU decoding for the decoders
+/// constructed here.
+struct CpuDecoderScope {
+    CpuDecoderScope()
+        : previous{Settings::values.nvdec_emulation.GetValue()} {
+        Settings::values.nvdec_emulation.SetValue(Settings::NvdecEmulation::Cpu);
+    }
+    ~CpuDecoderScope() {
+        Settings::values.nvdec_emulation.SetValue(previous);
+    }
+    Settings::NvdecEmulation previous;
+};
 
 Nx2Picture Picture(u32 width, u32 height, AVPixelFormat format) {
     Nx2Picture picture{width, height, 0, std::make_shared<FFmpeg::Frame>()};
@@ -106,6 +122,7 @@ bool SameVisiblePixels(const std::vector<u8>& actual, const std::vector<u8>& exp
 
 TEST_CASE("NX2 video interleaves planar chroma and copies complete odd NV12 rows",
           "[video_core][nx2_video_render]") {
+    const CpuDecoderScope cpu_decoder;
     Nx2VideoDecoder decoder{"video/avc"};
     REQUIRE(decoder.IsOpen());
     for (const AVPixelFormat format : {AV_PIX_FMT_YUV420P, AV_PIX_FMT_NV12}) {
@@ -140,6 +157,7 @@ TEST_CASE("NX2 video interleaves planar chroma and copies complete odd NV12 rows
 
 TEST_CASE("NX2 video rejects insufficient NV12 pitch and storage before writing",
           "[video_core][nx2_video_render]") {
+    const CpuDecoderScope cpu_decoder;
     Nx2VideoDecoder decoder{"video/avc"};
     REQUIRE(decoder.IsOpen());
     for (const AVPixelFormat format : {AV_PIX_FMT_YUV420P, AV_PIX_FMT_NV12}) {
@@ -161,6 +179,7 @@ TEST_CASE("NX2 video rejects insufficient NV12 pitch and storage before writing"
 
 TEST_CASE("NX2 video refreshes cached scaler ranges from full to limited and back",
           "[video_core][nx2_video_render]") {
+    const CpuDecoderScope cpu_decoder;
     Nx2VideoDecoder decoder{"video/avc"};
     REQUIRE(decoder.IsOpen());
     auto picture = Picture(16, 16, AV_PIX_FMT_YUV420P);
@@ -185,6 +204,7 @@ TEST_CASE("NX2 video refreshes cached scaler ranges from full to limited and bac
 
 TEST_CASE("NX2 video keeps full-range planar frames on the scaler path",
           "[video_core][nx2_video_render]") {
+    const CpuDecoderScope cpu_decoder;
     Nx2VideoDecoder decoder{"video/avc"};
     REQUIRE(decoder.IsOpen());
     for (const AVPixelFormat format : {AV_PIX_FMT_YUV420P, AV_PIX_FMT_YUVJ420P}) {
@@ -205,6 +225,7 @@ TEST_CASE("NX2 video keeps full-range planar frames on the scaler path",
 
 TEST_CASE("NX2 full-range NV12 preserves same-size chroma and converts resized frames",
           "[video_core][nx2_video_render]") {
+    const CpuDecoderScope cpu_decoder;
     Nx2VideoDecoder decoder{"video/avc"};
     REQUIRE(decoder.IsOpen());
     auto picture = Picture(16, 16, AV_PIX_FMT_NV12);
