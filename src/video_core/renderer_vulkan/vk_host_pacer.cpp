@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 #include "common/logging.h"
 #include "video_core/nx2_debug_control.h"
@@ -25,6 +26,10 @@ Ns ToNs(double ns) {
 }
 } // Anonymous namespace
 
+/// The host pacer's idea of the display refresh: on Windows, DWM's timing info (measured
+/// period, else the nominal rate); elsewhere the rate the frontend publishes to
+/// `g_display_refresh_hz`, or `EDEN_NX2_HOST_REFRESH_HZ` (Hz), when either is known in
+/// (20, 1000) Hz. nullopt when unknown or on failure.
 std::optional<double> QueryRefreshPeriodNs() {
 #ifdef _WIN32
     DWM_TIMING_INFO info{};
@@ -50,6 +55,19 @@ std::optional<double> QueryRefreshPeriodNs() {
     if (EnumDisplaySettingsW(nullptr, ENUM_CURRENT_SETTINGS, &mode) &&
         mode.dmDisplayFrequency > 1) {
         return 1e9 / mode.dmDisplayFrequency;
+    }
+#else
+    // No compositor timing query here (Linux): the frontend reports the window's display
+    // refresh, or the user overrides it.
+    static const double forced = [] {
+        const char* value = std::getenv("EDEN_NX2_HOST_REFRESH_HZ");
+        return value != nullptr ? std::atof(value) : 0.0;
+    }();
+    const double reported =
+        VideoCommon::Nx2Perf::g_display_refresh_hz.load(std::memory_order_relaxed);
+    const double hz = forced > 0.0 ? forced : reported;
+    if (hz > 20.0 && hz < 1000.0) {
+        return 1e9 / hz;
     }
 #endif
     return std::nullopt;

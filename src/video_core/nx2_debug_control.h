@@ -65,6 +65,36 @@ inline std::atomic<int> g_dma_snapshot{-1};
 /// measure how long each frame was shown.
 inline std::atomic<int> g_host_pace{-1};
 
+/// Numbered experiment switches EDEN_NX2_EXP0 .. EDEN_NX2_EXP63, live through the debug server:
+/// slots for batches of fixes built together and A/B-tested in one session. 0 = off.
+/// Slots 8, 9, 10, 12, 14, 17, 18, 19 mirror fixes that are on in this line through other
+/// switches or zortos293/Lichii imports; they default to 0 here — enable them for A/B with
+/// EDEN_NX2_EXP<n>.
+/// EXP21 = 1: a texture whose handle word is a storage buffer's address gets no texture
+/// (VideoCommon::HandleIsStoragePointer). Ocarina of Time's Zora's River waterfall flickered
+/// every other frame in bursts without it.
+inline constexpr int ExperimentCount = 64;
+inline std::atomic<int> g_experiments[ExperimentCount]{};
+
+inline void LoadExperiments() {
+    static const bool loaded = [] {
+        g_experiments[21].store(1, std::memory_order_relaxed);
+        for (int n = 0; n < ExperimentCount; ++n) {
+            const std::string name = "EDEN_NX2_EXP" + std::to_string(n);
+            if (const char* value = std::getenv(name.c_str())) {
+                g_experiments[n].store(std::atoi(value), std::memory_order_relaxed);
+            }
+        }
+        return true;
+    }();
+    static_cast<void>(loaded);
+}
+
+/// The value of experiment switch `n` (EDEN_NX2_EXP<n>), 0 unless set.
+[[nodiscard]] inline int Experiment(int n) {
+    LoadExperiments();
+    return g_experiments[n].load(std::memory_order_relaxed);
+}
 /// The live switch called `name`, or null.
 [[nodiscard]] inline std::atomic<int>* FindSwitch(std::string_view name) {
     if (name == "EDEN_NX2_DMA_WAIT_WRITERS") {

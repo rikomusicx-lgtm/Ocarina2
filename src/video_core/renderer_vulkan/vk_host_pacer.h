@@ -96,7 +96,9 @@ private:
     double interval_sum_ms{}, interval_max_ms{}, hold_sum_ms{}, latency_sum_ms{};
 };
 
-/// The display refresh period from the OS compositor (Windows); nullopt elsewhere or on failure.
+/// The display refresh period from the OS compositor (Windows, via DWM) or the rate the
+/// frontend publishes (see `g_display_refresh_hz` in nx2_perf.h), or from EDEN_NX2_HOST_REFRESH_HZ
+/// on platforms without a compositor query (Linux); nullopt elsewhere or on failure.
 [[nodiscard]] std::optional<double> QueryRefreshPeriodNs();
 
 } // namespace Vulkan
