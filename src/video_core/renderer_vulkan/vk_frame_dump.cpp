@@ -946,10 +946,6 @@ void FrameDumpSchedule::StartPair() {
     SetCapturing(true);
 }
 
-bool FrameDumpSchedule::FileTriggered() const noexcept {
-    return !trigger_file.empty();
-}
-
 FrameDumpSchedule::Step FrameDumpSchedule::Tick(double elapsed_seconds) {
     if (!enabled || done) {
         return Step::None;

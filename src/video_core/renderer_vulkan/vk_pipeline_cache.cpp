@@ -940,60 +940,6 @@ void MergeCompatiblePipelineCaches(const std::filesystem::path& base_dir,
 // boot that ran out of memory never saved one and the next boot did the same.
 constexpr size_t MaxPipelinesWithoutUsedList = 3000;
 
-// EDEN_NX2_BACKGROUND_PIPELINES=0: cached pipelines boot skips are built when first needed, on
-// the GPU thread, as before. EDEN_NX2_BACKGROUND_PIPELINE_THREADS sets how many threads build
-// them (default a quarter of the host's, 1 to 6).
-bool BackgroundPipelinesEnabled() {
-    static const bool enabled = [] {
-        const char* value = std::getenv("EDEN_NX2_BACKGROUND_PIPELINES");
-        return value == nullptr || value[0] != '0';
-    }();
-    return enabled;
-}
-
-size_t BackgroundPipelineThreads() {
-    if (const char* value = std::getenv("EDEN_NX2_BACKGROUND_PIPELINE_THREADS")) {
-        return std::clamp<size_t>(static_cast<size_t>(std::strtoull(value, nullptr, 10)), 1, 16);
-    }
-    return std::clamp<size_t>(std::thread::hardware_concurrency() / 4, 1, 6);
-}
-
-// EXPERIMENT EDEN_NX2_EXP5 (live, read by each background build): background pipeline builds
-// competed with the game's few busy threads (Ocarina of Time 49 instead of 60 fps for the 45-80 s
-// they took). 0 = as before (below normal priority, any core). 1 = idle priority, so every game
-// thread and the GPU thread's own pipeline builders run first, and off the cores pinned to the GPU
-// threads (and off their L3 where the CPU has two), on efficiency cores on hybrid CPUs. 2..16 = as
-// 1, with at most that many building at once.
-int QuietPrebuildMode() {
-    return VideoCore::Nx2Debug::Experiment(5);
-}
-
-void PlacePrebuildThread(bool quiet) {
-    thread_local bool placed_quiet = false;
-    thread_local u64 placed_mask = 0;
-    // The GPU threads pin themselves when they start, which can be after the first builds.
-    const u64 mask = quiet ? Common::BackgroundWorkCpuMask() : 0;
-    if (quiet == placed_quiet && mask == placed_mask) {
-        return;
-    }
-    if (quiet) {
-        Common::SetCurrentThreadIdlePriority();
-        Common::SetCurrentThreadToEfficiencyCores();
-    } else {
-        Common::SetCurrentThreadPriority(Common::ThreadPriority::Low);
-        Common::SetCurrentThreadToBackgroundWork();
-    }
-    Common::SetCurrentThreadCpuMask(mask);
-    placed_quiet = quiet;
-    placed_mask = mask;
-    static std::atomic<u64> logged{~u64{0}};
-    const u64 state = quiet ? mask | (u64{1} << 63) : 0;
-    if (logged.exchange(state, std::memory_order_relaxed) != state) {
-        LOG_INFO(Render_Vulkan, "Background pipeline threads: {} priority, CPU mask {:#x}",
-                 quiet ? "idle" : "below normal", mask);
-    }
-}
-
 // EDEN_NX2_PRELOAD_ALL_PIPELINES=1 builds every cached pipeline at boot, as before.
 bool PreloadAllPipelines() {
     static const bool all = [] {
