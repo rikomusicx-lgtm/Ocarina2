@@ -73,12 +73,16 @@ const Themes themes{{
     {"Dark Colorful", "colorful_dark"},
     {"Midnight Blue", "qdarkstyle_midnight_blue"},
     {"Midnight Blue Colorful", "colorful_midnight_blue"},
+    {"Midnight Purple", "qdarkstyle_midnight_purple"},
+    {"Midnight Purple Colorful", "colorful_midnight_purple"},
 }};
 
 bool IsDarkTheme() {
     const auto& theme = UISettings::values.theme;
     return theme == std::string("qdarkstyle") || theme == std::string("qdarkstyle_midnight_blue") ||
-           theme == std::string("colorful_dark") || theme == std::string("colorful_midnight_blue");
+           theme == std::string("qdarkstyle_midnight_purple") ||
+           theme == std::string("colorful_dark") || theme == std::string("colorful_midnight_blue") ||
+           theme == std::string("colorful_midnight_purple");
 }
 
 Values values = {};
