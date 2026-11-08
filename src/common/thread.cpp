@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "common/adpf.h"
+#include "common/core_pinning.h"
 #include "common/error.h"
 #include "common/event_wait.h"
 #include "common/logging.h"
@@ -458,6 +459,7 @@ namespace {
 // (a soft affinity the power manager respects) and background workers on the slower ones.
 // EDEN_HYBRID_CORES=0 turns this off.
 struct WindowsCpuSets {
+    std::vector<Common::LogicalProcessor> processors;
     std::vector<ULONG> performance;
     std::vector<ULONG> efficiency;
     bool hybrid = false;
@@ -489,11 +491,6 @@ const WindowsCpuSets& CpuSets() {
                  GetCurrentProcess(), 0)) {
             return result;
         }
-        struct Entry {
-            ULONG id;
-            u8 efficiency_class;
-        };
-        std::vector<Entry> entries;
         u8 best = 0;
         for (ULONG offset = 0; offset + sizeof(SYSTEM_CPU_SET_INFORMATION) <= length;) {
             const auto* info =
@@ -502,14 +499,17 @@ const WindowsCpuSets& CpuSets() {
                 break;
             }
             if (info->Type == CpuSetInformation) {
-                entries.push_back({info->CpuSet.Id, info->CpuSet.EfficiencyClass});
+                const u32 core =
+                    (static_cast<u32>(info->CpuSet.Group) << 8) | info->CpuSet.CoreIndex;
+                result.processors.push_back({static_cast<u32>(info->CpuSet.Id), core,
+                                             static_cast<u8>(info->CpuSet.EfficiencyClass)});
                 best = (std::max)(best, static_cast<u8>(info->CpuSet.EfficiencyClass));
             }
             offset += info->Size;
         }
-        for (const Entry& entry : entries) {
-            (entry.efficiency_class == best ? result.performance : result.efficiency)
-                .push_back(entry.id);
+        for (const Common::LogicalProcessor& processor : result.processors) {
+            (processor.efficiency_class == best ? result.performance : result.efficiency)
+                .push_back(processor.id);
         }
         result.hybrid = !result.efficiency.empty() && result.performance.size() >= 2;
         if (result.hybrid) {
@@ -533,6 +533,58 @@ void SelectCurrentThreadCpuSets(const std::vector<ULONG>& ids) {
     if (!set(GetCurrentThread(), ids.empty() ? nullptr : ids.data(),
              static_cast<ULONG>(ids.size()))) {
         LOG_WARNING(Common, "SetThreadSelectedCpuSets failed: {}", Common::GetLastErrorMsg());
+    }
+}
+} // Anonymous namespace
+#endif
+
+#if defined(__linux__) && !defined(__ANDROID__)
+#include <fstream>
+#include <optional>
+
+namespace {
+// The logical processors this process may run on, with their physical core (package and core id)
+// and, on hybrid CPUs that report it, their relative capacity as the efficiency class.
+std::vector<Common::LogicalProcessor> LinuxProcessors() {
+    std::vector<Common::LogicalProcessor> processors;
+    cpu_set_t allowed;
+    CPU_ZERO(&allowed);
+    if (sched_getaffinity(0, sizeof(allowed), &allowed) != 0) {
+        return processors;
+    }
+    const auto read = [](int cpu, const char* node) -> std::optional<u32> {
+        std::ifstream file{"/sys/devices/system/cpu/cpu" + std::to_string(cpu) + "/" + node};
+        u32 value{};
+        if (file >> value) {
+            return value;
+        }
+        return std::nullopt;
+    };
+    for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu) {
+        if (!CPU_ISSET(cpu, &allowed)) {
+            continue;
+        }
+        const auto core = read(cpu, "topology/core_id");
+        const auto package = read(cpu, "topology/physical_package_id");
+        if (!core || !package) {
+            return {};
+        }
+        // cpu_capacity is 1024 for the fastest cores; absent on CPUs that are not hybrid.
+        const u32 capacity = read(cpu, "cpu_capacity").value_or(1024);
+        processors.push_back({static_cast<u32>(cpu), (*package << 16) | *core,
+                              static_cast<u8>((std::min)(capacity, 1024U) >> 3)});
+    }
+    return processors;
+}
+
+void SetCurrentThreadAffinity(const std::vector<u32>& cpus) {
+    cpu_set_t set;
+    CPU_ZERO(&set);
+    for (const u32 cpu : cpus) {
+        CPU_SET(cpu, &set);
+    }
+    if (const int error = pthread_setaffinity_np(pthread_self(), sizeof(set), &set); error != 0) {
+        LOG_WARNING(Common, "pthread_setaffinity_np failed: {}", std::strerror(error));
     }
 }
 } // Anonymous namespace
@@ -595,12 +647,15 @@ void SetCurrentThreadPriority(ThreadPriority new_priority) {
 }
 
 void SetCurrentThreadName(const char* name) {
-#ifdef _MSC_VER
-    // Sets the debugger-visible name of the current thread.
-    if (auto pf = (decltype(&SetThreadDescription))(void*)GetProcAddress(GetModuleHandle(TEXT("KernelBase.dll")), "SetThreadDescription"); pf)
-        pf(GetCurrentThread(), UTF8ToUTF16W(name).data()); // Windows 10+
-    else
-        ; // No-op
+#ifdef _WIN32
+    // Sets the debugger-visible name of the current thread (Windows 10+). Looked up at run time,
+    // which also covers MinGW, whose headers may not declare it.
+    using SetThreadDescriptionFn = HRESULT(WINAPI*)(HANDLE, PCWSTR);
+    static const auto set_description = reinterpret_cast<SetThreadDescriptionFn>(
+        reinterpret_cast<void*>(GetProcAddress(GetModuleHandleW(L"KernelBase.dll"), "SetThreadDescription")));
+    if (set_description) {
+        set_description(GetCurrentThread(), UTF8ToUTF16W(name).c_str());
+    }
 #elif  defined(__APPLE__)
     pthread_setname_np(name);
 #elif defined(__HAIKU__)
@@ -620,11 +675,6 @@ void SetCurrentThreadName(const char* name) {
         buf[len] = '\0';
         pthread_setname_np(pthread_self(), buf);
     }
-#elif defined(_WIN32)
-    // MinGW with the POSIX threading model does not support pthread_setname_np
-    // See for reference
-    // https://gitlab.freedesktop.org/mesa/mesa/-/blame/main/src/util/u_thread.c?ref_type=heads#L75
-    (void)name;
 #else
     pthread_setname_np(pthread_self(), name);
 #endif
@@ -646,57 +696,60 @@ void SetCurrentThreadToPerformanceCores() {
 
 void PinCurrentThread(PinnedRole role) {
 #ifdef _WIN32
-    // Off with EDEN_NX2_PIN_THREADS=0. On by default with 6 or more physical cores: the split's
-    // back did about 8% more draws a second at Lake Hylia (Ryzen 7 7800X3D), its worst window
-    // 29 -> 54 fps, once no SMT sibling shared its core.
-    static const char* const setting = std::getenv("EDEN_NX2_PIN_THREADS");
-    if (setting != nullptr && setting[0] == '0') {
-        return;
-    }
-    // Physical cores of processor group 0, as masks of their logical processors.
-    static const std::vector<KAFFINITY> cores = [] {
-        std::vector<KAFFINITY> result;
-        DWORD length = 0;
-        GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &length);
-        std::vector<u8> buffer(length);
-        auto* info = reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*>(buffer.data());
-        if (!GetLogicalProcessorInformationEx(RelationProcessorCore, info, &length)) {
-            return result;
+    struct PinnedCpuSets {
+        std::vector<ULONG> front;
+        std::vector<ULONG> back;
+        std::vector<ULONG> guest;
+    };
+    static const PinnedCpuSets pinned = [] {
+        const GpuThreadPinning plan = PlanGpuThreadPinning(CpuSets().processors);
+        if (plan.front.empty()) {
+            LOG_WARNING(Common,
+                        "GPU thread pinning skipped: {} physical performance cores, needs {}",
+                        plan.performance_cores, MinCoresForGpuThreadPinning);
+            return PinnedCpuSets{};
         }
-        for (DWORD offset = 0; offset < length;) {
-            auto* entry =
-                reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*>(buffer.data() + offset);
-            if (entry->Processor.GroupCount > 0 && entry->Processor.GroupMask[0].Group == 0) {
-                result.push_back(entry->Processor.GroupMask[0].Mask);
-            }
-            offset += entry->Size;
+        LOG_INFO(Common,
+                 "GPU thread pinning: front and back on a physical core each, guest cores on the "
+                 "other {} performance cores ({} logical processors)",
+                 plan.performance_cores - 2, plan.guest.size());
+        return PinnedCpuSets{{plan.front.begin(), plan.front.end()},
+                             {plan.back.begin(), plan.back.end()},
+                             {plan.guest.begin(), plan.guest.end()}};
+    }();
+    const std::vector<ULONG>& ids = role == PinnedRole::GpuFront  ? pinned.front
+                                    : role == PinnedRole::GpuBack ? pinned.back
+                                                                  : pinned.guest;
+    if (!ids.empty()) {
+        SelectCurrentThreadCpuSets(ids);
+    }
+#elif defined(__linux__) && !defined(__ANDROID__)
+    static const GpuThreadPinning plan = [] {
+        GpuThreadPinning result = PlanGpuThreadPinning(LinuxProcessors());
+        if (result.front.empty()) {
+            LOG_WARNING(Common,
+                        "GPU thread pinning skipped: {} physical performance cores, needs {}",
+                        result.performance_cores, MinCoresForGpuThreadPinning);
+        } else {
+            LOG_INFO(Common,
+                     "GPU thread pinning: front and back on a physical core each, guest cores on "
+                     "the other {} performance cores ({} logical processors)",
+                     result.performance_cores - 2, result.guest.size());
         }
         return result;
     }();
-    // Core 0 takes most interrupts: the GPU threads get cores 1 and 2.
-    if (cores.size() < (setting != nullptr && setting[0] == '1' ? 4U : 6U)) {
-        return;
+    const std::vector<u32>& cpus = role == PinnedRole::GpuFront  ? plan.front
+                                   : role == PinnedRole::GpuBack ? plan.back
+                                                                 : plan.guest;
+    if (!cpus.empty()) {
+        SetCurrentThreadAffinity(cpus);
     }
-    const KAFFINITY front = cores[1];
-    const KAFFINITY back = cores[2];
-    KAFFINITY mask{};
-    switch (role) {
-    case PinnedRole::GpuFront:
-        mask = front;
-        break;
-    case PinnedRole::GpuBack:
-        mask = back;
-        break;
-    case PinnedRole::GuestCore:
-        for (const KAFFINITY core : cores) {
-            mask |= core;
-        }
-        mask &= ~(front | back);
-        break;
-    }
-    if (mask != 0) {
-        SetThreadAffinityMask(GetCurrentThread(), mask);
-    }
+#else
+    (void)role;
+    [[maybe_unused]] static const bool logged = [] {
+        LOG_INFO(Common, "GPU thread pinning is only supported on Windows and Linux");
+        return true;
+    }();
 #endif
 }
 
@@ -792,89 +845,6 @@ void PollThreadPolicies() {
 #endif
 }
 
-#ifdef _WIN32
-Event::~Event() {
-    if (timed_wait_event) {
-        CloseHandle(static_cast<HANDLE>(timed_wait_event));
-    }
-}
-
-void Event::WakeTimedWaiters() {
-    if (timed_wait_event) {
-        SetEvent(static_cast<HANDLE>(timed_wait_event));
-    }
-}
-
-bool Event::WaitForWin32Fallback(const std::chrono::nanoseconds time) {
-    std::unique_lock lk{mutex};
-    using Clock = std::chrono::steady_clock;
-    const auto now = Clock::now();
-    const auto deadline = Clock::time_point{EventWaitDeadline(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()), time)};
-    while (!is_set.load()) {
-        if (Clock::now() >= deadline) {
-            return false;
-        }
-        struct Timer {
-            Timer() {
-                handle = CreateWaitableTimerExW(nullptr, nullptr,
-                                                CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
-                                                TIMER_MODIFY_STATE | SYNCHRONIZE);
-                if (!handle) {
-                    handle = CreateWaitableTimerExW(nullptr, nullptr, 0,
-                                                    TIMER_MODIFY_STATE | SYNCHRONIZE);
-                }
-            }
-            ~Timer() {
-                if (handle) {
-                    CloseHandle(handle);
-                }
-            }
-            HANDLE handle{};
-        };
-        static thread_local Timer timer;
-        if (!timed_wait_event) {
-            timed_wait_event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-        }
-        const auto remaining = deadline - Clock::now();
-        if (remaining <= Clock::duration::zero()) {
-            return false;
-        }
-        const auto step = (std::min<Clock::duration>)(remaining, std::chrono::hours{24});
-        if (timed_wait_event) {
-            ResetEvent(static_cast<HANDLE>(timed_wait_event));
-            using TimerTicks = std::chrono::duration<s64, std::ratio<1, 10'000'000>>;
-            LARGE_INTEGER due{};
-            due.QuadPart = -std::chrono::ceil<TimerTicks>(step).count();
-            const bool armed =
-                timer.handle && SetWaitableTimerEx(timer.handle, &due, 0, nullptr, nullptr, nullptr, 0);
-            const HANDLE handles[]{static_cast<HANDLE>(timed_wait_event), timer.handle};
-            const auto milliseconds = std::chrono::ceil<std::chrono::milliseconds>(step);
-            const DWORD timeout =
-                static_cast<DWORD>((std::min<s64>)(milliseconds.count(), INFINITE - 1));
-            lk.unlock();
-            const DWORD result = armed ? WaitForMultipleObjects(2, handles, FALSE, INFINITE)
-                                       : WaitForSingleObject(static_cast<HANDLE>(timed_wait_event), timeout);
-            if (armed) {
-                CancelWaitableTimer(timer.handle);
-            }
-            lk.lock();
-            if (result != WAIT_FAILED) {
-                continue;
-            }
-        }
-        const auto rem2 = deadline - Clock::now();
-        if (rem2 > Clock::duration::zero()) {
-            const auto fallback = std::chrono::ceil<std::chrono::milliseconds>(
-                (std::min<Clock::duration>)(rem2, std::chrono::hours{24}));
-            condvar.wait_for(lk, fallback, [this] { return is_set.load(); });
-        }
-    }
-    is_set = false;
-    return true;
-}
-#endif
-
 #ifdef ARCHITECTURE_x86_64
 // On Linux and UNIX systems, a futex would nominally be used to cover the costs
 // the idea is that it's intuitivelly cheaper to use a direct instruction as opposed to a full futex call
@@ -943,7 +913,10 @@ bool Event::WaitFor(const std::chrono::nanoseconds time) {
                 return true;
         }
     }
-    return WaitForWin32Fallback(time);
+    while (!is_set.load() && remaining() > std::chrono::nanoseconds::zero())
+        Common::Windows::SleepForOneTick();
+    bool expected = true;
+    return is_set.compare_exchange_strong(expected, false, std::memory_order_release);
 #else
     std::unique_lock lk{mutex};
     const auto now = std::chrono::steady_clock::now();
@@ -958,7 +931,12 @@ bool Event::WaitFor(const std::chrono::nanoseconds time) {
 #else
 bool Event::WaitFor(const std::chrono::nanoseconds time) {
 #ifdef _WIN32
-    return WaitForWin32Fallback(time);
+    auto const end = Common::g_wall_clock.GetTimeNS() + time;
+    while (!is_set.load() && end > Common::g_wall_clock.GetTimeNS())
+        Common::Windows::SleepForOneTick();
+    if (is_set.load())
+        Reset();
+    return true;
 #else
     std::unique_lock lk{mutex};
     const auto now = std::chrono::steady_clock::now();

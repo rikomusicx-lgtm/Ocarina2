@@ -10,6 +10,10 @@
 #include <immintrin.h>
 #endif
 
+#ifdef __linux__
+#include <sys/prctl.h>
+#endif
+
 #include "common/assert.h"
 #include "common/dkb_cpu_trace.h"
 #include "common/scope_exit.h"
@@ -55,9 +59,16 @@ void ThreadManager::StartThread(VideoCore::RendererBase& renderer, Core::Fronten
     thread = std::jthread([&](std::stop_token stop_token) {
         const Common::DkbCpuTrace::Registration cpu_trace{Common::DkbCpuTrace::Role::GpuCommand};
         Common::SetCurrentThreadName("GPU");
+#ifdef __linux__
+        // The pending-channel polls below sleep 50 us; the default timer slack adds up to 50 more.
+        prctl(PR_SET_TIMERSLACK, 1UL, 0, 0, 0);
+#endif
         Common::SetCurrentThreadPriority(Common::ThreadPriority::Critical);
         Common::PinCurrentThread(Common::PinnedRole::GpuFront);
         Common::SetCurrentThreadToPerformanceCores();
+        if (Settings::values.pin_gpu_threads.GetValue()) {
+            Common::PinCurrentThread(Common::PinnedRole::GpuFront);
+        }
         system.RegisterHostThread();
         // A guest semaphore write on another thread wakes this one from its pending sleep.
         Tegra::Nx2SemaphoreWaiters::Get().SetWakeEvent(&state.pending_wake);
@@ -69,7 +80,6 @@ void ThreadManager::StartThread(VideoCore::RendererBase& renderer, Core::Fronten
         CommandDataContainer next;
         // When a pending channel last moved or a command arrived (see the polling below).
         auto last_progress = std::chrono::steady_clock::now();
-        u32 idle_polls = 0;
         namespace Profile = VideoCommon::Nx2Profile;
         auto& split = VideoCommon::GpuSplit::Get();
         while (!stop_token.stop_requested()) {
@@ -85,7 +95,6 @@ void ThreadManager::StartThread(VideoCore::RendererBase& renderer, Core::Fronten
                 if (progressed) {
                     state.idle_on_pending.store(false, std::memory_order_release);
                     last_progress = std::chrono::steady_clock::now();
-                    idle_polls = 0;
                 }
                 if (!state.queue.TryPop(next)) {
                     if (!scheduler.HasPendingChannels()) {
@@ -109,38 +118,23 @@ void ThreadManager::StartThread(VideoCore::RendererBase& renderer, Core::Fronten
                         }
                     }
                     Profile::Scope scope{Profile::Zone::PendingSleep};
-                    // The CPU usually releases the semaphore soon after: pause-poll for up to
-                    // 2 ms at Normal priority, then sleep on pending_wake (a new command or a
-                    // latched semaphore wakes immediately) instead of a 1 ms kernel sleep.
+                    // The CPU usually releases the semaphore soon after: yield for half a
+                    // millisecond, then 50 us sleeps for up to 2 s (Ocarina of Time suspends
+                    // ~330 times a second), then 1 ms sleeps for menus and loading. 50 us got
+                    // Ocarina Kokiri village present to wait ~1 ms instead of ~17 ms. A
+                    // pending_wake latched by a release wakes us right away.
                     const auto idle_for = std::chrono::steady_clock::now() - last_progress;
-                    if (idle_polls == 0) {
-                        ++idle_polls;
-#if defined(ARCHITECTURE_x86_64)
-                        for (u32 i = 0; i < 256; ++i) {
-                            _mm_pause();
-                        }
-#else
+                    if (idle_for < std::chrono::microseconds{500}) {
                         std::this_thread::yield();
-#endif
-                    } else if (idle_for < std::chrono::milliseconds{2}) {
-                        ++idle_polls;
-                        Common::SetCurrentThreadPriority(Common::ThreadPriority::Normal);
-#if defined(ARCHITECTURE_x86_64)
-                        for (u32 i = 0; i < 256; ++i) {
-                            _mm_pause();
-                        }
-#endif
-                        std::this_thread::yield();
-                        Common::SetCurrentThreadPriority(Common::ThreadPriority::Critical);
+                    } else if (idle_for < std::chrono::seconds{2}) {
+                        std::this_thread::sleep_for(std::chrono::microseconds{50});
                     } else {
                         state.pending_wake.WaitFor(std::chrono::milliseconds{1});
                     }
                     continue;
                 }
-                idle_polls = 0;
                 state.idle_on_pending.store(false, std::memory_order_release);
             } else {
-                idle_polls = 0;
                 state.idle_on_pending.store(false, std::memory_order_release);
                 Profile::Scope scope{Profile::Zone::Idle};
                 state.queue.PopWait(next, stop_token);

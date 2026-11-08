@@ -20,16 +20,10 @@ namespace Common {
 
 class Event {
 public:
-#ifdef _WIN32
-    ~Event();
-#endif
     void Set() {
         std::scoped_lock lk{mutex};
         if (!is_set) {
             is_set = true;
-#ifdef _WIN32
-            WakeTimedWaiters();
-#endif
             condvar.notify_one();
         }
     }
@@ -63,11 +57,6 @@ public:
     }
 
 private:
-#ifdef _WIN32
-    void WakeTimedWaiters();
-    bool WaitForWin32Fallback(std::chrono::nanoseconds time);
-    void* timed_wait_event{};
-#endif
     alignas(64) std::atomic<bool> is_set{false};
     std::condition_variable condvar;
     std::mutex mutex;
@@ -119,15 +108,17 @@ enum class ThreadPlacement : u32 {
 void SetCurrentThreadPriority(ThreadPriority new_priority);
 void SetCurrentThreadName(const char* name);
 void SetCurrentThreadToPerformanceCores();
-
-/// EDEN_NX2_PIN_THREADS=1 (Windows): one physical core each for the split GPU thread's halves and
-/// the guest cores kept off them, so an SMT sibling never shares the GPU threads' core.
-enum class PinnedRole : u32 { GpuFront, GpuBack, GuestCore };
-void PinCurrentThread(PinnedRole role);
-
 void SetCurrentThreadToEfficiencyCores();
 void SetCurrentThreadToBackgroundWork();
 void SetCurrentThreadToAllCores();
+
+enum class PinnedRole : u32 { GpuFront, GpuBack, GuestCore };
+
+/// The experimental pin_gpu_threads setting (Windows and Linux): the split GPU thread's front and
+/// back each get a physical performance core of their own and the guest cores keep off those two.
+/// Skipped, with one log line, on CPUs with too few cores, with EDEN_HYBRID_CORES=0 (Windows), and
+/// on other hosts.
+void PinCurrentThread(PinnedRole role);
 
 void RefreshThreadPolicies();
 void PollThreadPolicies();
