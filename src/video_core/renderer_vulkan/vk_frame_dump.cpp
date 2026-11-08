@@ -243,8 +243,12 @@ FrameDump::FrameDump(const Device& device_, MemoryAllocator& memory_allocator_,
     const char* const at = std::getenv("EDEN_NX2_FRAME_DUMP_AT");
     const std::string_view value = at ? at : "60";
     // "file" captures once <dir>/capture.now exists, so a frame can be picked while playing.
+    // EDEN_NX2_FRAME_DUMP_PAIR=1 records the next frame as a second capture too.
     schedule.Configure(value, directory / "capture.now",
                        sampled_value && *sampled_value != '\0' && *sampled_value != '0');
+    if (const char* const pair_value = std::getenv("EDEN_NX2_FRAME_DUMP_PAIR")) {
+        pair = *pair_value != '\0' && *pair_value != '0';
+    }
     LOG_INFO(Render_Vulkan, "Frame dump armed: dir={} at={}", directory.string(), value);
 }
 
@@ -489,6 +493,23 @@ bool FrameDump::NoteBuffers(bool compute, std::span<const u64> shader_hashes,
             continue;
         }
         recorded |= RecordBuffer(buffer.host, buffer.host_offset, buffer.size, std::move(tags));
+    }
+    for (const BoundBuffer& buffer : buffers) {
+        if (!buffer.also_host || buffer.host == VK_NULL_HANDLE) {
+            continue;
+        }
+        const size_t program = compute ? 0 : buffer.stage + 1;
+        const u64 shader = program < shader_hashes.size() ? shader_hashes[program] : 0;
+        const std::string owner =
+            compute ? fmt::format(R"("dispatch":{},"after_draws":{})", dispatches, draws)
+                    : fmt::format(R"("pass":{},"draw":{})", pass_index, draws - 1);
+        recorded |= RecordBuffer(
+            buffer.host, buffer.host_offset, buffer.size,
+            fmt::format(
+                R"("kind":"buffer",{},"stage":{},"shader":"{:016x}","type":"{}","index":{},"written":{},"gpu_addr":"{:#x}","device_addr":"{:#x}","bound_size":{},"size":{},"gpu_modified":{},"source":"host_copy")",
+                owner, buffer.stage, shader, buffer.storage ? "storage" : "uniform", buffer.index,
+                buffer.written, buffer.gpu_addr, buffer.device_addr, buffer.bound_size, buffer.size,
+                buffer.gpu_modified));
     }
     return recorded;
 }
@@ -852,20 +873,29 @@ void FrameDump::TickFrame() {
     switch (schedule.Tick(elapsed)) {
     case FrameDumpSchedule::Step::None:
         return;
-    case FrameDumpSchedule::Step::Finish:
+    case FrameDumpSchedule::Step::Finish: {
         EndPass();
         Drain();
         Enqueue({.tags = fmt::format(R"("passes":{},"draws":{},"dispatches":{})", pass_index,
                                      draws, dispatches),
                  .summary = true,
                  .truncated = truncated});
-        return;
+        if (pair && !pair_active && schedule.FileTriggered()) {
+            pair_active = true;
+            schedule.StartPair();
+            LOG_INFO(Render_Vulkan, "Frame dump: pair capture of the next frame into {}",
+                     directory.string());
+            // Begin the pair capture below.
+        } else {
+            return;
+        }
+    }
     case FrameDumpSchedule::Step::Start:
         break;
     }
     std::error_code error;
     std::filesystem::create_directories(directory, error);
-    manifest.open(directory / "manifest.jsonl", std::ios::trunc);
+    manifest.open(directory / "manifest.jsonl", pair_active ? std::ios::app : std::ios::trunc);
     if (!manifest) {
         LOG_ERROR(Render_Vulkan, "Frame dump: cannot write {}", directory.string());
         if (const u64 id = schedule.CaptureId(); id != 0) {
@@ -908,6 +938,16 @@ bool FrameDumpSchedule::Arm(bool sampled_, bool buffers_, u64 id) {
     trigger_frame = 0;
     capture_id = id;
     return true;
+}
+
+void FrameDumpSchedule::StartPair() {
+    done = false;
+    pair_capture = true;
+    SetCapturing(true);
+}
+
+bool FrameDumpSchedule::FileTriggered() const noexcept {
+    return !trigger_file.empty();
 }
 
 FrameDumpSchedule::Step FrameDumpSchedule::Tick(double elapsed_seconds) {

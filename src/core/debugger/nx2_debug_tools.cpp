@@ -394,6 +394,16 @@ json LogFilter(ToolState& state, const json& params) {
     return result;
 }
 
+// Lifts or restores the speed limit (test scripts boot through the logos and menus unlimited).
+json SpeedLimit(ToolState&, const json& params) {
+    auto& setting = Settings::values.use_speed_limit;
+    const bool previous = setting.GetValue();
+    if (params.contains("on")) {
+        setting.SetValue(params.at("on").get<bool>());
+    }
+    return {{"previous", previous}, {"on", setting.GetValue()}};
+}
+
 json CaptureFrame(ToolState& state, const json& params) {
     if (!IsVulkan()) {
         throw std::runtime_error{"frame capture needs the Vulkan renderer"};
@@ -677,6 +687,7 @@ Handlers MakeHandlers(const std::shared_ptr<ToolState>& state) {
         {"screenshot", handler(Screenshot)},
         {"log_tail", handler(LogTail)},
         {"log_filter", handler(LogFilter)},
+        {"speed_limit", handler(SpeedLimit)},
         {"capture_frame", handler(CaptureFrame)},
         {"reject_shaders", handler(RejectShaders)},
         {"sample", handler(SampleThreads)},

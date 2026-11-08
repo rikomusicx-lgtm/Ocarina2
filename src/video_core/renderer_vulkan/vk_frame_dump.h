@@ -43,6 +43,13 @@ public:
     /// Captures the next frame for the debug server, which is told `id`. False while a capture
     /// runs.
     bool Arm(bool sampled, bool buffers, u64 id);
+    /// EDEN_NX2_FRAME_DUMP_PAIR: after a file-triggered capture, record the next frame as a
+    /// second capture, without re-checking the trigger.
+    void StartPair();
+    /// Whether the capture was triggered by the `capture.now` file (as opposed to time/frame).
+    [[nodiscard]] bool FileTriggered() const noexcept {
+        return !trigger_file.empty();
+    }
     /// Once per presented frame: whether a capture starts with the next frame or has ended.
     Step Tick(double elapsed_seconds);
     /// The capture Tick started could not begin.
@@ -74,6 +81,8 @@ private:
     bool buffers{};
     bool capturing{};
     bool done{};
+    /// The capture in flight was started by StartPair; the next Finish ends the pair.
+    bool pair_capture{};
     std::filesystem::path trigger_file;
     u64 trigger_frame{~0ULL};
     double trigger_seconds{std::numeric_limits<double>::infinity()};
@@ -118,6 +127,8 @@ public:
         VkBuffer host;
         u32 host_offset;
         std::vector<u8> guest;
+        /// EDEN_NX2_FRAME_DUMP_HOST: also read the host buffer the draw reads ("host_copy").
+        bool also_host{};
     };
 
     explicit FrameDump(const Device& device, MemoryAllocator& memory_allocator,
@@ -226,6 +237,11 @@ private:
     FrameDumpSchedule schedule;
     bool truncated{};
     std::filesystem::path directory;
+    /// EDEN_NX2_FRAME_DUMP_PAIR=1: a file-triggered capture is followed by one of the next frame
+    /// (both parities of an every-other-frame flicker). `pair` is the env, `pair_active` the one
+    /// pair already made.
+    bool pair{};
+    bool pair_active{};
     std::chrono::steady_clock::time_point start;
 
     std::ofstream manifest;
