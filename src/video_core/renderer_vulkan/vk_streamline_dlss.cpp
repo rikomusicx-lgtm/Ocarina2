@@ -215,7 +215,8 @@ void StreamlineDlssUpscaler::CreateOutput(VkExtent2D upscale_size) {
 
 bool StreamlineDlssUpscaler::Upscale(const Inputs& in) {
     if (failed) {
-        return false;
+        // Failed() only lets the caller through once the cooldown elapsed.
+        failed = false;
     }
     const bool extent_changed = !output_image || in.render_size.width != render_extent.width ||
                                 in.render_size.height != render_extent.height ||
@@ -416,6 +417,12 @@ bool StreamlineDlssUpscaler::Upscale(const Inputs& in) {
                       static_cast<int>(result), static_cast<int>(api_result));
         }
         if (result != VideoCommon::DlssEvaluationResult::Succeeded) {
+            // Failed() reports false again once the cooldown elapses, so a later, lighter scene
+            // can adopt DLSS without a restart. This frame's output was cleared: the game's
+            // upscaler takes over from here.
+            resume_ns.store(
+                (std::chrono::steady_clock::now() + kDlssRetryAfter).time_since_epoch().count(),
+                std::memory_order_relaxed);
             clear_output();
         }
     });

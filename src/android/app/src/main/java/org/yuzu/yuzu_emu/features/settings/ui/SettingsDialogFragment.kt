@@ -382,9 +382,7 @@ class SettingsDialogFragment : DialogFragment(), DialogInterface.OnClickListener
                 }
                 scSetting.setSelectedValue(value)
 
-                if (scSetting.setting.key == IntSetting.RENDERER_SCALING_FILTER.key ||
-                    scSetting.setting.key == IntSetting.RENDERER_FRAME_GEN_TARGET_RATE.key
-                ) {
+                if (scSetting.setting.key == IntSetting.RENDERER_SCALING_FILTER.key) {
                     settingsViewModel.setShouldReloadSettingsList(true)
                 }
 

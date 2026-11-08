@@ -371,20 +371,6 @@ class GamePropertiesFragment : Fragment() {
             }
             add(
                 SubmenuProperty(
-                    R.string.frame_gen,
-                    R.string.frame_gen_per_game_description,
-                    R.drawable.ic_duck,
-                    action = {
-                        val action = HomeNavigationDirections.actionGlobalSettingsActivity(
-                            args.game,
-                            Settings.MenuTag.SECTION_FRAME_GEN
-                        )
-                        binding.root.findNavController().navigate(action)
-                    }
-                )
-            )
-            add(
-                SubmenuProperty(
                     R.string.post_processing,
                     R.string.post_processing_per_game_description,
                     R.drawable.ic_post_processing,

@@ -774,8 +774,8 @@ Device::Device(VkInstance instance_, vk::PhysicalDevice physical_, VkSurfaceKHR 
     }
 
     // The Ampere workaround above only concerns guest shaders: enable float16 on the device so
-    // host-only shaders (frame generation) may use it. The AMD and Intel workarounds turn it off
-    // for every shader, host ones included.
+    // host-only shaders may use it. The AMD and Intel workarounds turn it off for every shader,
+    // host ones included.
     host_float16_supported |= float16_math;
     if (host_float16_supported) {
         features.shader_float16_int8.shaderFloat16 = VK_TRUE;

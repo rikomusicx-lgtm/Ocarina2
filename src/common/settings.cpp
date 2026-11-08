@@ -61,7 +61,6 @@ SWITCHABLE(NvdecEmulation, false);
 SWITCHABLE(Region, true);
 SWITCHABLE(RendererBackend, true);
 SWITCHABLE(ScalingFilter, false);
-SWITCHABLE(FrameGenType, false);
 SWITCHABLE(SpirvOptimizeMode, true);
 SWITCHABLE(TimeZone, true);
 SETTING(VSyncMode, true);
@@ -394,28 +393,6 @@ void UpdateRescalingInfo() {
     const auto setup = values.resolution_setup.GetValue();
     auto& info = values.resolution_info;
     TranslateResolutionInfo(setup, info);
-}
-
-u32 FrameGenMultiplier() {
-    return std::clamp(values.frame_gen_multiplier.GetValue(), MIN_FRAME_GEN_MULTIPLIER,
-                      MAX_FRAME_GEN_MULTIPLIER);
-}
-
-size_t FrameGenGenerations() {
-    if (!values.frame_gen.GetValue()) {
-        return 0;
-    }
-    return FrameGenMultiplier() - 1;
-}
-
-size_t FrameGenMaxGenerations() {
-    if (!values.frame_gen.GetValue()) {
-        return 0;
-    }
-    if (values.frame_gen_target_rate.GetValue() != 0) {
-        return MAX_FRAME_GEN_MULTIPLIER - 1;
-    }
-    return FrameGenMultiplier() - 1;
 }
 
 void RestoreGlobalState(bool is_powered_on) {

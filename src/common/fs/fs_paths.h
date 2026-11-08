@@ -20,7 +20,6 @@
 #define KEYS_DIR "keys"
 #define LOAD_DIR "load"
 #define LOG_DIR "log"
-#define LOSSLESS_DIR "lossless"
 #define NAND_DIR "nand"
 #define PLAY_TIME_DIR "play_time"
 #define POST_PRESET_DIR "post_presets"
@@ -41,5 +40,3 @@
 
 // yuzu-specific files
 #define LOG_FILE "eden_log.txt"
-#define LOSSLESS_DLL_FILE "Lossless.dll"
-#define LOSSLESS_CACHE_FILE "lsfg_spirv.cache"

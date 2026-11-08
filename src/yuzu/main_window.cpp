@@ -1118,31 +1118,6 @@ void MainWindow::InitializeWidgets() {
 
     statusBar()->insertPermanentWidget(0, volume_button);
 
-    frame_gen_status_button = new QPushButton();
-    frame_gen_status_button->setObjectName(QStringLiteral("TogglableStatusBarButton"));
-    frame_gen_status_button->setFocusPolicy(Qt::NoFocus);
-    frame_gen_status_button->setCheckable(true);
-    connect(frame_gen_status_button, &QPushButton::clicked, this, [this] {
-        Settings::values.frame_gen.SetValue(!Settings::values.frame_gen.GetValue());
-        UpdateFrameGenButton();
-    });
-    UpdateFrameGenButton();
-    frame_gen_status_button->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(frame_gen_status_button, &QPushButton::customContextMenuRequested,
-            [this](const QPoint& menu_location) {
-                QMenu context_menu;
-                for (auto const& [type, text] : ConfigurationShared::frame_gen_type_texts_map) {
-                    context_menu.addAction(text, [this, type] {
-                        Settings::values.frame_gen_type.SetValue(type);
-                        Settings::values.frame_gen.SetValue(true);
-                        UpdateFrameGenButton();
-                    });
-                }
-                context_menu.exec(frame_gen_status_button->mapToGlobal(menu_location));
-                frame_gen_status_button->repaint();
-            });
-    statusBar()->insertPermanentWidget(0, frame_gen_status_button);
-
 #ifdef HAS_RESHADE
     post_shader_status_button = new QPushButton();
     post_shader_status_button->setObjectName(QStringLiteral("TogglableStatusBarButton"));
@@ -2169,7 +2144,7 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
                "Vulkan, 1x resolution, GPU Low, asynchronous shaders, BC3, conservative VRAM, "
                "GPU video decoding, bilinear scaling, no AA or post-processing, reactive "
                "flushing off, the built-in Dynamic FPS patch, and DLSS Super Resolution for "
-               "the game's upscale pass when DLSS fits in VRAM. Frame generation stays off.\n\n"
+               "the game's upscale pass when DLSS fits in VRAM.\n\n"
                "These settings apply until Lichii is closed. Your saved settings are not "
                "changed. Patches you disabled in Add-Ons stay disabled."),
             QMessageBox::Yes | QMessageBox::No, this);
@@ -2378,10 +2353,6 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
     }
     status_bar_update_timer.start(500);
     renderer_status_button->setDisabled(true);
-    frame_gen_status_button->setDisabled(true);
-    frame_gen_state = VideoCore::FrameGenState::Pending;
-    frame_gen_frames = 0;
-    frame_gen_generating = false;
     refresh_button->setDisabled(true);
     SetFPSSuffix();
 
@@ -2600,7 +2571,6 @@ void MainWindow::OnEmulationStopped() {
     game_fps_label->setVisible(false);
     emu_frametime_label->setVisible(false);
     renderer_status_button->setEnabled(!UISettings::values.has_broken_vulkan);
-    frame_gen_status_button->setEnabled(true);
     refresh_button->setEnabled(true);
 
     if (!firmware_label->text().isEmpty()) {
@@ -4916,8 +4886,7 @@ void MainWindow::UpdateWindowTitle(std::string_view title_name, std::string_view
                                    std::string_view gpu_vendor) {
     static const std::string build_id = std::string{Common::g_build_id};
     static const std::string yuzu_title =
-        fmt::format("{} | {} | {}", std::string{Common::g_build_name},
-                    std::string{Common::g_build_version}, std::string{Common::g_compiler_id});
+        fmt::format("Lichii {}", std::string{Common::g_build_version});
 
     const auto override_title =
         fmt::format(fmt::runtime(std::string(Common::g_title_bar_format_idle)), build_id);
@@ -5035,12 +5004,6 @@ void MainWindow::UpdateStatusBar() {
 
     emu_frametime_label->setText(tr("Frame: %1 ms").arg(results.frametime * 1000.0, 0, 'f', 2));
 
-    const auto frame_gen = QtCommon::system->GPU().Renderer().GetFrameGenStatus();
-    frame_gen_generating = frame_gen.generated_frames > frame_gen_frames;
-    frame_gen_frames = frame_gen.generated_frames;
-    frame_gen_state = frame_gen.state;
-    UpdateFrameGenButton();
-
     res_scale_label->setVisible(true);
     emu_speed_label->setVisible(!Settings::values.use_multi_core.GetValue());
     game_fps_label->setVisible(true);
@@ -5104,87 +5067,6 @@ void MainWindow::UpdatePostShaderText() {
 }
 #endif
 
-void MainWindow::UpdateFrameGenButton() {
-    const bool enabled = Settings::values.frame_gen.GetValue();
-    frame_gen_status_button->setChecked(enabled);
-    if (!enabled) {
-        frame_gen_status_button->setText(tr("NO FG"));
-        frame_gen_status_button->setToolTip(tr("Frame generation is off."));
-        return;
-    }
-
-    const QString type = ConfigurationShared::frame_gen_type_texts_map
-                             .find(Settings::values.frame_gen_type.GetValue())
-                             ->second.toUpper();
-    const u32 target_rate = Settings::values.frame_gen_target_rate.GetValue();
-    const QString mode = target_rate == 0
-                             ? tr("FG %1 %2X").arg(type).arg(Settings::FrameGenMultiplier())
-                             : tr("FG %1 AUTO").arg(type);
-    const QString target = target_rate == 0
-                               ? QString()
-                               : tr(" It adds up to %1 frames per game frame to reach %2 FPS.")
-                                     .arg(Settings::MAX_FRAME_GEN_MULTIPLIER - 1)
-                                     .arg(target_rate);
-
-    if (!emulation_running) {
-        frame_gen_status_button->setText(mode);
-        frame_gen_status_button->setToolTip(
-            tr("Frame generation is on.%1 Whether it runs shows here once a game starts.")
-                .arg(target));
-        return;
-    }
-
-    QString unavailable;
-    switch (frame_gen_state) {
-    case VideoCore::FrameGenState::Pending:
-    case VideoCore::FrameGenState::Running:
-        break;
-    case VideoCore::FrameGenState::UnsupportedRenderer:
-        unavailable = tr("Frame generation needs the Vulkan renderer.");
-        break;
-    case VideoCore::FrameGenState::UnsupportedBuild:
-        unavailable = tr("This build was compiled without frame generation.");
-        break;
-    case VideoCore::FrameGenState::UnsupportedGpu:
-        unavailable = tr("This GPU lacks Vulkan features LSFG needs (Vulkan memory model, null "
-                         "descriptors and 16-bit floats). The Optical Flow type may still work.");
-        break;
-    case VideoCore::FrameGenState::UnsupportedSurface:
-        unavailable = tr("This GPU can't write to the window's swapchain format from a shader, so "
-                         "generated frames can't be presented.");
-        break;
-    case VideoCore::FrameGenState::MissingLosslessDll:
-        unavailable = tr("LSFG needs Lossless.dll from Lossless Scaling in the \"lossless\" folder "
-                         "of the user directory. It is missing or could not be loaded.");
-        break;
-    }
-
-    if (!unavailable.isEmpty()) {
-        frame_gen_status_button->setChecked(false);
-        frame_gen_status_button->setText(tr("FG UNAVAILABLE"));
-        frame_gen_status_button->setToolTip(
-            tr("Frame generation is on but not running. %1").arg(unavailable));
-        return;
-    }
-
-    if (frame_gen_generating) {
-        frame_gen_status_button->setText(mode);
-        frame_gen_status_button->setToolTip(tr("Frame generation is running.%1").arg(target));
-        return;
-    }
-
-    const QString target_met =
-        target_rate == 0
-            ? QString()
-            : tr(" It also pauses while the game already reaches %1 FPS.").arg(target_rate);
-    frame_gen_status_button->setText(tr("%1 (IDLE)").arg(mode));
-    frame_gen_status_button->setToolTip(
-        tr("Frame generation is on but generated no frames in the last half second. It pauses "
-           "while it warms up, for a second after a frame takes longer than 100 ms, and while "
-           "frames arrive in bursts.%1")
-            .arg(target_met));
-}
-
 void MainWindow::UpdateVolumeUI() {
     const auto volume_value = static_cast<int>(Settings::values.volume.GetValue());
     volume_slider->setValue(volume_value);
@@ -5205,7 +5087,6 @@ void MainWindow::UpdateStatusButtons() {
     UpdateDockedButton();
     UpdateFilterText();
     UpdateAAText();
-    UpdateFrameGenButton();
     UpdateVolumeUI();
 }
 

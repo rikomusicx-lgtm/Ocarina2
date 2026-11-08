@@ -63,8 +63,6 @@ inline void SetOcarinaOfTimePerformanceSettings(Values& settings, bool global,
     session(settings.scaling_filter, ScalingFilter::Bilinear);
     session(settings.anti_aliasing, AntiAliasing::None);
     session(settings.post_shader_enabled, false);
-    // Frame generation stays OFF: the game has to reach a stable 30 fps on its own frames.
-    session(settings.frame_gen, false);
     // Max Resolution is on by default: it fixes the render at 1080p, which is what users on a
     // 3050-class card want. Turning it off only lowers internal resolution (about 2-3 fps).
     settings.oot_max_resolution_preset_enabled = max_resolution;

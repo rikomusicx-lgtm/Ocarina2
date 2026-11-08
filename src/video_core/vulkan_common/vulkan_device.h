@@ -494,8 +494,8 @@ FN_MAX_LIMIT_LIST
         return float16_math;
     }
 
-    /// Whether host-only shaders (frame generation) may use float16. Unlike IsFloat16Supported, it
-    /// stays on under the NVIDIA Ampere workaround, which concerns guest shaders only.
+    /// Whether host-only shaders may use float16. Unlike IsFloat16Supported, it stays on under
+    /// the NVIDIA Ampere workaround, which concerns guest shaders only.
     bool IsHostFloat16Supported() const {
         return host_float16_supported;
     }
