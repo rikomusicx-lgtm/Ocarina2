@@ -31,11 +31,40 @@
 #include "video_core/host1x/gpu_device_memory_manager.h"
 #include "video_core/memory_manager.h"
 #include "video_core/nx2_debug_control.h"
+#include "video_core/pipeline_cache_policy.h"
 #include "video_core/shader_cache.h"
 #include "video_core/shader_environment.h"
+#include "shader_recompiler/program_header.h"
 #include "video_core/texture_cache/util.h"
 
 namespace VideoCommon {
+
+u64 VertexAttributeMaskOf(const Shader::Environment& environment) {
+    static const bool key_all = [] {
+        const char* value = std::getenv("EDEN_NX2_KEY_ALL_ATTRIBUTES");
+        return value != nullptr && value[0] == '1';
+    }();
+    if (key_all) {
+        return ~u64{0};
+    }
+    const Shader::Stage stage{environment.ShaderStage()};
+    if (stage == Shader::Stage::Task || stage == Shader::Stage::Mesh) {
+        // No vertex input (Ocarina of Time: 191 keys for 31 sets of shaders, split only by the
+        // attribute registers).
+        return 0;
+    }
+    if (stage != Shader::Stage::VertexB || !environment.IsNativeProgram()) {
+        return ~u64{0};
+    }
+    // The hardware only fetches the attributes in the input map, so a read outside it is never
+    // valid (none of Ocarina of Time's 1,250 cached vertex programs makes one).
+    std::array<std::array<bool, 4>, Tegra::Engines::Maxwell3D::Regs::NumVertexAttributes>
+        input_generic{};
+    for (size_t index = 0; index < input_generic.size(); ++index) {
+        input_generic[index] = environment.SPH().vtg.InputGeneric(index);
+    }
+    return VertexAttributeMask(input_generic);
+}
 
 void ShaderCache::InvalidateRegion(VAddr addr, size_t size) {
     std::scoped_lock lock{invalidation_mutex};

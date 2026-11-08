@@ -36,6 +36,12 @@ namespace VideoCommon {
 
 class GenericEnvironment;
 
+/// The vertex attribute registers a native vertex program fetches (two bits per attribute, in
+/// the same layout as FixedPipelineState::attribute_types). Task and mesh programs read no
+/// vertex input; programs in other stages read all of them. Environments of unsupported kinds
+/// keep all bits. EDEN_NX2_KEY_ALL_ATTRIBUTES=1 keeps every bit, as before the masking.
+[[nodiscard]] u64 VertexAttributeMaskOf(const Shader::Environment& environment);
+
 struct ShaderInfo {
     u64 unique_hash{};
     size_t size_bytes{};

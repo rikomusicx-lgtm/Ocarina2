@@ -41,6 +41,7 @@
 #include "video_core/memory_manager.h"
 #include "video_core/nx2_perf.h"
 #include "video_core/pipeline_cache_files.h"
+#include "video_core/pipeline_cache_policy.h"
 #include "video_core/renderer_vulkan/async_draw_policy.h"
 #include "video_core/renderer_vulkan/fixed_pipeline_state.h"
 #include "video_core/renderer_vulkan/maxwell_to_vk.h"
@@ -745,6 +746,254 @@ std::unordered_map<u64, u8> LoadUsedPipelines(const std::filesystem::path& path,
     return used;
 }
 
+/// Keeps only the vertex attribute types the programs of `envs` read (dynamic vertex input keys).
+void MaskKeyedAttributeTypes(GraphicsPipelineCacheKey& key, std::span<const FileEnvironment> envs) {
+    std::array<u64, Maxwell::MaxShaderProgram> attribute_masks;
+    attribute_masks.fill(~u64{0});
+    size_t env_index = 0;
+    for (size_t stage = 0; stage < Maxwell::MaxShaderProgram; ++stage) {
+        if (key.unique_hashes[stage] != 0 && env_index < envs.size()) {
+            attribute_masks[stage] = VideoCommon::VertexAttributeMaskOf(envs[env_index++]);
+        }
+    }
+    key.state.attribute_types = VideoCommon::KeyedAttributeTypes(
+        key.state.attribute_types, key.unique_hashes, attribute_masks);
+}
+
+/// Reads one record as VideoCommon::LoadPipelines does and returns the key it is loaded under
+/// (graphics keys masked as load_graphics masks them, compared over GraphicsPipelineCacheKey::Size
+/// bytes), for merging another build's cache. Counts and sizes are checked against the bytes
+/// left first, so a corrupt record cannot make an environment allocate more than the file holds.
+std::optional<std::string> ReadPipelineRecordKey(std::ifstream& file, std::streamoff end) {
+    u32 num_envs{};
+    file.read(reinterpret_cast<char*>(&num_envs), sizeof(num_envs));
+    if (num_envs == 0 || num_envs > Maxwell::MaxShaderProgram) {
+        return std::nullopt;
+    }
+    std::vector<FileEnvironment> envs(num_envs);
+    for (FileEnvironment& env : envs) {
+        const auto begin = static_cast<std::streamoff>(file.tellg());
+        std::array<u64, 6> counts{}; // code size, then the entry count of each table
+        file.read(reinterpret_cast<char*>(counts.data()), sizeof(counts));
+        file.seekg(begin);
+        const u64 left = static_cast<u64>(end - begin);
+        if (std::ranges::any_of(counts, [left](u64 count) { return count > left; })) {
+            return std::nullopt;
+        }
+        env.Deserialize(file);
+        if (static_cast<u32>(env.ShaderStage()) > static_cast<u32>(Shader::Stage::Mesh)) {
+            return std::nullopt;
+        }
+    }
+    const bool compute = envs.front().ShaderStage() == Shader::Stage::Compute;
+    const auto compute_envs = std::ranges::count_if(envs, [](const FileEnvironment& env) {
+        return env.ShaderStage() == Shader::Stage::Compute;
+    });
+    if (compute ? num_envs != 1 : compute_envs != 0) {
+        return std::nullopt;
+    }
+    std::string bytes(1, compute ? 'c' : 'g');
+    if (compute) {
+        ComputePipelineCacheKey key;
+        file.read(reinterpret_cast<char*>(&key), sizeof(key));
+        bytes.append(reinterpret_cast<const char*>(&key), sizeof(key));
+        return bytes;
+    }
+    GraphicsPipelineCacheKey key;
+    file.read(reinterpret_cast<char*>(&key), sizeof(key));
+    if (key.state.dynamic_vertex_input != 0) {
+        MaskKeyedAttributeTypes(key, envs);
+    }
+    bytes.append(reinterpret_cast<const char*>(&key), (std::min)(key.Size(), sizeof(key)));
+    return bytes;
+}
+
+/// Pipeline caches of zortos293/Lichii builds whose records this build reads, newest first.
+/// From #194 on (cache version 53) they write the same records as this build under another
+/// version number; version 54 (#408) only masks the vertex attribute types in its keys, as
+/// loading does here. Community packs often keep the legacy names, so those are taken when
+/// their header says 53 or 54.
+void MergeCompatiblePipelineCaches(const std::filesystem::path& base_dir,
+                                   const std::filesystem::path& own_cache,
+                                   const std::filesystem::path& own_used) {
+    constexpr std::array<char, 8> PipelineCacheMagic{'y', 'u', 'z', 'u', 'c', 'a', 'c', 'h'};
+    constexpr std::array<u32, 2> CompatibleVersions{54, 53};
+    struct Candidate {
+        std::filesystem::path cache;
+        std::filesystem::path used;
+        std::optional<u32> version; // nullopt: legacy name, read from the header
+    };
+    std::vector<Candidate> candidates;
+    for (const u32 version : CompatibleVersions) {
+        candidates.push_back({VideoCommon::VersionedPipelineCachePath(base_dir, "vulkan", version),
+                              VideoCommon::VersionedPipelineCachePath(base_dir, "vulkan_used",
+                                                                      version),
+                              version});
+    }
+    candidates.push_back({base_dir / "vulkan.bin", base_dir / "vulkan_used.bin", std::nullopt});
+    candidates.push_back({base_dir / "vulkan_pipelines.bin", {}, std::nullopt});
+
+    auto log_path = own_cache;
+    log_path += ".merged";
+    std::error_code error;
+    // Merge everything again into a cache that was deleted.
+    auto merge_log = std::filesystem::exists(own_cache, error)
+                         ? VideoCommon::ReadPipelineMergeLog(log_path)
+                         : VideoCommon::PipelineMergeLog{};
+    bool log_changed = false;
+    std::optional<VideoCommon::PipelineKeySet> own_keys;
+    using Status = VideoCommon::PipelineCacheMergeResult::Status;
+    for (const Candidate& candidate : candidates) {
+        const auto stamp = VideoCommon::StampPipelineCacheFile(candidate.cache);
+        if (!stamp) {
+            continue;
+        }
+        const std::string name = Common::FS::PathToUTF8String(candidate.cache.filename());
+        const std::string path = Common::FS::PathToUTF8String(candidate.cache);
+        std::optional<u32> version = candidate.version;
+        if (!version) {
+            for (const u32 compatible : CompatibleVersions) {
+                if (VideoCommon::PipelineCacheHeaderMatches(candidate.cache, PipelineCacheMagic,
+                                                            compatible)) {
+                    version = compatible;
+                    break;
+                }
+            }
+            if (!version) {
+                continue; // another build's or a driver cache
+            }
+        }
+        const auto merged = merge_log.find(name);
+        bool cache_merged = merged != merge_log.end() && merged->second == *stamp;
+        if (!cache_merged) {
+            const auto result = VideoCommon::MergePipelineCache(
+                candidate.cache, own_cache, PipelineCacheMagic, *version, CACHE_VERSION,
+                ReadPipelineRecordKey, own_keys);
+            switch (result.status) {
+            case Status::Merged:
+                LOG_INFO(Render_Vulkan,
+                         "Merged {} new pipelines ({} records) from {} (cache version {}); {} "
+                         "were already cached",
+                         result.added_pipelines, result.added_records, path, *version,
+                         result.known_pipelines);
+                cache_merged = true;
+                break;
+            case Status::Missing:
+                continue;
+            case Status::WrongHeader:
+                LOG_WARNING(Render_Vulkan,
+                            "Skipped pipeline cache {}: it is not a cache version {} file", path,
+                            *version);
+                break;
+            case Status::BadSource:
+                LOG_WARNING(Render_Vulkan,
+                            "Skipped pipeline cache {} (cache version {}): {}; nothing was "
+                            "merged, it is tried again when it changes",
+                            path, *version, result.detail);
+                break;
+            case Status::BadDestination:
+                LOG_WARNING(Render_Vulkan, "Not merging pipeline cache {} into {}: {}", path,
+                            Common::FS::PathToUTF8String(own_cache), result.detail);
+                return;
+            case Status::NoSpace:
+            case Status::WriteFailed:
+                LOG_WARNING(Render_Vulkan,
+                            "Not merging pipeline cache {}: {}; the cache is unchanged", path,
+                            result.detail);
+                continue; // tried again next boot
+            }
+            // A source that does not parse is recorded too, so it is not scanned every boot.
+            merge_log.insert_or_assign(name, *stamp);
+            log_changed = true;
+        }
+        if (!cache_merged || candidate.used.empty()) {
+            continue;
+        }
+        const auto used_stamp = VideoCommon::StampPipelineCacheFile(candidate.used);
+        const std::string used_name = Common::FS::PathToUTF8String(candidate.used.filename());
+        const auto used_merged = merge_log.find(used_name);
+        if (!used_stamp || (used_merged != merge_log.end() && used_merged->second == *used_stamp)) {
+            continue;
+        }
+        if (const auto added =
+                VideoCommon::MergeUsedPipelineLists(candidate.used, own_used, UsedPipelinesMagic)) {
+            LOG_INFO(Render_Vulkan, "Merged {} used pipelines from {}", *added,
+                     Common::FS::PathToUTF8String(candidate.used));
+        } else {
+            LOG_WARNING(Render_Vulkan,
+                        "Skipped used pipelines list {}: it or {} does not parse",
+                        Common::FS::PathToUTF8String(candidate.used),
+                        Common::FS::PathToUTF8String(own_used));
+        }
+        merge_log.insert_or_assign(used_name, *used_stamp);
+        log_changed = true;
+    }
+    if (log_changed && !VideoCommon::WritePipelineMergeLog(log_path, merge_log)) {
+        LOG_WARNING(Render_Vulkan, "Failed to write {}", Common::FS::PathToUTF8String(log_path));
+    }
+}
+
+// Without a list of the pipelines recent sessions used (the first boot with this cache, or a session
+// that ended before saving it), this many cached graphics pipelines at most are built at boot and the
+// rest when first needed. A cache that grew over many builds held 48k pipelines, ~21 GB of driver
+// memory built before the game started; the list is only saved at exit or after two minutes, so a
+// boot that ran out of memory never saved one and the next boot did the same.
+constexpr size_t MaxPipelinesWithoutUsedList = 3000;
+
+// EDEN_NX2_BACKGROUND_PIPELINES=0: cached pipelines boot skips are built when first needed, on
+// the GPU thread, as before. EDEN_NX2_BACKGROUND_PIPELINE_THREADS sets how many threads build
+// them (default a quarter of the host's, 1 to 6).
+bool BackgroundPipelinesEnabled() {
+    static const bool enabled = [] {
+        const char* value = std::getenv("EDEN_NX2_BACKGROUND_PIPELINES");
+        return value == nullptr || value[0] != '0';
+    }();
+    return enabled;
+}
+
+size_t BackgroundPipelineThreads() {
+    if (const char* value = std::getenv("EDEN_NX2_BACKGROUND_PIPELINE_THREADS")) {
+        return std::clamp<size_t>(static_cast<size_t>(std::strtoull(value, nullptr, 10)), 1, 16);
+    }
+    return std::clamp<size_t>(std::thread::hardware_concurrency() / 4, 1, 6);
+}
+
+// EXPERIMENT EDEN_NX2_EXP5 (live, read by each background build): background pipeline builds
+// competed with the game's few busy threads (Ocarina of Time 49 instead of 60 fps for the 45-80 s
+// they took). 0 = as before (below normal priority, any core). 1 = idle priority, so every game
+// thread and the GPU thread's own pipeline builders run first, and off the cores pinned to the GPU
+// threads (and off their L3 where the CPU has two), on efficiency cores on hybrid CPUs. 2..16 = as
+// 1, with at most that many building at once.
+int QuietPrebuildMode() {
+    return VideoCore::Nx2Debug::Experiment(5);
+}
+
+void PlacePrebuildThread(bool quiet) {
+    thread_local bool placed_quiet = false;
+    thread_local u64 placed_mask = 0;
+    // The GPU threads pin themselves when they start, which can be after the first builds.
+    const u64 mask = quiet ? Common::BackgroundWorkCpuMask() : 0;
+    if (quiet == placed_quiet && mask == placed_mask) {
+        return;
+    }
+    if (quiet) {
+        Common::SetCurrentThreadIdlePriority();
+        Common::SetCurrentThreadToEfficiencyCores();
+    } else {
+        Common::SetCurrentThreadPriority(Common::ThreadPriority::Low);
+        Common::SetCurrentThreadToBackgroundWork();
+    }
+    Common::SetCurrentThreadCpuMask(mask);
+    placed_quiet = quiet;
+    placed_mask = mask;
+    static std::atomic<u64> logged{~u64{0}};
+    const u64 state = quiet ? mask | (u64{1} << 63) : 0;
+    if (logged.exchange(state, std::memory_order_relaxed) != state) {
+        LOG_INFO(Render_Vulkan, "Background pipeline threads: {} priority, CPU mask {:#x}",
+                 quiet ? "idle" : "below normal", mask);
+    }
+}
+
 // EDEN_NX2_PRELOAD_ALL_PIPELINES=1 builds every cached pipeline at boot, as before.
 bool PreloadAllPipelines() {
     static const bool all = [] {
@@ -971,6 +1220,9 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
     std::filesystem::copy_file(VideoCommon::VersionedPipelineCachePath(base_dir, "vulkan_used", 52),
                                used_pipelines_filename, std::filesystem::copy_options::none,
                                migration_error);
+    // Pipelines of zortos293/Lichii caches this cache lacks are appended each time such a cache
+    // changes, and their used lists merged, so they are built like this build's own.
+    MergeCompatiblePipelineCaches(base_dir, pipeline_cache_filename, used_pipelines_filename);
     used_pipelines = LoadUsedPipelines(used_pipelines_filename, MaxUsedPipelineAge(device));
     used_pipelines_saved = std::chrono::steady_clock::now();
     size_t skipped_pipelines = 0;
@@ -1062,6 +1314,21 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
             return;
         }
 
+
+
+        // Keys stored before they kept only the attribute types the programs read (and imported
+        // cache version 53 ones) are looked up masked. The pipeline is the same: a type is only
+        // dropped for an attribute no program reads. Records that now share a key are tried
+        // newest first, like those of a pipeline stored again.
+        if (key.state.dynamic_vertex_input != 0) {
+            const u64 stored_hash = key.Hash();
+            MaskKeyedAttributeTypes(key, envs);
+            if (const auto used = used_pipelines.find(stored_hash); used != used_pipelines.end()) {
+                const u8 age = used->second;
+                const auto [entry, inserted] = used_pipelines.try_emplace(key.Hash(), age);
+                entry->second = (std::min)(entry->second, age);
+            }
+        }
         const bool key_requests_provoking_last = key.state.provoking_vertex_last != 0;
         if (key_requests_provoking_last && !dynamic_features.has_provoking_vertex_last_mode) {
             return;
