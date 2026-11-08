@@ -140,9 +140,13 @@ TEST_CASE("sysmix sink publishes samples before concurrently consumed metadata",
     REQUIRE(stream.GetQueueSize() == 0);
 }
 
-TEST_CASE("legacy output and renderer sinks preserve FIFO volume and repeated-frame underrun", "[sysmix_sink]") {
+TEST_CASE("legacy output and renderer sinks preserve FIFO volume and underrun behaviour", "[sysmix_sink]") {
     SysmixTests::Context context;
-    for (const auto type : {AudioCore::Sink::StreamType::Out, AudioCore::Sink::StreamType::Render}) {
+    // Out repeats the last frame on underrun; Render flushes silence instead (the repeated DC
+    // frame buzzes when the mix starves at low frame rates; Sysmix already did this).
+    for (const auto [type, underrun] :
+         {std::pair{AudioCore::Sink::StreamType::Out, s16{-2000}},
+          std::pair{AudioCore::Sink::StreamType::Render, s16{0}}}) {
         auto owned_stream = std::make_unique<SysmixTests::Stream>(context.system, type, 2, true);
         auto& stream = *owned_stream;
         stream.SetSystemVolume(0.5f);
@@ -160,6 +164,6 @@ TEST_CASE("legacy output and renderer sinks preserve FIFO volume and repeated-fr
         REQUIRE(std::ranges::all_of(output, [](s16 value) { return value == -2000; }));
         REQUIRE(stream.GetQueueSize() == 0);
         stream.ProcessAudioOutAndRender(output, 240);
-        REQUIRE(std::ranges::all_of(output, [](s16 value) { return value == -2000; }));
+        REQUIRE(std::ranges::all_of(output, [&underrun](s16 value) { return value == underrun; }));
     }
 }

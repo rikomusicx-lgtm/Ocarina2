@@ -95,7 +95,7 @@ void CheckLegacyProfile() {
     const auto& values = Settings::values;
     CHECK(values.scaling_filter.GetValue() == Settings::ScalingFilter::ScaleForce);
     CHECK(values.gpu_accuracy.GetValue() == Settings::GpuAccuracy::High);
-    CHECK(values.nvdec_emulation.GetValue() == Settings::NvdecEmulation::Cpu);
+    CHECK(values.nvdec_emulation.GetValue() == Settings::NvdecEmulation::Gpu);
     CHECK_FALSE(values.async_presentation.GetValue());
     CHECK_FALSE(values.use_asynchronous_shaders.GetValue());
 }
@@ -110,7 +110,7 @@ void CheckUnchangedProfile() {
     CHECK(values.slow_speed_limit.GetValue() == 50);
     CHECK(values.turbo_speed_limit.GetValue() == 200);
     CHECK_FALSE(values.sync_core_speed.GetValue());
-    CHECK(values.memory_layout_mode.GetValue() == Settings::MemoryLayout::Memory_4Gb);
+    CHECK(values.memory_layout_mode.GetValue() == Settings::MemoryLayout::Memory_8Gb);
     CHECK(values.vsync_mode.GetValue() == Settings::VSyncMode::Fifo);
     CHECK(values.fsr_sharpening_slider.GetValue() == 25);
     CHECK(values.dma_accuracy.GetValue() == Settings::DmaAccuracy::Default);
@@ -169,10 +169,13 @@ TEST_CASE("Absent global config receives the first-run profile and persists it",
                                std::istreambuf_iterator<char>{}};
     REQUIRE(saved.LoadData(contents) >= 0);
     file.close();
-    for (const char* key : {"scaling_filter", "gpu_accuracy", "nvdec_emulation",
+    for (const char* key : {"scaling_filter", "gpu_accuracy",
                             "async_presentation", "use_asynchronous_shaders"}) {
         CHECK_FALSE(saved.GetBoolValue("Renderer", (std::string{key} + "\\default").c_str(), true));
     }
+    // This fork defaults nvdec_emulation to Gpu, the value the fresh seed writes, so re-saving the
+    // config recomputes the marker as "matches the branch default": true, not false.
+    CHECK(saved.GetBoolValue("Renderer", "nvdec_emulation\\default", false));
     const auto filename = config->GetConfigFilePath();
     config.reset();
     FileConfig reopened{std::make_optional(filename)};
