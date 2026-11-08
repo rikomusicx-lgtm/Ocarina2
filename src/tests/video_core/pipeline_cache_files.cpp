@@ -124,7 +124,7 @@ LoadedPipelines LoadKeys(const std::filesystem::path& file) {
     VideoCommon::LoadPipelines(
         {}, file, VideoCommon::VulkanPipelineCacheVersion,
         [](std::ifstream&, VideoCommon::FileEnvironment) { FAIL("Unexpected compute record"); },
-        [&](std::ifstream& stream, std::vector<VideoCommon::FileEnvironment>) {
+        [&](std::ifstream& stream, std::vector<VideoCommon::FileEnvironment>, std::streampos) {
             u64 key{};
             stream.read(reinterpret_cast<char*>(&key), sizeof(key));
             loaded.keys.push_back(key);
@@ -152,7 +152,7 @@ std::vector<u64> LoadCheckedKeys(const std::filesystem::path& file) {
     VideoCommon::LoadPipelines(
         {}, file, VideoCommon::VulkanPipelineCacheVersion,
         [](std::ifstream&, VideoCommon::FileEnvironment) { FAIL("Unexpected compute record"); },
-        [&](std::ifstream& stream, std::vector<VideoCommon::FileEnvironment> envs) {
+        [&](std::ifstream& stream, std::vector<VideoCommon::FileEnvironment> envs, std::streampos) {
             std::array<u64, 6> key{};
             stream.read(reinterpret_cast<char*>(key.data()), sizeof(key));
             VideoCommon::CheckGraphicsRecord(key, envs.size());
@@ -218,7 +218,7 @@ std::vector<Vulkan::CachedComputeTranslation> LoadComputeTranslations(
                 {std::move(env), VideoCommon::ReadPipelineRecord(stream, begin)});
             begin = translations.back().record.end;
         },
-        [](std::ifstream&, std::vector<VideoCommon::FileEnvironment>) {
+        [](std::ifstream&, std::vector<VideoCommon::FileEnvironment>, std::streampos) {
             FAIL("Unexpected graphics record");
         });
     return translations;
@@ -642,7 +642,7 @@ TEST_CASE("Running out of memory while loading stops the load and keeps the file
     VideoCommon::LoadPipelines(
         {}, path, VideoCommon::VulkanPipelineCacheVersion,
         [](std::ifstream&, VideoCommon::FileEnvironment) { FAIL("Unexpected compute record"); },
-        [&](std::ifstream& file, std::vector<VideoCommon::FileEnvironment>) {
+        [&](std::ifstream& file, std::vector<VideoCommon::FileEnvironment>, std::streampos) {
             u64 key{};
             file.read(reinterpret_cast<char*>(&key), sizeof(key));
             if (++loaded == 2) {
@@ -671,7 +671,7 @@ TEST_CASE("A cached environment tells when the translator asked for a value it l
         VideoCommon::LoadPipelines(
             {}, path, VideoCommon::VulkanPipelineCacheVersion,
             [](std::ifstream&, VideoCommon::FileEnvironment) { FAIL("Unexpected compute record"); },
-            [&](std::ifstream& file, std::vector<VideoCommon::FileEnvironment> envs) {
+            [&](std::ifstream& file, std::vector<VideoCommon::FileEnvironment> envs, std::streampos) {
                 u64 key{};
                 file.read(reinterpret_cast<char*>(&key), sizeof(key));
                 auto& env = envs.front();
@@ -700,7 +700,7 @@ TEST_CASE("A missing value is conclusive where the record was made, or for an ol
     VideoCommon::LoadPipelines(
         {}, path, VideoCommon::VulkanPipelineCacheVersion,
         [](std::ifstream&, VideoCommon::FileEnvironment) { FAIL("Unexpected compute record"); },
-        [&](std::ifstream& file, std::vector<VideoCommon::FileEnvironment> envs) {
+        [&](std::ifstream& file, std::vector<VideoCommon::FileEnvironment> envs, std::streampos) {
             u64 key{};
             file.read(reinterpret_cast<char*>(&key), sizeof(key));
             auto& env = envs.front();
@@ -884,7 +884,7 @@ TEST_CASE("A cancelled load stops waiting for another emulator's lock",
     VideoCommon::LoadPipelines(
         stop.get_token(), path, VideoCommon::VulkanPipelineCacheVersion,
         [](std::ifstream&, VideoCommon::FileEnvironment) { FAIL("Unexpected compute record"); },
-        [](std::ifstream&, std::vector<VideoCommon::FileEnvironment>) {
+        [](std::ifstream&, std::vector<VideoCommon::FileEnvironment>, std::streampos) {
             FAIL("Cancelled load reached pipeline creation");
         });
     REQUIRE(std::chrono::steady_clock::now() - start < VideoCommon::PipelineCacheLockWait);
@@ -1034,7 +1034,7 @@ TEST_CASE("A later graphics record of a key goes only when its key is the first 
     VideoCommon::LoadPipelines(
         {}, path, VideoCommon::VulkanPipelineCacheVersion,
         [](std::ifstream&, VideoCommon::FileEnvironment) { FAIL("Unexpected compute record"); },
-        [&](std::ifstream& stream, std::vector<VideoCommon::FileEnvironment>) {
+        [&](std::ifstream& stream, std::vector<VideoCommon::FileEnvironment>, std::streampos) {
             Vulkan::GraphicsPipelineCacheKey read{};
             stream.read(reinterpret_cast<char*>(&read), sizeof(read));
             records.push_back(VideoCommon::ReadPipelineRecord(stream, begin));
