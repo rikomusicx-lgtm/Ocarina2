@@ -144,7 +144,7 @@ TEST_CASE("legacy output and renderer sinks preserve FIFO volume and underrun be
     SysmixTests::Context context;
     // Out repeats the last frame on underrun; Render flushes silence instead (the repeated DC
     // frame buzzes when the mix starves at low frame rates; Sysmix already did this).
-    for (const auto [type, underrun] :
+    for (const auto& [type, underrun] :
          {std::pair{AudioCore::Sink::StreamType::Out, s16{-2000}},
           std::pair{AudioCore::Sink::StreamType::Render, s16{0}}}) {
         auto owned_stream = std::make_unique<SysmixTests::Stream>(context.system, type, 2, true);
