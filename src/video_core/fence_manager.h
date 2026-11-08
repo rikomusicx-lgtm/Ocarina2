@@ -8,8 +8,8 @@
 
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstdlib>
 #include <cstring>
@@ -107,7 +107,7 @@ public:
             TryReleasePendingFences<false>();
         }
         auto [should_flush, committed_flushes] = CommitCacheFlushes();
-        if (Nx2Profile::Enabled()) [[unlikely]] {
+        if (Nx2Profile::Enabled()) {
             NoteFenceDecision(delay_fence, committed_flushes, trim);
         }
         if (!delay_fence && committed_flushes == 0 && SkipEmptyFence(trim)) {

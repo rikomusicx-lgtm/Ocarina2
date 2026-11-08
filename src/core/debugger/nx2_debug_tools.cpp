@@ -1037,6 +1037,7 @@ Handlers MakeHandlers(const std::shared_ptr<ToolState>& state) {
         {"pgo_dump", handler(PgoDump)},
         {"switch", handler(SetSwitch)},
         {"oot_high_refresh", handler(OotHighRefresh)},
+        {"speed_limit", handler(SpeedLimit)},
         {"read_memory", handler(ReadMemory)},
         {"search_memory", handler(SearchMemory)},
         {"read_gpu_memory", handler(ReadGpuMemory)},
