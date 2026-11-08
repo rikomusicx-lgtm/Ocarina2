@@ -7,6 +7,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <deque>
 #include <limits>
@@ -91,6 +92,7 @@ public:
 
     /// Mark region as CPU modified, notifying the device_tracker about this change
     void MarkRegionAsCpuModified(VAddr dirty_cpu_addr, u64 query_size) {
+        ForgetSynchronized(dirty_cpu_addr, query_size);
         IteratePages<true>(dirty_cpu_addr, query_size, [](Manager* manager, u64 offset, size_t size) {
             manager->ChangeRegionState(Type::CPU, true, manager->cpu_addr + offset, size);
         });
@@ -134,6 +136,7 @@ public:
     /// Mark region as modified from the CPU
     /// but don't mark it as modified until FlusHCachedWrites is called.
     void CachedCpuWrite(VAddr dirty_cpu_addr, u64 query_size) {
+        ForgetSynchronized(dirty_cpu_addr, query_size);
         IteratePages<true>(dirty_cpu_addr, query_size, [this](Manager* manager, u64 offset, size_t size) {
             const VAddr cpu_address = manager->cpu_addr + offset;
             manager->ChangeRegionState(Type::CachedCPU, true, cpu_address, size);
@@ -143,12 +146,16 @@ public:
 
     /// Flushes cached CPU writes, and notify the device_tracker about the deltas
     void FlushCachedWrites(VAddr query_cpu_addr, u64 query_size) noexcept {
+        synchronized_mask = 0;
         IteratePages<false>(query_cpu_addr, query_size, [](Manager* manager, [[maybe_unused]] u64 offset, [[maybe_unused]] size_t size) {
             manager->FlushCachedWrites();
         });
     }
 
     void FlushCachedWrites() noexcept {
+        if (!cached_pages.empty()) {
+            synchronized_mask = 0;
+        }
         for (auto id : cached_pages) {
             top_tier[id]->FlushCachedWrites();
         }
@@ -174,6 +181,19 @@ public:
             remaining_size -= copy_amount;
         }
         return false;
+    }
+
+    /// A range an upload scan just cleared (BufferCache::SynchronizeGeometryBuffer). Only a CPU
+    /// mark or a cached-write flush sets CPU or Untracked bits again, so until one reaches its
+    /// pages another scan would find and change nothing.
+    void WatchSynchronized(u32 slot, VAddr cpu_addr, u64 size) noexcept {
+        synchronized_ranges[slot] = {Common::AlignDown(cpu_addr, BYTES_PER_PAGE),
+                                     Common::AlignUp(cpu_addr + size, BYTES_PER_PAGE)};
+        synchronized_mask |= u64{1} << slot;
+    }
+
+    [[nodiscard]] bool IsSynchronized(u32 slot) const noexcept {
+        return ((synchronized_mask >> slot) & 1) != 0;
     }
 
     /// Call 'func' for each CPU modified range and unmark those pages as CPU modified
@@ -266,6 +286,19 @@ public:
     }
 
 private:
+    /// The tracker marks whole pages: a write next to a range on one of its pages reaches it.
+    void ForgetSynchronized(VAddr cpu_addr, u64 size) noexcept {
+        const VAddr write_begin = Common::AlignDown(cpu_addr, BYTES_PER_PAGE);
+        const VAddr write_end = Common::AlignUp(cpu_addr + size, BYTES_PER_PAGE);
+        for (u64 mask = synchronized_mask; mask != 0; mask &= mask - 1) {
+            const u32 slot = static_cast<u32>(std::countr_zero(mask));
+            const auto [begin, end] = synchronized_ranges[slot];
+            if (write_begin < end && begin < write_end) {
+                synchronized_mask &= ~(u64{1} << slot);
+            }
+        }
+    }
+
     template <bool create_region_on_fail, typename Func>
     bool IteratePages(VAddr cpu_address, size_t size, Func&& func) {
         using FuncReturn = typename std::invoke_result<Func, Manager*, u64, size_t>::type;
@@ -364,6 +397,8 @@ private:
     std::deque<std::array<Manager, MANAGER_POOL_SIZE>> manager_pool;
     std::deque<Manager*> free_managers;
     ::Common::unordered_set<u32> cached_pages;
+    std::array<std::pair<VAddr, VAddr>, 64> synchronized_ranges{};
+    u64 synchronized_mask{};
     DeviceTracker* device_tracker = nullptr;
 };
 

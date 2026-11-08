@@ -74,6 +74,12 @@ public:
         TrackContinuityImpl(address, virtual_address, size, asid);
     }
 
+    /// Changes whenever Map or Unmap ran: host pointers GetPointer returned before are only good
+    /// while it stays the same.
+    [[nodiscard]] u64 TranslationGeneration() const noexcept {
+        return translation_generation.load(std::memory_order_acquire);
+    }
+
     // Write / Read
     template <typename T>
     T* GetPointer(DAddr address);
@@ -124,12 +130,6 @@ public:
 
     u8* GetSpan(const DAddr src_addr, const std::size_t size);
     const u8* GetSpan(const DAddr src_addr, const std::size_t size) const;
-
-    /// Changes whenever Map or Unmap changes which host memory a device page reads: host
-    /// pointers kept from before are stale.
-    [[nodiscard]] u64 TranslationGeneration() const {
-        return translation_generation.load(std::memory_order_acquire);
-    }
 
     void ReadBlock(DAddr address, void* dest_pointer, size_t size,
                    std::source_location caller = std::source_location::current());

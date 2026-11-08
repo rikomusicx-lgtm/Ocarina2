@@ -213,7 +213,7 @@ void DmaPusher::DispatchCalls() {
                 gpu->FlushCommands();
                 gpu->OnCommandListEnd();
             },
-            VideoCommon::GpuSplit::Effect::None);
+            VideoCommon::GpuSplit::FastDrawNeutral);
         split.Publish();
         return;
     }
@@ -314,12 +314,10 @@ bool DmaPusher::Step() {
                 auto* const engine_state = subchannels[dma_state.subchannel];
                 if (auto& split = VideoCommon::GpuSplit::Get(); split.Active()) {
                     // The caches behind IsMemoryDirty belong to the split's back thread.
-                    split.Defer(
-                        [engine_state, memory = &memory_manager,
-                         address = GPUVAddr{dma_state.dma_get}, bytes = words * sizeof(u32)] {
-                            engine_state->current_dirty = memory->IsMemoryDirty(address, bytes);
-                        },
-                        VideoCommon::GpuSplit::Effect::None);
+                    split.Defer([engine_state, memory = &memory_manager, address = GPUVAddr{dma_state.dma_get},
+                                 bytes = words * sizeof(u32)] {
+                        engine_state->current_dirty = memory->IsMemoryDirty(address, bytes);
+                    }, VideoCommon::GpuSplit::FastDrawNeutral);
                 } else {
                     engine_state->current_dirty = memory_manager.IsMemoryDirty(dma_state.dma_get, words * sizeof(u32));
                 }
@@ -1004,7 +1002,7 @@ bool DmaPusher::ReadGpuWrittenCommands(GPUVAddr address, u32 count) {
                         split.Defer([page, begin = static_cast<u32>(*device - page),
                                      end = static_cast<u32>(*device - page + part.size())] {
                             Nx2CmdPageDiag::CheckMissedWrite(page, begin, end);
-                        });
+                        }, VideoCommon::GpuSplit::FastDrawNeutral);
                     }
                 } else {
                     diag.reads_unknown.fetch_add(1, std::memory_order_relaxed);

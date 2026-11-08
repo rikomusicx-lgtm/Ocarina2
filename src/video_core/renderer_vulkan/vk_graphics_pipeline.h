@@ -301,6 +301,15 @@ public:
         transitions.clear();
     }
 
+    [[nodiscard]] bool WritesStorage() const noexcept {
+        return writes_storage;
+    }
+
+    /// Writes storage images or image buffers (their images are marked modified when resolved).
+    [[nodiscard]] bool WritesImages() const noexcept {
+        return writes_images;
+    }
+
     [[nodiscard]] bool IsBuilt() const noexcept {
         return build->IsBuilt();
     }
@@ -314,6 +323,48 @@ public:
         return build->Failed();
     }
 
+    /// Fast draw (nx2_fast_draw.h): whether draws can keep the image views and samplers the last
+    /// captured Configure resolved. Handles computed at draw time are resolved on every draw.
+    [[nodiscard]] bool TakesDeltaDraws() const noexcept {
+        return delta_blocker == DeltaBlocker::None && delta_views_valid;
+    }
+
+    /// Why TakesDeltaDraws is false (diagnostics).
+    enum class DeltaBlocker : u8 {
+        None,
+        WritesImages,
+        Mesh,
+        ComputedHandles,
+        NotConfigured,
+        Count,
+    };
+    [[nodiscard]] DeltaBlocker DeltaDrawBlocker() const noexcept {
+        return delta_blocker != DeltaBlocker::None ? delta_blocker
+               : delta_views_valid                 ? DeltaBlocker::None
+                                                   : DeltaBlocker::NotConfigured;
+    }
+
+    /// Constant buffer slots per stage the pipeline reads texture and image handles from.
+    [[nodiscard]] const std::array<u32, NUM_STAGES>& HandleConstantBuffers() const noexcept {
+        return handle_constant_buffers;
+    }
+
+    /// Resolves and binds every buffer as Configure does (storage buffer addresses are read from
+    /// the constant buffers again) and records the draw's descriptors with the image views,
+    /// samplers and texture buffers the last captured Configure resolved. False when the draw
+    /// can't be recorded, as for Configure.
+    bool ConfigureDelta(bool is_indexed);
+
+    /// The next Configure keeps the views and samplers it resolves for delta draws. With
+    /// `verify`, it first compares them with the ones kept before; DeltaMismatch reports it.
+    void CaptureNextDelta(bool verify) noexcept {
+        capture_delta = true;
+        verify_delta = verify;
+    }
+    [[nodiscard]] bool DeltaMismatch() const noexcept {
+        return delta_mismatch;
+    }
+
     template <typename Spec>
     static auto MakeConfigureSpecFunc() {
         return [](GraphicsPipeline* pl, bool is_indexed) { return pl->ConfigureImpl<Spec>(is_indexed); };
@@ -325,48 +376,6 @@ public:
     }
 
 private:
-    /// EDEN_NX2_EXP32 (texture binding memo; zortos293/Lichii#717's BINDMEMO reduced to "the same
-    /// textures as this pipeline's previous draw"): that draw's texture bindings as resolved and
-    /// pushed, for pipelines whose image bindings are all sampled textures (no texture or image
-    /// buffers, no storage images). A draw reading the same handles with the same texture cache
-    /// state (TextureCache::TextureMemoState), the same guest TIC/TSC entries and clean images
-    /// takes the view and sampler ids and the descriptor entries from it instead of resolving them
-    /// (GetSamplerId, FillImageViews) and building them (PushImageDescriptors).
-    struct TextureMemo {
-        bool valid{};
-        u64 generation{};  ///< the switch generation it was recorded in (a switch change drops it)
-        u64 touch_frame{}; ///< the frame its images were last touched in the LRU
-        TextureCache::TextureMemoState state{};
-        std::vector<u32> handles;         ///< per texture: the TIC handle read
-        std::vector<u32> sampler_handles; ///< per texture: the TSC handle read
-        std::vector<TextureCache::TextureMemoEntry> entries;
-        std::vector<VideoCommon::ImageViewId> views;
-        std::vector<VideoCommon::SamplerId> samplers;
-        std::vector<DescriptorUpdateEntry> descriptors; ///< per texture, in push order
-        std::vector<u8> rescaled; ///< per texture descriptor (array), in push order
-    };
-
-    /// Whether the memo holds this draw's textures (counts why not).
-    [[nodiscard]] bool TextureMemoHit(const TextureCache::TextureMemoState& state,
-                                      std::span<const VideoCommon::ImageViewInOut> views,
-                                      std::span<const u32> sampler_handles);
-
-    /// Remembers the textures this draw resolved and pushed, when nothing in the texture cache
-    /// changed since `state` was taken and the tables still hold them as resolved.
-    void RecordTextureMemo(const TextureCache::TextureMemoState& state,
-                           std::span<const VideoCommon::ImageViewInOut> views,
-                           std::span<const u32> sampler_handles,
-                           std::span<const VideoCommon::SamplerId> samplers,
-                           std::span<const DescriptorUpdateEntry> descriptors,
-                           std::span<const u8> rescaled);
-
-    /// EXP32 verify: a memo hit resolved and pushed the full way; compares the memo with it,
-    /// logs and counts a difference, and turns the memo off when the switch asks (bit 4).
-    bool VerifyTextureMemo(std::span<const VideoCommon::ImageViewInOut> views,
-                           std::span<const VideoCommon::SamplerId> samplers,
-                           std::span<const DescriptorUpdateEntry> descriptors,
-                           std::span<const u8> rescaled, int switch_value);
-
     template <typename Spec>
     bool ConfigureImpl(bool is_indexed);
 
@@ -430,8 +439,6 @@ private:
     u32 color_output_mask{};
     u32 zero_texture_handles{};
     bool writes_storage{};
-    TextureMemo texture_memo;
-
     /// Graphics pipeline libraries (EDEN_NX2_GPL): one descriptor set per stage (set index =
     /// stage index), the shader libraries, and this pipeline's own vertex input and fragment
     /// output libraries.
@@ -449,6 +456,22 @@ private:
     vk::Pipeline fragment_output_library;
     vk::DescriptorSetLayout fallback_empty_set_layout;
     bool linked{};
+
+    /// Every texture is sampled with a handle read from a constant buffer: ConfigureImpl can
+    /// resolve them from texture_memo.
+    bool texture_memo_eligible{};
+    VideoCommon::SampledTextureMemo texture_memo;
+    bool writes_images{};
+
+    DeltaBlocker delta_blocker{};
+    bool delta_views_valid{};
+    bool capture_delta{};
+    bool verify_delta{};
+    bool delta_mismatch{};
+    std::array<bool, NUM_STAGES> configured_stages{};
+    std::array<u32, NUM_STAGES> handle_constant_buffers{};
+    std::vector<VideoCommon::ImageViewInOut> delta_views;
+    std::vector<VideoCommon::SamplerId> delta_samplers;
 
     vk::DescriptorSetLayout descriptor_set_layout;
     DescriptorAllocator descriptor_allocator;
