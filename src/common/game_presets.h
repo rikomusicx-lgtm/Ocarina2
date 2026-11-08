@@ -51,7 +51,11 @@ inline void SetOcarinaOfTimePerformanceSettings(Values& settings, bool global,
         setting.SetValue(value);
     };
     session(settings.renderer_backend, RendererBackend::Vulkan);
-    session(settings.resolution_setup, ResolutionSetup::Res1X);
+    // 1080p docked: render at 0.75x (1080p native presentation), which still leaves the game
+    // at its native docked resolution. The 1440p internal path the remake asks for exceeds
+    // what a 6 GB card can drive at 30 FPS in this scene, and NativeSeqRef at 1080p is the
+    // baseline this fork exists for on low-end PCs.
+    session(settings.resolution_setup, ResolutionSetup::Res3_4X);
     session(settings.gpu_accuracy, GpuAccuracy::Low);
     session(settings.use_asynchronous_shaders, true);
     session(settings.astc_recompression, AstcRecompression::Bc3);
