@@ -25,7 +25,9 @@ There is no official Ocarina2 website. Only download Ocarina2 from this reposito
 
 ## Downloads and setup
 
-Published builds belong on this fork's [releases page](https://github.com/rikomusicx-lgtm/Ocarina2/releases). On Windows, extract the entire build archive and run **Ocarina2.exe**. Only use games and system files you have legally obtained. Games, keys and firmware are not included.
+Published builds belong on this fork's [releases page](https://github.com/rikomusicx-lgtm/Ocarina2/releases). Ocarina2 has no other download site: archives offered elsewhere are not built by this project.
+
+On Windows, extract the entire build archive and run **Ocarina2.exe**. Only use games and system files you have legally obtained. Games, keys and firmware are not included.
 
 ### Existing saves and settings
 
