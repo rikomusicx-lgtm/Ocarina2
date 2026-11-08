@@ -318,10 +318,58 @@ cannot shrink that from outside. For 1080p output, set the game's graphics optio
 (docked, as on a real 1080p TV) - DLSS then upscales/presents at 1080p natively. Unverified as of
 this writing; the build above has NOT been measured in gameplay yet.
 
-Build machinery on this PC: build dir C:\Users\rikom\ocarina2-build, MSVC 14.51.36231 + VS2026 Build Tools, Qt 6.11.1 via CPM repo cache (.cache/cpm), Ninja, configured by
-vcvars64. Do NOT run a bare cmake configure without vcvars64: CMAKE_SYSTEM_PROCESSOR is then NOT
-detected ('Target architecture: GENERIC') and the OpenSSL CI package fatals ('Unsupported platform
-for CI package'). working configure = ocarina2-configure.cmd; this round passes LICHII_BUILD_TAG=build-119.
+
+## 2026-11-08 (later) - build-120 measured live (Kokiri), clang flavor added
+
+The user authorised launching and driving the game. Test setup: isolated portable copy at
+C:\Users\rikom\ocarina2-test-120 (copied keys/nand/config from %APPDATA%\eden; the real profile is
+untouched), `EDEN_NX2_OOT_PRESET=1`, docked, DRS, Fast GPU mode, BC3, DLSS on, fresh cold shader
+cache (blobs NOT copied), build-120 MSVC, tag build-120.
+
+Measured on this PC (live, debug server + Task Manager-style counters):
+
+- Title / attract: ~59-60 FPS (vsync-locked). Main menu: ~47 FPS. Options/system menus: ~46-47.
+- Kokiri (the benchmark area): ~25 FPS sustained, ~37-45 ms frames, ~40 ms steady.
+  First cold-cache entry to the Saria spot spiked at 75-195 ms transiently (the
+  pipeline rebuild; 283-417 builds per 10 s window during load, ~4.3 s GPU thread per 10 s),
+  then settled to ~25.
+- GPU ~84% busy at ~62 W (under the 70 W limit), SM ~1972/2130 MHz, VRAM ~4.3-4.9 GB.
+- Zero "Uncached storage pointer" rejects across the cold boot (rejected: []).
+  The shader disk cache rebuilt and reports 2-35 ms per worker build.
+- The options menu has NO graphics/display settings (checked every page: in-game Options
+  and the title-screen Options; amiibo, ZELDA NOTES, camera, interface, subtitles, voice,
+  vibration only). The game picks 3840x2160 itself (its SR pass is keyed to the 1440p
+  pipeline: vk_rasterizer upscale_4k = pipeline.ShaderHash() == Ocarina1440pShader).
+  DLSS at 3840x2160 still cannot allocate on 6 GB (stage 4 / result 15 / NGX 0xbad0000d)
+  and is now retried every 10 s (build-120). Docked stays per the owner.
+- The per-game profile on this machine (as copied) has gpu_accuracy=1 (GPU Mode: Accurate)
+  and astc_recompression=0 (uncompressed) - the expensive end of the emulator's knobs;
+  the OOT preset forces Fast GPU + BC3 at runtime regardless.
+
+Build-120 was also built with clang-cl (LLVM 23.1.5) into a second flavor
+(Ocarina2-build-120-Clang-Windows-x64.zip, from fix/oot-fps-perf-timing).
+One file needed a clang-only fix:
+
+- global_memory_to_storage_buffer_pass.cpp: MSVC STL's vectorized std::ranges::find
+  (xutility _Find_vectorized) static-asserts for 12-byte elements because clang's
+  __is_trivially_equality_comparable accepts the defaulted <=>; the TU keeps the scalar
+  path (_USE_STD_VECTOR_ALGORITHMS=0). MSVC was never affected.
+
+GUI check on this machine: the saved theme was colorful_dark (chosen pre-build-118),
+not Midnight Purple; the Midnight Purple themes ship compiled in and are the default for
+new installs; Settings > Interface > Theme > "Midnight Purple Colorful" switches and the
+whole window (title bar, border, sidebar, status bar) goes dark purple.
+The window title at the very top reads "Lichii build-120".
+New entries go on top of this section; the build-119 machinery notes moved into this block:
+
+Build machinery on this PC: build dir C:\Users\rikom\ocarina2-build (MSVC 14.51.36231 + VS2026
+Build Tools), second flavor in C:\Users\rikom\ocarina2-build-clang (clang-cl 23.1.5, LLVM 23.1.5
+from winget), Qt 6.11.1 via CPM repo cache (.cache/cpm), Ninja, configured by vcvars64. Do NOT
+run a bare cmake configure without vcvars64: CMAKE_SYSTEM_PROCESSOR is then NOT detected
+('Target architecture: GENERIC') and the OpenSSL CI package fatals ('Unsupported platform for CI
+package'). working configure = ocarina2-configure.cmd (LICHII_BUILD_TAG=build-120) and
+ocarina2-configure-clang.cmd (clang flavor, LICHII_BUILD_PLATFORM=windows-x86_64-clang).
+
 
 ## 2026-11-08 - build-120 (Ocarina of Time 3050, update #4)
 

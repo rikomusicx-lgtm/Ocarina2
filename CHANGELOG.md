@@ -6,6 +6,9 @@ New entries go under `## [Unreleased]`; `tools/ci/bump-version.sh` turns them in
 
 ## [Unreleased]
 
+- Clang flavor: the fork now also builds with clang-cl (LLVM 23.1.5), shipped as a separate
+  Clang package; one TU keeps the scalar std::ranges::find for clang's
+  __is_trivially_equality_comparable interaction with the MSVC STL.
 - Remove frame generation in its entirety: the LSFG/FSR3 interpolation chains and their
   settings, the present-frame storage-image plumbing, the status-bar toggle and the
   Advanced-tab page (Windows), and the Android quick settings / Lossless Scaling manager /

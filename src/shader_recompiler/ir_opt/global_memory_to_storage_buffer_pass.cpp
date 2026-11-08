@@ -4,6 +4,11 @@
 // SPDX-FileCopyrightText: Copyright 2021 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+// The MSVC STL's vectorized std::find/std::ranges::find only handles 1/2/4/8-byte elements,
+// and clang's __is_trivially_equality_comparable makes StorageBufferAddr look eligible;
+// keep the scalar path in this translation unit.
+#define _USE_STD_VECTOR_ALGORITHMS 0
+
 #include <algorithm>
 #include <array>
 #include <bit>
