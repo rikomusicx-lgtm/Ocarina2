@@ -645,6 +645,7 @@ private:
     // Applets
     QtAmiiboSettingsDialog* cabinet_applet = nullptr;
     QtControllerSelectorDialog* controller_applet = nullptr;
+    class ControllerNavigation* controller_nav = nullptr;  ///< Gamepad drives the UI like a Switch 2
     QtProfileSelectionDialog* profile_select_applet = nullptr;
     QDialog* error_applet = nullptr;
     QtSoftwareKeyboardDialog* software_keyboard = nullptr;

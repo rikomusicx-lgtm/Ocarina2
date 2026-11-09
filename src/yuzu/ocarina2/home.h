@@ -62,6 +62,10 @@ private:
     QWidget* MakeRail();
     QWidget* MakePage();
     QToolButton* RailButton(const QString& icon, const QString& tip);
+    /// Move keyboard focus (and gamepad's mapped keys) between the rail, the play button and
+    /// the tiles, Switch 2 style.
+    void RebuildNavOrder();
+    bool HandleNavKey(QKeyEvent* event);
 
     QMainWindow* window;
     QWidget* game_list;
@@ -71,10 +75,15 @@ private:
     QWidget* rail = nullptr;
     QWidget* page = nullptr;
     QToolButton* library_button = nullptr;
+    QToolButton* help_button = nullptr;
+    QToolButton* settings_button = nullptr;
+    QToolButton* menu_button = nullptr;
     QLabel* cover = nullptr;
     QLabel* subtitle = nullptr;
     QLabel* title = nullptr;
     QPushButton* play = nullptr;
+    QList<QWidget*> nav_order_;  ///< Focus order: rail up/down, play, tiles, add-folder/all-games.
+    int nav_index_ = 0;
     QHBoxLayout* row = nullptr;
     QWidget* row_box = nullptr;
     QTimer* refresh_timer = nullptr;

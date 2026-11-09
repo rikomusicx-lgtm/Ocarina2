@@ -509,6 +509,17 @@ MainWindow::MainWindow(bool has_broken_vulkan)
     QtCommon::SetupHID();
     controller_dialog->refreshConfiguration();
 
+    // Gamepad drives the UI (A = confirm, B = back, sticks/D-pad = move), so the console
+    // can be used without a keyboard or mouse, like the Switch 2's home screen.
+    controller_nav = new ControllerNavigation(QtCommon::system->HIDCore(), this);
+    connect(controller_nav, &ControllerNavigation::TriggerKeyboardEvent, this,
+            [](Qt::Key key) {
+                if (QWidget* focused = QApplication::focusWidget()) {
+                    auto* event = new QKeyEvent(QEvent::KeyPress, key, Qt::NoModifier);
+                    QCoreApplication::postEvent(focused, event);
+                }
+            });
+
     UpdateWindowTitle();
 
     show();

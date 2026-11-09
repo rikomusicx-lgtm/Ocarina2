@@ -216,3 +216,16 @@ QToolButton#Ocarina2Tile {
     font-size: 13px;
 }
 QToolButton#Ocarina2Tile:hover { background: #1d1930; border-color: #332e4d; color: #ececf1; }
+
+/* Gamepad/keyboard focus rings (Ocarina2 rail, tiles and the Play button) */
+QToolButton#Ocarina2RailButton:focus {
+    background: #241d3d;
+    border: 2px solid #9a7cf5;
+}
+QToolButton#Ocarina2Tile:focus {
+    background: #221d33;
+    border: 2px solid #9a7cf5;
+}
+QPushButton#Ocarina2Play:focus {
+    border: 2px solid #c4b5fd;
+}

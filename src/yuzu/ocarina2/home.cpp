@@ -12,6 +12,7 @@
 #include <QEvent>
 #include <QFileInfo>
 #include <QGraphicsDropShadowEffect>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QMainWindow>
 #include <QMenu>
@@ -190,7 +191,7 @@ QToolButton* Home::RailButton(const QString& icon, const QString& tip) {
     button->setIconSize(QSize(22, 22));
     button->setToolTip(tip);
     button->setCursor(Qt::PointingHandCursor);
-    button->setFocusPolicy(Qt::NoFocus);
+    button->setFocusPolicy(Qt::StrongFocus);
     return button;
 }
 
@@ -207,13 +208,14 @@ QWidget* Home::MakeRail() {
     library_button->setCheckable(true);
     connect(library_button, &QToolButton::clicked, this, &Home::ShowHome);
 
-    QToolButton* settings = RailButton(QStringLiteral("settings"), tr("Settings"));
-    connect(settings, &QToolButton::clicked, this, [this] { hooks.open_settings(); });
+    settings_button = RailButton(QStringLiteral("settings"), tr("Settings"));
+    connect(settings_button, &QToolButton::clicked, this, [this] { hooks.open_settings(); });
 
-    QToolButton* help = RailButton(QStringLiteral("help"), tr("Help"));
-    connect(help, &QToolButton::clicked, this, [this, help] {
+    help_button = RailButton(QStringLiteral("help"), tr("Help"));
+    connect(help_button, &QToolButton::clicked, this, [this] {
         if (hooks.help_menu) {
-            hooks.help_menu->exec(help->mapToGlobal(QPoint(help->width() + 8, 0)));
+            hooks.help_menu->exec(help_button->mapToGlobal(
+                QPoint(help_button->width() + 8, 0)));
         }
     });
 
@@ -221,18 +223,21 @@ QWidget* Home::MakeRail() {
     for (QMenu* menu : hooks.classic_menus) {
         classic->addMenu(menu);
     }
-    QToolButton* menu_button = RailButton(QStringLiteral("menu"), tr("Menu"));
-    connect(menu_button, &QToolButton::clicked, this, [classic, menu_button] {
+    menu_button = RailButton(QStringLiteral("menu"), tr("Menu"));
+    connect(menu_button, &QToolButton::clicked, this, [classic, this] {
         const QSize size = classic->sizeHint();
         classic->exec(menu_button->mapToGlobal(
             QPoint(menu_button->width() + 8, menu_button->height() - size.height())));
     });
 
     layout->addWidget(library_button);
-    layout->addWidget(settings);
-    layout->addWidget(help);
+    layout->addWidget(settings_button);
+    layout->addWidget(help_button);
     layout->addStretch(1);
     layout->addWidget(menu_button);
+    for (QWidget* button : {library_button, settings_button, help_button, menu_button}) {
+        button->installEventFilter(this);
+    }
     return rail;
 }
 
@@ -295,6 +300,8 @@ QWidget* Home::MakePage() {
     play->setObjectName(QStringLiteral("Ocarina2Play"));
     play->setCursor(Qt::PointingHandCursor);
     play->setIconSize(QSize(18, 18));
+    play->setFocusPolicy(Qt::StrongFocus);
+    play->installEventFilter(this);
     connect(play, &QPushButton::clicked, this, [this] {
         if (hero_path.isEmpty()) {
             hooks.add_folder();
@@ -380,7 +387,8 @@ void Home::Refresh() {
         button->setIconSize(QSize(TileIcon, TileIcon));
         button->setFixedWidth(TileIcon + 40);
         button->setCursor(Qt::PointingHandCursor);
-        button->setFocusPolicy(Qt::NoFocus);
+        button->setFocusPolicy(Qt::StrongFocus);
+        button->installEventFilter(this);
         const QFontMetrics metrics(button->font());
         button->setText(metrics.elidedText(text, Qt::ElideRight, TileIcon + 24));
         button->setToolTip(text);
@@ -411,6 +419,7 @@ void Home::Refresh() {
     add->setIconSize(QSize(40, 40));
     add->setMinimumHeight(TileIcon + 44);
     connect(add, &QToolButton::clicked, this, [this] { hooks.add_folder(); });
+    RebuildNavOrder();
 }
 
 void Home::ShowHome() {
@@ -420,6 +429,8 @@ void Home::ShowHome() {
     rail->show();
     page->show();
     library_button->setChecked(true);
+    library_button->setFocus(Qt::OtherFocusReason);
+    nav_index_ = 0;
     Refresh();
 }
 
@@ -456,11 +467,89 @@ void Home::OnEmulationStarting() {
     page->hide();
 }
 
+bool Home::HandleNavKey(QKeyEvent* event) {
+    const int key = event->key();
+    if (nav_order_.isEmpty()) {
+        RebuildNavOrder();
+    }
+    const int count = nav_order_.size();
+    int next = nav_index_;
+
+    switch (key) {
+        case Qt::Key_Up:
+            if (nav_index_ <= 3) {
+                // The rail is vertical; the top item is the ceiling.
+                --next;
+            } else if (nav_index_ == 4) {
+                // From the Play button up is the rail again.
+                nav_index_ = 0;
+                next = 0;
+            } else {
+                // Tiles: up is the Play button.
+                nav_index_ = 4;
+                next = 4;
+            }
+            break;
+        case Qt::Key_Down:
+            if (nav_index_ <= 3) {
+                ++next;  // rail descends; the last rail item flows into the Play button
+            } else if (nav_index_ == 4) {
+                next = 5 < count ? 5 : 4;  // Play -> first tile
+            }
+            // Tiles: down goes nowhere.
+            break;
+        case Qt::Key_Left:
+            if (nav_index_ <= 3) {
+                return false;  // The rail is on the left edge already.
+            }
+            --next;
+            break;
+        case Qt::Key_Right:
+            if (nav_index_ <= 3) {
+                next = 4;  // Rail -> Play
+            } else {
+                ++next;
+            }
+            break;
+        default:
+            return false;
+    }
+
+    next = std::clamp(next, 0, count - 1);
+    if (next != nav_index_) {
+        nav_index_ = next;
+        nav_order_[nav_index_]->setFocus(Qt::OtherFocusReason);
+        return true;
+    }
+    return false;
+}
+
+void Home::RebuildNavOrder() {
+    nav_order_.clear();
+    nav_order_ = {library_button, settings_button, help_button, menu_button, play};
+    if (row != nullptr) {
+        for (int i = 0; i < row->count(); ++i) {
+            if (QLayoutItem* item = row->itemAt(i)) {
+                if (QWidget* widget = item->widget()) {
+                    nav_order_.append(widget);
+                }
+            }
+        }
+    }
+    nav_index_ = std::min(nav_index_, static_cast<int>(nav_order_.size()) - 1);
+}
+
 bool Home::eventFilter(QObject* watched, QEvent* event) {
     // The main window shows its game list (start up, a game stopped, the list filled): show the
     // home page instead, unless the player asked for the full list.
     if (event->type() == QEvent::Show && (watched == game_list || watched == placeholder)) {
         QTimer::singleShot(0, this, &Home::Restore);
+    }
+    if (event->type() == QEvent::KeyPress) {
+        if (auto* key = static_cast<QKeyEvent*>(event);
+            nav_order_.contains(qobject_cast<QWidget*>(watched)) && HandleNavKey(key)) {
+            return true;
+        }
     }
     return QObject::eventFilter(watched, event);
 }
