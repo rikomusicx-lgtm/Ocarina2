@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
+﻿// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <array>
@@ -6,7 +6,12 @@
 #include <cstring>
 #include <optional>
 #include <set>
+#include <type_traits>
 #include <utility>
+
+#if defined(_MSC_VER)
+#include <excpt.h>
+#endif
 
 #include "common/logging.h"
 #include "common/settings.h"
@@ -15,6 +20,8 @@
 #include "video_core/host1x/nx2_video_decoder.h"
 
 extern "C" {
+#include <libavutil/pixdesc.h>
+
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wconversion"
@@ -48,6 +55,48 @@ std::optional<NvdecCommon::VideoCodec> CodecFromMime(std::string_view mime) {
         return NvdecCommon::VideoCodec::H264;
     }
     return std::nullopt;
+}
+
+#if defined(_MSC_VER)
+int FaultFilter(unsigned long code, unsigned long* out) {
+    switch (code) {
+    case 0xC0000005: // access violation
+    case 0xC0000006: // in-page error
+    case 0xC000001D: // illegal instruction
+    case 0xC000008C: // array bounds exceeded
+    case 0xC0000094: // integer divide by zero
+    case 0xC0000095: // integer overflow
+    case 0x80000002: // datatype misalignment
+        *out = code;
+        return EXCEPTION_EXECUTE_HANDLER;
+    default:
+        // C++ exceptions, breakpoints and stack overflows go on as before.
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+}
+
+/// Runs fn(arg); false when it faulted. No objects with destructors in this frame (SEH).
+bool RunGuarded(void (*fn)(void*), void* arg, unsigned long* code) {
+    __try {
+        fn(arg);
+    } __except (FaultFilter(GetExceptionCode(), code)) {
+        return false;
+    }
+    return true;
+}
+#else
+bool RunGuarded(void (*fn)(void*), void* arg, unsigned long*) {
+    fn(arg);
+    return true;
+}
+#endif
+
+/// Runs f on this thread; false when it faulted (Windows: a decoder or GPU driver reading bad
+/// memory). A movie frame must never take the game down.
+template <typename F>
+bool Guarded(F&& f, unsigned long& code) {
+    using Fn = std::remove_reference_t<F>;
+    return RunGuarded([](void* p) { (*static_cast<Fn*>(p))(); }, &f, &code);
 }
 
 } // namespace
@@ -93,16 +142,19 @@ bool IsH264Stream(std::span<const u8> data) {
 
 struct Nx2VideoDecoder::Impl {
     std::string name;
-    std::optional<FFmpeg::Decoder> decoder;
-    std::optional<FFmpeg::HardwareContext> hardware;
-    std::optional<FFmpeg::DecoderContext> context;
+    std::optional<NvdecCommon::VideoCodec> codec;
+    // Pointers, not values: a context that faulted is abandoned, never freed (its state is
+    // unknown, and freeing it calls into the same driver).
+    std::unique_ptr<FFmpeg::Decoder> decoder;
+    std::unique_ptr<FFmpeg::HardwareContext> hardware;
+    std::unique_ptr<FFmpeg::DecoderContext> context;
     SwsContext* scaler{};
     bool open{};
     bool using_hardware{};
     bool received_any{};
+    u32 render_faults{}; ///< Frames that faulted in Render; games never see them crash.
     H264PacketConverter h264_packets;
-    /// Timestamps of submitted frames not yet output. Frames copied back from a host GPU decoder
-    /// lose theirs and take the earliest one instead.
+    /// Timestamps of submitted frames not yet output, for frames that come out without one.
     std::multiset<u64> pending_pts;
     std::vector<u8> packet; ///< FFmpeg reads up to AV_INPUT_BUFFER_PADDING_SIZE past the data
     /// Padded packets retained until the first hardware frame so CPU fallback can replay headers.
@@ -114,71 +166,28 @@ struct Nx2VideoDecoder::Impl {
         hardware.reset();
     }
 
-    /// Opens a hardware or multi-threaded CPU FFmpeg decoder context for `codec_type`.
-    bool Open(NvdecCommon::VideoCodec codec_type, bool use_gpu) {
-        open = false;
-        using_hardware = false;
-        context.reset();
-        hardware.reset();
-        decoder.emplace(codec_type, use_gpu);
-        if (decoder->GetCodec() == nullptr) {
-            return false;
-        }
-        context.emplace(*decoder);
-        if (use_gpu) {
-            hardware.emplace();
-            if (!hardware->InitializeForDecoder(*context, *decoder)) {
-                context.reset();
-                hardware.reset();
-                return false;
-            }
-        } else {
-            AVCodecContext* codec_context = context->GetCodecContext();
-            codec_context->flags &= ~AV_CODEC_FLAG_LOW_DELAY;
-            codec_context->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
-            codec_context->thread_count = 4;
-        }
-        open = context->OpenContext(*decoder);
-        using_hardware = open && use_gpu;
-        if (!open) {
-            context.reset();
-            hardware.reset();
-        }
-        return open;
-    }
-
-    bool Submit(std::span<const u8> bytes, u64 pts, std::vector<Nx2Picture>& pictures) {
-        {
-            FFmpeg::Packet input{bytes};
-            input.GetPacket()->pts = static_cast<s64>(pts);
-            if (!context->SendPacket(input)) {
-                return false;
-            }
-        }
-        // Hidden VP9 frames never come out: keep the set from growing over a long movie.
-        if (pending_pts.size() >= 64) {
-            pending_pts.erase(pending_pts.begin());
-        }
-        pending_pts.insert(pts);
-        Receive(pictures);
-        return !context->HadDecodeError();
     }
 
     void Receive(std::vector<Nx2Picture>& pictures) {
         while (auto frame = context->ReceiveFrame()) {
             const AVFrame* f = frame->GetFrame();
+            if (f->width <= 0 || f->height <= 0) {
+                continue;
+            }
             const s64 stamp = f->best_effort_timestamp != AV_NOPTS_VALUE ? f->best_effort_timestamp
                                                                          : f->pts;
             u64 pts{};
             if (stamp != AV_NOPTS_VALUE) {
                 pts = static_cast<u64>(stamp);
-                if (const auto it = pending_pts.find(pts); it != pending_pts.end()) {
-                    pending_pts.erase(it);
-                }
+                // Frames come out in display order: earlier timestamps belong to frames the
+                // decoder dropped (errors, hidden frames). Left here, a frame without a
+                // timestamp of its own would take one of them and show too early.
+                pending_pts.erase(pending_pts.begin(), pending_pts.upper_bound(pts));
             } else if (!pending_pts.empty()) {
                 pts = *pending_pts.begin();
                 pending_pts.erase(pending_pts.begin());
             }
+            received_any = true;
             pictures.push_back({static_cast<u32>(f->width), static_cast<u32>(f->height), pts,
                                 std::move(frame)});
             received_any = true;
@@ -186,35 +195,21 @@ struct Nx2VideoDecoder::Impl {
         }
     }
 
-    bool FallBackToCpu(std::vector<Nx2Picture>& pictures) {
-        auto packets = std::exchange(startup_packets, {});
-        pending_pts.clear();
-        const auto codec = CodecFromMime(name);
-        if (!codec || !Open(*codec, false)) {
-            return false;
-        }
-        LOG_INFO(HW_GPU, "nx2 video: hardware decoding unavailable for \"{}\", falling back to CPU",
-                 name);
-        for (const auto& [pts, bytes] : packets) {
-            Submit(std::span<const u8>{bytes.data(), bytes.size() - AV_INPUT_BUFFER_PADDING_SIZE},
-                   pts, pictures);
-        }
-        return true;
     }
 };
 
 Nx2VideoDecoder::Nx2VideoDecoder(std::string_view mime) : impl{std::make_unique<Impl>()} {
     impl->name = std::string{mime};
-    const auto codec = CodecFromMime(mime);
-    if (!codec) {
+    impl->codec = CodecFromMime(mime);
+    if (!impl->codec) {
         LOG_ERROR(HW_GPU, "nx2 video: no decoder for codec \"{}\"", mime);
         return;
     }
     if (Settings::values.nvdec_emulation.GetValue() == Settings::NvdecEmulation::Gpu) {
-        impl->Open(*codec, true);
+        impl->Open(*impl->codec, true);
     }
     if (!impl->open) {
-        impl->Open(*codec, false);
+        impl->Open(*impl->codec, false);
     }
     LOG_INFO(HW_GPU, "nx2 video: decoder for \"{}\" {}", mime, impl->open ? "open" : "failed to open");
 }
@@ -223,6 +218,10 @@ Nx2VideoDecoder::~Nx2VideoDecoder() = default;
 
 bool Nx2VideoDecoder::IsOpen() const {
     return impl->open;
+}
+
+bool Nx2VideoDecoder::UsingHardware() const {
+    return impl->open && impl->using_hardware;
 }
 
 const std::string& Nx2VideoDecoder::Name() const {
@@ -241,7 +240,7 @@ void Nx2VideoDecoder::Decode(std::span<const u8> data, u64 pts, std::vector<Nx2P
     std::memcpy(impl->packet.data(), data.data(), data.size());
 
     // Convert MP4/avcC length-prefixed NALUs to Annex-B start codes for FFmpeg if needed.
-    if (impl->name.find("avc") != std::string::npos || impl->name.find("264") != std::string::npos) {
+    if (impl->codec == NvdecCommon::VideoCodec::H264) {
         impl->h264_packets.Convert(std::span<u8>{impl->packet.data(), data.size()});
     }
 
@@ -285,7 +284,30 @@ void Nx2VideoDecoder::Reset() {
 
 void Nx2VideoDecoder::Render(const Nx2Picture& picture, Nx2PictureFormat format, u32 width,
                              u32 height, u64 pitch, u64 chroma_offset, std::span<u8> out) {
+    if (!picture.frame) {
+        return;
+    }
+    unsigned long code = 0;
+    if (!Guarded([&] { RenderUnguarded(picture, format, width, height, pitch, chroma_offset, out); },
+                 code)) {
+        // The image keeps what it held; the next frame tries again.
+        if (impl->render_faults++ < 8) {
+            LOG_ERROR(HW_GPU, "nx2 video: converting a {}x{} frame of \"{}\" faulted ({:#x})",
+                      picture.width, picture.height, impl->name, code);
+        }
+    }
+}
+
+void Nx2VideoDecoder::RenderUnguarded(const Nx2Picture& picture, Nx2PictureFormat format,
+                                      u32 width, u32 height, u64 pitch, u64 chroma_offset,
+                                      std::span<u8> out) {
     const AVFrame* f = picture.frame->GetFrame();
+    const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(static_cast<AVPixelFormat>(f->format));
+    if (desc == nullptr || (desc->flags & AV_PIX_FMT_FLAG_HWACCEL) || f->data[0] == nullptr ||
+        f->width <= 0 || f->height <= 0) {
+        // Never read a GPU surface or an empty frame as memory.
+        return;
+    }
     const u64 needed = format == Nx2PictureFormat::Nv12
                            ? chroma_offset + pitch * ((u64{height} + 1) / 2)
                            : pitch * height;

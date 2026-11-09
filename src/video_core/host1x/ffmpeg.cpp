@@ -23,6 +23,7 @@ extern "C" {
 #endif
 
 #include <libavutil/hwcontext.h>
+#include <libavutil/pixdesc.h>
 }
 
 namespace FFmpeg {
@@ -54,6 +55,8 @@ constexpr std::array PreferredGpuDecoders = {
 };
 
 AVPixelFormat GetGpuFormat(AVCodecContext* codec_context, const AVPixelFormat* pix_fmts) {
+    // The hardware format of the device the context was given, when the decoder offers it for
+    // this stream.
     if (codec_context->hw_device_ctx) {
         const auto* hw_ctx =
             reinterpret_cast<const AVHWDeviceContext*>(codec_context->hw_device_ctx->data);
@@ -75,12 +78,21 @@ AVPixelFormat GetGpuFormat(AVCodecContext* codec_context, const AVPixelFormat* p
 
     LOG_INFO(HW_GPU, "Could not find supported GPU pixel format, falling back to CPU decoder");
     av_buffer_unref(&codec_context->hw_device_ctx);
+    // A software format from the offered list: one outside it fails the decode of the whole
+    // stream (a 10-bit stream offers YUV420P10, not YUV420P). FFmpeg lists them after the
+    // hardware formats.
+    AVPixelFormat software = AV_PIX_FMT_NONE;
     for (const AVPixelFormat* p = pix_fmts; *p != AV_PIX_FMT_NONE; ++p) {
+        const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(*p);
+        if (desc && (desc->flags & AV_PIX_FMT_FLAG_HWACCEL)) {
+            continue;
+        }
         if (*p == PreferredCpuFormat) {
             return *p;
         }
+        software = *p;
     }
-    return pix_fmts[0];
+    return software != AV_PIX_FMT_NONE ? software : pix_fmts[0];
 }
 
 std::string AVError(int errnum) {
@@ -242,16 +254,21 @@ bool HardwareContext::InitializeForDecoder(DecoderContext& decoder_context, cons
             continue;
         }
 
+        // Ask the codec first: creating a device it can't use costs time at the start of every
+        // movie (CUDA, D3D11, DXVA2 and D3D12 one after another for libdav1d, which has none).
+        if (!decoder.SupportsDecodingOnDevice(&hw_pix_fmt, type)) {
+            continue;
+        }
+
         if (!this->InitializeWithType(type)) {
             continue;
         }
 
-        if (decoder.SupportsDecodingOnDevice(&hw_pix_fmt, type)) {
-            decoder_context.InitializeHardwareDecoder(*this, hw_pix_fmt);
-            return true;
-        }
+        decoder_context.InitializeHardwareDecoder(*this, hw_pix_fmt);
+        return true;
     }
 
+    av_buffer_unref(&m_gpu_decoder);
     return false;
 }
 
@@ -335,6 +352,7 @@ bool DecoderContext::SendPacket(const Packet& packet) {
         ret < 0 && ret != AVERROR_EOF && ret != AVERROR(EAGAIN)) {
         LOG_ERROR(HW_GPU, "avcodec_send_packet error: {}", AVError(ret));
         m_had_decode_error = true;
+        ++m_errors;
         return false;
     }
 
