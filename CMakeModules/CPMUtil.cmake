@@ -1055,13 +1055,22 @@ function(AddCIPackage)
         list(GET sha512sum_status 0 sha512sum_error)
 
         if(sha512sum_error)
-            message(FATAL_ERROR "[CPMUtil] Failed to download sha512sum "
-                "for ${ARTIFACT_NAME} from ${sha512sum_url}")
+            # The artifact may already be in the source cache (offline or GitHub trouble): the
+            # sha512sum only authenticates a download that will not happen then.
+            get_cache_path(${ARTIFACT_PACKAGE} "${ARTIFACT_VERSION}-${pkgname}" cached_artifact)
+            if(EXISTS "${cached_artifact}/.cpm_patch_key")
+                message(WARNING "[CPMUtil] Could not download sha512sum for ${ARTIFACT_NAME} "
+                    "from ${sha512sum_url}; using the cached ${ARTIFACT} from ${cached_artifact}")
+                set(sha512sum_hash "0")
+            else()
+                message(FATAL_ERROR "[CPMUtil] Failed to download sha512sum "
+                    "for ${ARTIFACT_NAME} from ${sha512sum_url}")
+            endif()
+        else()
+            file(READ "${sha512sum_file}" sha512sum_hash)
+            string(STRIP "${sha512sum_hash}" sha512sum_hash)
+            file(REMOVE "${sha512sum_file}")
         endif()
-
-        file(READ "${sha512sum_file}" sha512sum_hash)
-        string(STRIP "${sha512sum_hash}" sha512sum_hash)
-        file(REMOVE "${sha512sum_file}")
 
         AddPackage(
             NAME ${ARTIFACT_PACKAGE}
