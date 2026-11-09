@@ -3631,10 +3631,15 @@ ImageId TextureCache<P>::JoinImages(const ImageInfo& info, GPUVAddr gpu_addr, DA
     // Which test refused the last call (EXP7's new-image line).
     const char* clear_refusal = "";
     const auto overwritten_by_clear = [&] {
-        if (!clearing_render_targets || !join_copies_to_do.empty() ||
-            new_info.type != ImageType::e2D || new_info.resources.levels != 1 ||
+        if (!clearing_render_targets) {
+            return (clear_refusal = "not clearing", false);
+        }
+        if (!join_copies_to_do.empty()) {
+            return (clear_refusal = "join copies pending", false);
+        }
+        if (new_info.type != ImageType::e2D || new_info.resources.levels != 1 ||
             new_info.resources.layers != 1 || new_info.num_samples != 1) {
-            return (clear_refusal = "not clearing, joins, or not a plain 2D target", false);
+            return (clear_refusal = "not a plain 2D target", false);
         }
         const auto& regs = maxwell3d->regs;
         const auto& surface = regs.clear_surface;
@@ -3931,7 +3936,7 @@ ImageId TextureCache<P>::JoinImages(const ImageInfo& info, GPUVAddr gpu_addr, DA
                         clear_skip  ? "skipped (clear)"
                         : copy_skip ? "skipped (copies)"
                                     : "done",
-                        clear_skip || clear_refusal[0] == ' ' ? "" : ", clear refused: ",
+                        clear_skip || clear_refusal[0] == '\0' ? "" : ", clear refused: ",
                         clear_skip ? "" : clear_refusal);
         }
     }
