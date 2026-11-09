@@ -38,6 +38,14 @@ std::optional<std::string> ParseSha256Digest(std::string_view digest) {
 }
 
 LinuxPackage CurrentLinuxPackage() {
+#ifdef __linux__
+    const char* appimage = std::getenv("APPIMAGE");
+    return appimage && *appimage ? LinuxPackage::AppImage : LinuxPackage::Archive;
+#else
+    return LinuxPackage::Any;
+#endif
+}
+
 std::vector<Asset> Release::GetPlatformAssets() const {
     return GetPlatformAssets(Common::g_build_release_platform, CurrentLinuxPackage());
 }

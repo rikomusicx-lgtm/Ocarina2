@@ -374,6 +374,7 @@ inline void LoadExperiments() {
         // EXP39 = 3: publish to a back that waits after 8 words, no snapshot refresh of entries
         // that ran (zortos293/Lichii#805 62db242b34; see the EXP39 notes above). Timing only.
         g_experiments[39].store(3, std::memory_order_relaxed);
+        for (int n = 0; n < ExperimentCount; ++n) {
             const std::string name = "EDEN_NX2_EXP" + std::to_string(n);
             if (const char* value = std::getenv(name.c_str())) {
                 g_experiments[n].store(std::atoi(value), std::memory_order_relaxed);

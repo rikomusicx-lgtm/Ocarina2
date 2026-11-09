@@ -1154,7 +1154,6 @@ private:
     };
     std::array<PendingWrite, 8192> pending_writes{};
     u64 pending_write_count{};
-    std::unordered_map<u64, u64> async_writes; ///< Front: 16-byte slot -> ring position
     /// Compute and copy writes with a known device range (NoteWriterRange), newest last.
     struct WriterRange {
         u64 position;

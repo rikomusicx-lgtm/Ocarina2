@@ -773,65 +773,6 @@ void SetCurrentThreadToPerformanceCores() {
 #endif
 }
 
-void PinCurrentThread(PinnedRole role) {
-#ifdef _WIN32
-    struct PinnedCpuSets {
-        std::vector<ULONG> front;
-        std::vector<ULONG> back;
-        std::vector<ULONG> guest;
-    };
-    static const PinnedCpuSets pinned = [] {
-        const GpuThreadPinning plan = PlanGpuThreadPinning(CpuSets().processors);
-        if (plan.front.empty()) {
-            LOG_WARNING(Common,
-                        "GPU thread pinning skipped: {} physical performance cores, needs {}",
-                        plan.performance_cores, MinCoresForGpuThreadPinning);
-            return PinnedCpuSets{};
-        }
-        LOG_INFO(Common,
-                 "GPU thread pinning: front and back on a physical core each, guest cores on the "
-                 "other {} performance cores ({} logical processors)",
-                 plan.performance_cores - 2, plan.guest.size());
-        return PinnedCpuSets{{plan.front.begin(), plan.front.end()},
-                             {plan.back.begin(), plan.back.end()},
-                             {plan.guest.begin(), plan.guest.end()}};
-    }();
-    const std::vector<ULONG>& ids = role == PinnedRole::GpuFront  ? pinned.front
-                                    : role == PinnedRole::GpuBack ? pinned.back
-                                                                  : pinned.guest;
-    if (!ids.empty()) {
-        SelectCurrentThreadCpuSets(ids);
-    }
-#elif defined(__linux__) && !defined(__ANDROID__)
-    static const GpuThreadPinning plan = [] {
-        GpuThreadPinning result = PlanGpuThreadPinning(LinuxProcessors());
-        if (result.front.empty()) {
-            LOG_WARNING(Common,
-                        "GPU thread pinning skipped: {} physical performance cores, needs {}",
-                        result.performance_cores, MinCoresForGpuThreadPinning);
-        } else {
-            LOG_INFO(Common,
-                     "GPU thread pinning: front and back on a physical core each, guest cores on "
-                     "the other {} performance cores ({} logical processors)",
-                     result.performance_cores - 2, result.guest.size());
-        }
-        return result;
-    }();
-    const std::vector<u32>& cpus = role == PinnedRole::GpuFront  ? plan.front
-                                   : role == PinnedRole::GpuBack ? plan.back
-                                                                 : plan.guest;
-    if (!cpus.empty()) {
-        SetCurrentThreadAffinity(cpus);
-    }
-#else
-    (void)role;
-    [[maybe_unused]] static const bool logged = [] {
-        LOG_INFO(Common, "GPU thread pinning is only supported on Windows and Linux");
-        return true;
-    }();
-#endif
-}
-
 void PinCurrentThread(PinnedRole role, int guest_core) {
 #ifdef _WIN32
     // Off with EDEN_NX2_PIN_THREADS=0, forced with 1, otherwise on with enough performance cores

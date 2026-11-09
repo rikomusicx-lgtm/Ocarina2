@@ -245,10 +245,6 @@ private:
     void UpdateContinuousRuns(GPUVAddr gpu_addr, size_t size);
     const MappingSnapshot& CurrentSnapshot() const;
 
-    /// Rebuilds the runs through the big pages a page table operation touched.
-    void UpdateContinuousRuns(GPUVAddr gpu_addr, size_t size);
-    const MappingSnapshot& CurrentSnapshot() const;
-
     void ReadBlockImpl(GPUVAddr gpu_src_addr, void* dest_buffer, std::size_t size, VideoCommon::CacheType which, bool unsafe,
                        std::source_location caller) const;
     void WriteBlockImpl(GPUVAddr gpu_dest_addr, const void* src_buffer, std::size_t size, VideoCommon::CacheType which, bool unsafe);
