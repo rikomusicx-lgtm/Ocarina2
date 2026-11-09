@@ -168,10 +168,6 @@ UpdateDialog::UpdateDialog(const Common::Net::Release& release,
         return;
     }
 
-    ui->buttonBox->button(QDialogButtonBox::No)->setText(tr("Remind Me Later"));
-    auto* skip = ui->buttonBox->addButton(tr("Skip This Version"), QDialogButtonBox::ActionRole);
-    connect(skip, &QPushButton::clicked, this, [this] { done(SkipVersion); });
-
     // TODO(crueter): Find a way to set default
     const auto assets = release.GetPlatformAssets();
 
