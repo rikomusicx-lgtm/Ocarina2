@@ -92,6 +92,8 @@ private:
     QToolButton* folder_button = nullptr;
     QToolButton* update_button = nullptr;
     QToolButton* settings_button = nullptr;
+    QToolButton* discord_button = nullptr;  ///< bottom of the dock, above More
+    QToolButton* donate_button = nullptr;   ///< bottom of the dock, above More
     QToolButton* menu_button = nullptr;
     QToolButton* play = nullptr;  ///< the hero image, click to launch
     QList<QWidget*> nav_order_;  ///< Focus order: dock and hero.

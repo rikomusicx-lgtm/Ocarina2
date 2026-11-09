@@ -11,6 +11,7 @@
 #include <QApplication>
 #include <QBuffer>
 #include <QDateTime>
+#include <QDesktopServices>
 #include <QDir>
 #include <QFile>
 #include <QFont>
@@ -27,6 +28,7 @@
 #include <QPixmap>
 #include <QProxyStyle>
 #include <QPushButton>
+#include <QUrl>
 #include <QScrollArea>
 #include <QStyleFactory>
 
@@ -310,6 +312,25 @@ void DrawIconPath(QPainterPath& path, const QString& name) {
         path.cubicTo(QPointF(16.6, 11.2), QPointF(17.9, 13.9), QPointF(17.9, 16.4));
         path.lineTo(6.1, 16.4);
         path.cubicTo(QPointF(6.1, 13.9), QPointF(7.4, 11.2), QPointF(12, 4.2));
+    } else if (name == QStringLiteral("community")) {
+        path.addEllipse(QRectF(4.5, 3.5, 16, 16));
+        path.moveTo(6.3, 17.3);
+        path.lineTo(4.0, 20.0);
+        path.lineTo(8.7, 18.7);
+        path.moveTo(8.5, 11.5);
+        path.lineTo(8.51, 11.5);
+        path.moveTo(12.5, 11.5);
+        path.lineTo(12.51, 11.5);
+        path.moveTo(16.5, 11.5);
+        path.lineTo(16.51, 11.5);
+    } else if (name == QStringLiteral("heart")) {
+        path.moveTo(12, 19.3);
+        path.cubicTo(QPointF(7.5, 15.4), QPointF(4.3, 12.9), QPointF(4.3, 9.5));
+        path.cubicTo(QPointF(4.3, 6.7), QPointF(6.7, 4.8), QPointF(8.9, 4.8));
+        path.cubicTo(QPointF(10.5, 4.8), QPointF(11.6, 5.6), QPointF(12, 6.7));
+        path.cubicTo(QPointF(12.4, 5.6), QPointF(13.5, 4.8), QPointF(15.1, 4.8));
+        path.cubicTo(QPointF(17.3, 4.8), QPointF(19.7, 6.7), QPointF(19.7, 9.5));
+        path.cubicTo(QPointF(19.7, 12.9), QPointF(16.5, 15.4), QPointF(12, 19.3));
     }
 }
 
@@ -512,6 +533,12 @@ void RestructureMenus(Ui::MainWindow& ui, QMainWindow& window, const MenuHooks& 
     ui.menu_Help->insertAction(first_help, delete_cache);
     ui.menu_Help->insertSeparator(first_help);
     ui.menu_Help->insertAction(first_help, whats_new);
+    auto* discord = new QAction(Icon(QStringLiteral("community"), 16), tr("Fritchii &Discord"), &window);
+    QObject::connect(discord, &QAction::triggered, &window, [] { OpenDiscord(); });
+    auto* donate = new QAction(Icon(QStringLiteral("heart"), 16), tr("D&onate"), &window);
+    QObject::connect(donate, &QAction::triggered, &window, [] { OpenDonate(); });
+    ui.menu_Help->insertAction(first_help, discord);
+    ui.menu_Help->insertAction(first_help, donate);
 
     // Plain names.
     ui.menu_recent_files->setTitle(tr("Open &Recent"));
@@ -767,6 +794,14 @@ bool RestoreSettingsFiles(const QString& backup) {
 QString& PendingSettingsRestore() {
     static QString pending;
     return pending;
+}
+
+void OpenDiscord() {
+    QDesktopServices::openUrl(QUrl(QString::fromLatin1(DiscordInvite)));
+}
+
+void OpenDonate() {
+    QDesktopServices::openUrl(QUrl(QString::fromLatin1(DonateLink)));
 }
 
 namespace {
