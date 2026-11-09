@@ -3674,12 +3674,12 @@ bool AccelerateDMA::BufferToImage(const Tegra::DMA::ImageCopy& copy_info,
     return DmaBufferImageCopy<true>(copy_info, buffer_operand, image_operand);
 }
 
-void RasterizerVulkan::UpdateDynamicStates(GraphicsPipeline* draw_pipeline) {
+void RasterizerVulkan::UpdateDynamicStates(const GraphicsPipeline* pipeline) {
     auto& regs = maxwell3d->regs;
     auto& flags = maxwell3d->dirty.flags;
     // A mesh emulation pipeline has static input assembly and vertex input. Binding it replaces
     // that dynamic state, so leave it to the next regular draw to set again.
-    const bool emulated_mesh{draw_pipeline != nullptr && draw_pipeline->IsEmulatedMesh()};
+    const bool emulated_mesh{pipeline != nullptr && pipeline->IsEmulatedMesh()};
     if (emulated_mesh) {
         state_tracker.InvalidateInputState();
     }
@@ -3754,15 +3754,15 @@ void RasterizerVulkan::UpdateDynamicStates(GraphicsPipeline* draw_pipeline) {
     }
 
     if (device.IsExtExtendedDynamicState3BlendingSupported()) {
-        UpdateBlending(regs, draw_pipeline);
+        UpdateBlending(regs, pipeline);
     } else if (device.IsExtColorWriteEnableSupported()) {
         UpdateColorWriteEnable(regs);
     }
 
     if (device.IsExtVertexInputDynamicStateSupported() && !emulated_mesh) {
         // A draw passes the pipeline it looked up: a second lookup was ~2.5% of the back thread.
-        GraphicsPipeline* const gp =
-            draw_pipeline != nullptr ? draw_pipeline : pipeline_cache.CurrentGraphicsPipeline();
+        const GraphicsPipeline* const gp =
+            pipeline != nullptr ? pipeline : pipeline_cache.CurrentGraphicsPipeline();
         if (gp && gp->HasDynamicVertexInput()) {
             UpdateVertexInput(regs);
         }

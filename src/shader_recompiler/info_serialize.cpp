@@ -25,7 +25,7 @@ static_assert(sizeof(ConstantBufferDescriptor) == 8 && sizeof(StorageBufferDescr
                   sizeof(TextureBufferDescriptor) == 40 && sizeof(ImageBufferDescriptor) == 28 &&
                   sizeof(TextureDescriptor) == 44 && sizeof(ImageDescriptor) == 36,
               "A Shader::Info descriptor changed: list the new fields in its Visit function below, "
-              "then update these sizes and PrecompiledKeptMagic (vk_pipeline_cache.cpp)");
+              "then update these sizes and Magic (vk_precompiled_kept.cpp)");
 static_assert(sizeof(StorageWriteExtent) == 60,
               "StorageWriteExtent changed: list the new fields in VisitWriteExtent below");
 #endif
