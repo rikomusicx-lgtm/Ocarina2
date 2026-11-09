@@ -8,15 +8,15 @@
 #include <QAction>
 #include <QActionGroup>
 #include <QApplication>
-#include <QBuffer>
 #include <QFile>
 #include <QFont>
 #include <QFontDatabase>
 #include <QIcon>
-#include <QImageReader>
 #include <QMainWindow>
 #include <QMenu>
 #include <QMenuBar>
+#include <QPainter>
+#include <QPainterPath>
 #include <QPalette>
 #include <QPixmap>
 #include <QProxyStyle>
@@ -90,15 +90,148 @@ public:
     }
 };
 
-QPixmap RenderSvg(QByteArray svg, const QColor& color, int px) {
-    svg.replace("currentColor", color.name().toLatin1());
-    QBuffer buffer(&svg);
-    buffer.open(QIODevice::ReadOnly);
-    QImageReader reader(&buffer, "svg");
+// The fritchii icons as QPainter strokes. The minimal Qt packages the project builds against
+// have no SVG module, so the line glyphs are drawn here: each icon is its viewBox coordinates,
+// scaled to px (grid is square). Keep the shapes, the round caps and the 1.8 (24-grid) widths —
+// the strip, the rail and the play button all use them.
+void DrawIconPath(QPainterPath& path, const QString& name) {
+    if (name == QStringLiteral("check")) {
+        path.moveTo(3.5, 8.5);
+        path.lineTo(6.5, 11.5);
+        path.lineTo(12.5, 4.5);
+    } else if (name == QStringLiteral("chevron-down")) {
+        path.moveTo(3, 4.5);
+        path.lineTo(6, 7.5);
+        path.lineTo(9, 4.5);
+    } else if (name == QStringLiteral("fullscreen-exit")) {
+        path.moveTo(9, 4);
+        path.lineTo(9, 8);
+        path.quadTo(QPointF(9, 9), QPointF(8, 9));
+        path.lineTo(4, 9);
+        path.moveTo(15, 4);
+        path.lineTo(19, 4);
+        path.quadTo(QPointF(20, 4), QPointF(20, 5));
+        path.lineTo(20, 9);
+        path.moveTo(20, 15);
+        path.lineTo(20, 19);
+        path.quadTo(QPointF(20, 20), QPointF(19, 20));
+        path.lineTo(15, 20);
+        path.moveTo(9, 20);
+        path.lineTo(5, 20);
+        path.quadTo(QPointF(4, 20), QPointF(4, 19));
+        path.lineTo(4, 15);
+    } else if (name == QStringLiteral("fullscreen")) {
+        path.moveTo(4, 9);
+        path.lineTo(4, 5);
+        path.quadTo(QPointF(4, 4), QPointF(5, 4));
+        path.lineTo(9, 4);
+        path.moveTo(15, 4);
+        path.lineTo(19, 4);
+        path.quadTo(QPointF(20, 4), QPointF(20, 5));
+        path.lineTo(20, 9);
+        path.moveTo(20, 15);
+        path.lineTo(20, 19);
+        path.quadTo(QPointF(20, 20), QPointF(19, 20));
+        path.lineTo(15, 20);
+        path.moveTo(9, 20);
+        path.lineTo(5, 20);
+        path.quadTo(QPointF(4, 20), QPointF(4, 19));
+        path.lineTo(4, 15);
+    } else if (name == QStringLiteral("help")) {
+        path.addEllipse(QPointF(12, 12), 8.5, 8.5);
+        path.moveTo(12, 8.5);
+        path.addEllipse(QPointF(12, 12), 3.5, 3.5);
+        path.moveTo(6, 6);
+        path.lineTo(9.5, 9.5);
+        path.moveTo(18, 6);
+        path.lineTo(14.5, 9.5);
+        path.moveTo(6, 18);
+        path.lineTo(9.5, 14.5);
+        path.moveTo(18, 18);
+        path.lineTo(14.5, 14.5);
+    } else if (name == QStringLiteral("library")) {
+        for (const QPointF pos : {QPointF(4, 4), QPointF(13, 4), QPointF(4, 13), QPointF(13, 13)}) {
+            path.addRoundedRect(QRectF(pos, QSizeF(7, 7)), 2.0, 2.0);
+        }
+    } else if (name == QStringLiteral("list")) {
+        for (const qreal y : {6.0, 12.0, 18.0}) {
+            path.moveTo(9, y);
+            path.lineTo(20, y);
+        }
+        path.moveTo(4.5 + 1, 6);
+        path.addEllipse(QPointF(4.5, 6), 1, 1);
+        path.moveTo(4.5 + 1, 12);
+        path.addEllipse(QPointF(4.5, 12), 1, 1);
+        path.moveTo(4.5 + 1, 18);
+        path.addEllipse(QPointF(4.5, 18), 1, 1);
+    } else if (name == QStringLiteral("menu")) {
+        for (const qreal y : {7.0, 12.0, 17.0}) {
+            path.moveTo(5, y);
+            path.lineTo(19, y);
+        }
+    } else if (name == QStringLiteral("plus")) {
+        path.moveTo(12, 5);
+        path.lineTo(12, 19);
+        path.moveTo(5, 12);
+        path.lineTo(19, 12);
+    } else if (name == QStringLiteral("restart")) {
+        // Arc with a gap at the top right, arrowhead at the gap.
+        path.arcMoveTo(QRectF(5, 5, 14, 14), 65);
+        path.arcTo(QRectF(5, 5, 14, 14), 65, 310);
+        path.moveTo(19, 4.5);
+        path.lineTo(19, 8.0);
+        path.lineTo(15.5, 8.0);
+    } else if (name == QStringLiteral("settings")) {
+        path.moveTo(4, 6);   path.lineTo(13, 6);
+        path.moveTo(17, 6);  path.lineTo(20, 6);
+        path.moveTo(4, 12);  path.lineTo(7, 12);
+        path.moveTo(11, 12); path.lineTo(20, 12);
+        path.moveTo(4, 18);  path.lineTo(15, 18);
+        path.moveTo(19, 18); path.lineTo(20, 18);
+        for (const QPointF pos : {QPointF(15, 6), QPointF(9, 12), QPointF(17, 18)}) {
+            path.moveTo(pos.x() + 2, pos.y());
+            path.addEllipse(pos, 2, 2);
+        }
+    }
+}
+
+QPixmap RenderIcon(const QString& name, const QColor& color, int px) {
     const qreal ratio = qApp->devicePixelRatio();
-    reader.setScaledSize(QSize(px, px) * ratio);
-    QPixmap pixmap = QPixmap::fromImage(reader.read());
+    QPixmap pixmap(QSize(px, px) * ratio);
     pixmap.setDevicePixelRatio(ratio);
+    pixmap.fill(Qt::transparent);
+    const int grid = (name == QStringLiteral("check") ? 16
+                                             : name == QStringLiteral("chevron-down") ? 12
+                                                                                      : 24);
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.scale((px * ratio) / grid, (px * ratio) / grid);
+    const qreal stroke = (name == QStringLiteral("check") ? 2.0
+                              : name == QStringLiteral("chevron-down") ? 1.6
+                                                                       : 1.8);
+    const QPen pen(color, stroke, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+    QPainterPath path;
+    if (name == QStringLiteral("stop")) {
+        path.addRoundedRect(QRectF(6, 6, 12, 12), 2.0, 2.0);
+        painter.fillPath(path, color);
+        return pixmap;
+    }
+    if (name == QStringLiteral("pause")) {
+        path.addRoundedRect(QRectF(6.5, 5, 3.5, 14), 1.0, 1.0);
+        path.addRoundedRect(QRectF(14, 5, 3.5, 14), 1.0, 1.0);
+        painter.fillPath(path, color);
+        return pixmap;
+    }
+    if (name == QStringLiteral("play")) {
+        path.moveTo(8.2, 5.4);
+        path.lineTo(19.4, 12);
+        path.lineTo(8.2, 18.6);
+        path.closeSubpath();
+        painter.fillPath(path, color);
+        return pixmap;
+    }
+    DrawIconPath(path, name);
+    painter.strokePath(path, pen);
     return pixmap;
 }
 
@@ -151,15 +284,10 @@ bool HidesSetting(const std::string& label) {
 }
 
 QIcon Icon(const QString& name, int px) {
-    QFile file(QStringLiteral(":/fritchii/icons/%1.svg").arg(name));
-    if (!file.open(QFile::ReadOnly)) {
-        return {};
-    }
-    const QByteArray svg = file.readAll();
     QIcon icon;
-    const QPixmap idle = RenderSvg(svg, IconIdle, px);
-    const QPixmap hover = RenderSvg(svg, Text, px);
-    const QPixmap on = RenderSvg(svg, Accent, px);
+    const QPixmap idle = RenderIcon(name, IconIdle, px);
+    const QPixmap hover = RenderIcon(name, Text, px);
+    const QPixmap on = RenderIcon(name, Accent, px);
     icon.addPixmap(idle, QIcon::Normal, QIcon::Off);
     icon.addPixmap(hover, QIcon::Active, QIcon::Off);
     icon.addPixmap(on, QIcon::Normal, QIcon::On);
@@ -168,11 +296,7 @@ QIcon Icon(const QString& name, int px) {
 }
 
 QIcon Glyph(const QString& name, unsigned rgb, int px) {
-    QFile file(QStringLiteral(":/fritchii/icons/%1.svg").arg(name));
-    if (!file.open(QFile::ReadOnly)) {
-        return {};
-    }
-    return QIcon(RenderSvg(file.readAll(), QColor::fromRgb(rgb), px));
+    return QIcon(RenderIcon(name, QColor::fromRgb(rgb), px));
 }
 
 void RestructureMenus(Ui::MainWindow& ui, QMainWindow& window, const MenuHooks& hooks) {

@@ -30,7 +30,8 @@ bool ApplyTheme();
 /// Settings the Fritchii settings pages leave out (frame generation and its dev options).
 [[nodiscard]] bool HidesSetting(const std::string& label);
 
-/// A bundled line icon (fritchii/icons/<name>.svg): grey, and violet when checked.
+/// A line icon drawn with QPainter (fritchii_ui.cpp): grey, and violet when checked. The
+/// minimal Qt the project builds against has no SVG module, so glyphs are native drawings.
 [[nodiscard]] QIcon Icon(const QString& name, int px = 22);
 /// The same icon in one fixed colour (e.g. the dark play glyph on the violet button).
 [[nodiscard]] QIcon Glyph(const QString& name, unsigned rgb, int px);
