@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Fritchii's automatic side of zortos293/Lichii#895: finds a title's precompiled pipeline file
+// Ocarina2's automatic side of zortos293/Lichii#895: finds a title's precompiled pipeline file
 // (precompiled.fork-v<N>.nx2prep, as #895 places it) or a precompile recipe for it, and assembles
 // the recipe with the running game's own files when the file is missing or older than the recipe.
 // PipelineCache::PreparePrecompiled then builds the file's pipelines in the background.

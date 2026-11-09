@@ -442,7 +442,7 @@ private:
     /// tools/nx2-precompile, or assembled from a recipe), so the driver's own cache holds them
     /// before they are first drawn. Draws never use these pipelines: they build their own from
     /// the guest's shaders and find the driver's compiled code. Runs once per precompiled file,
-    /// driver and release (or again when `force`). Fritchii runs it on precompile_thread,
+    /// driver and release (or again when `force`). Ocarina2 runs it on precompile_thread,
     /// so `callback` (the loading screen in #895) is empty and progress goes to ShaderNotify.
     void PreparePrecompiled(const std::filesystem::path& base_dir, std::stop_token stop_loading,
                             const VideoCore::DiskResourceLoadCallback& callback,

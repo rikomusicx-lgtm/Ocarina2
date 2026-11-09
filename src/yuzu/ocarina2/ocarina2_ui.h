@@ -15,22 +15,22 @@ namespace Ui {
 class MainWindow;
 }
 
-// The Fritchii look ("Graphite"): dark, one violet accent, Inter, a home screen for Ocarina of
-// Time and plain menus. Everything here is switched on only for Fritchii builds, so a Lichii build
+// The Ocarina2 look ("Graphite"): dark, one violet accent, Inter, a home screen for Ocarina of
+// Time and plain menus. Everything here is switched on only for Ocarina2 builds, so a Lichii build
 // keeps the upstream UI and merges from Lichii stay clean. Shared files only call in here.
-namespace FritchiiUi {
+namespace Ocarina2Ui {
 
-/// Fritchii builds (g_build_name "Fritchii"). FRITCHII_CLASSIC_UI=1 shows the upstream UI.
+/// Ocarina2 builds (g_build_name "Ocarina2"). OCARINA2_CLASSIC_UI=1 shows the upstream UI.
 [[nodiscard]] bool Enabled();
 
 /// Fusion style, the Graphite palette, Inter and the stylesheet. Does nothing (and returns false)
-/// when the Fritchii UI is off.
+/// when the Ocarina2 UI is off.
 bool ApplyTheme();
 
-/// Settings the Fritchii settings pages leave out (frame generation and its dev options).
+/// Settings the Ocarina2 settings pages leave out (frame generation and its dev options).
 [[nodiscard]] bool HidesSetting(const std::string& label);
 
-/// A line icon drawn with QPainter (fritchii_ui.cpp): grey, and violet when checked. The
+/// A line icon drawn with QPainter (ocarina2_ui.cpp): grey, and violet when checked. The
 /// minimal Qt the project builds against has no SVG module, so glyphs are native drawings.
 [[nodiscard]] QIcon Icon(const QString& name, int px = 22);
 /// The same icon in one fixed colour (e.g. the dark play glyph on the violet button).
@@ -41,7 +41,7 @@ struct MenuHooks {
     std::function<void()> whats_new;
     std::function<void()> delete_shader_cache; ///< OoT's, after a confirmation
 };
-/// Plain names and Fritchii's grouping for the classic menus (File, Game, View, Tools, Help).
+/// Plain names and Ocarina2's grouping for the classic menus (File, Game, View, Tools, Help).
 void RestructureMenus(Ui::MainWindow& ui, QMainWindow& window, const MenuHooks& hooks);
 
 struct GraphicsHooks {
@@ -53,11 +53,11 @@ struct GraphicsHooks {
 /// The status bar's one "Graphics" button: renderer, accuracy, filter, anti-aliasing, effects.
 [[nodiscard]] QPushButton* MakeGraphicsButton(QWidget* parent, GraphicsHooks hooks);
 
-/// A settings page as the settings dialog shows it: inside a scroll area in Fritchii builds, so
+/// A settings page as the settings dialog shows it: inside a scroll area in Ocarina2 builds, so
 /// the window keeps a normal size with the larger type; the page itself otherwise.
 [[nodiscard]] QWidget* SettingsPage(QWidget* page);
 
 /// Loading screen bar in the Graphite colours.
 [[nodiscard]] const char* LoadingBarStyle();
 
-} // namespace FritchiiUi
+} // namespace Ocarina2Ui

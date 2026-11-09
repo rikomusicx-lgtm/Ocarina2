@@ -16,9 +16,9 @@ namespace VideoCore {
 class ShaderNotify;
 }
 
-namespace FritchiiUi {
+namespace Ocarina2Ui {
 
-/// Fritchii's performance overlay (View > Performance Overlay): a Graphite panel with the frame
+/// Ocarina2's performance overlay (View > Performance Overlay): a Graphite panel with the frame
 /// rate in big type, the frame time and the lowest recent frame rate, and a violet line of the
 /// last minute and a half against the target (60, or 30 with OoT at 30 FPS). Freezes and loading
 /// screens break the line instead of pulling it to zero. Drag it anywhere; right-click hides it.
@@ -45,4 +45,4 @@ private:
     QPoint drag_start;
 };
 
-} // namespace FritchiiUi
+} // namespace Ocarina2Ui

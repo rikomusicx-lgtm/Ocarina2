@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include "yuzu/fritchii/whats_new.h"
+#include "yuzu/ocarina2/whats_new.h"
 
 #include <algorithm>
 
@@ -22,7 +22,7 @@
 #include "common/scm_rev.h"
 #include "qt_common/config/uisettings.h"
 
-namespace FritchiiUi {
+namespace Ocarina2Ui {
 
 QString CleanReleaseNotes(const QString& markdown) {
     QString text = markdown;
@@ -31,7 +31,7 @@ QString CleanReleaseNotes(const QString& markdown) {
     if (const auto packages = text.indexOf(QStringLiteral("# Packages")); packages >= 0) {
         text.truncate(packages);
     }
-    // A Fritchii release starts with "Download this file ..." and a rule; the app has
+    // A Ocarina2 release starts with "Download this file ..." and a rule; the app has
     // already downloaded it.
     QStringList lines = text.split(QLatin1Char('\n'));
     const int head = std::min<int>(static_cast<int>(lines.size()), 20);
@@ -48,9 +48,9 @@ QString CleanReleaseNotes(const QString& markdown) {
 }
 
 QString BundledNotes() {
-    // FRITCHII_NOTES_PREVIEW=<notes.md> shows a draft before it is bundled (for the release notes).
-    const QString preview = qEnvironmentVariable("FRITCHII_NOTES_PREVIEW");
-    QFile file(preview.isEmpty() ? QStringLiteral(":/fritchii/whats-new.md") : preview);
+    // OCARINA2_NOTES_PREVIEW=<notes.md> shows a draft before it is bundled (for the release notes).
+    const QString preview = qEnvironmentVariable("OCARINA2_NOTES_PREVIEW");
+    QFile file(preview.isEmpty() ? QStringLiteral(":/ocarina2/whats-new.md") : preview);
     if (!file.open(QFile::ReadOnly | QFile::Text)) {
         return {};
     }
@@ -85,11 +85,9 @@ void SetNotes(QTextBrowser* browser, const QString& markdown) {
 }
 
 QString VersionName() {
-    QString version = QString::fromUtf8(Common::g_build_version);
-    if (!version.isEmpty() && !version.startsWith(QLatin1Char('v'))) {
-        version.prepend(QLatin1Char('v'));
-    }
-    return QStringLiteral("Fritchii %1").arg(version).trimmed();
+    // The version string carries its own prefix ("build-122-dev", "build-121"); just hand it over.
+    const QString version = QString::fromUtf8(Common::g_build_version);
+    return QStringLiteral("Ocarina2 %1").arg(version).trimmed();
 }
 
 bool ShouldShowWhatsNew(bool used_before) {
@@ -97,7 +95,7 @@ bool ShouldShowWhatsNew(bool used_before) {
     if (version.empty()) {
         return false;
     }
-    const std::string& seen = UISettings::values.fritchii_whats_new_seen.GetValue();
+    const std::string& seen = UISettings::values.ocarina2_whats_new_seen.GetValue();
     if (seen == version) {
         return false;
     }
@@ -110,7 +108,7 @@ bool ShouldShowWhatsNew(bool used_before) {
 }
 
 void MarkWhatsNewSeen() {
-    UISettings::values.fritchii_whats_new_seen.SetValue(std::string{Common::g_build_version});
+    UISettings::values.ocarina2_whats_new_seen.SetValue(std::string{Common::g_build_version});
 }
 
 void ShowWhatsNew(QWidget* parent) {
@@ -126,11 +124,11 @@ void ShowWhatsNew(QWidget* parent) {
     layout->setSpacing(18);
 
     auto* heading = new QLabel(QObject::tr("What's new in %1").arg(VersionName()));
-    heading->setObjectName(QStringLiteral("FritchiiDialogTitle"));
+    heading->setObjectName(QStringLiteral("Ocarina2DialogTitle"));
     layout->addWidget(heading);
 
     auto* notes = new QTextBrowser;
-    notes->setObjectName(QStringLiteral("FritchiiNotes"));
+    notes->setObjectName(QStringLiteral("Ocarina2Notes"));
     notes->setFrameShape(QFrame::NoFrame);
     notes->setOpenExternalLinks(true);
     const QString text = BundledNotes();
@@ -148,4 +146,4 @@ void ShowWhatsNew(QWidget* parent) {
     dialog.exec();
 }
 
-} // namespace FritchiiUi
+} // namespace Ocarina2Ui

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.rikomusicx-lgtm.ocarina2</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <name>Ocarina2</name>
+  <summary>The Legend of Zelda: Ocarina of Time on the Lichii emulator</summary>
+  <description>
+    <p>Ocarina2 is The Legend of Zelda: Ocarina of Time edition of Lichii, the experimental open-source Nintendo Switch and Switch 2 emulator fork based on Eglantine and Eden, with work inherited from yuzu and Sudachi. Compatibility and performance vary by game and hardware.</p>
+  </description>
+  <launchable type="desktop-id">io.github.rikomusicx-lgtm.ocarina2.desktop</launchable>
+  <provides><binary>ocarina2</binary></provides>
+  <categories><category>Game</category><category>Emulator</category></categories>
+  <url type="homepage">https://github.com/rikomusicx-lgtm/Ocarina2</url>
+  <url type="bugtracker">https://github.com/rikomusicx-lgtm/Ocarina2/issues</url>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer_name>Ocarina2 contributors</developer_name>
+  <content_rating type="oars-1.0"/>
+</component>

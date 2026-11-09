@@ -97,7 +97,7 @@ public:
 
     /// From boot until the title's precompiled pipelines are known to be prepared or absent: the
     /// file is looked for or assembled, the stamp checked, or the preparation runs. A frontend can
-    /// hold the game back meanwhile (Fritchii's "Preparing shaders" screen).
+    /// hold the game back meanwhile (Ocarina2's "Preparing shaders" screen).
     void SetPrecompilePending(bool pending) noexcept {
         precompile_pending.store(pending, std::memory_order::release);
     }

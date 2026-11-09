@@ -147,8 +147,8 @@ struct Values {
     // Release tag the user chose to skip, and the epoch second before which updates stay quiet.
     Setting<std::string> skipped_update_tag{linkage, {}, "skipped_update_tag", Category::Ui};
     Setting<unsigned long long> update_remind_at{linkage, 0, "update_remind_at", Category::Ui};
-    // The Fritchii version whose "What's new" window was shown (yuzu/fritchii/whats_new.cpp).
-    Setting<std::string> fritchii_whats_new_seen{linkage, {}, "fritchii_whats_new_seen",
+    // The Ocarina2 version whose "What's new" window was shown (yuzu/ocarina2/whats_new.cpp).
+    Setting<std::string> ocarina2_whats_new_seen{linkage, {}, "ocarina2_whats_new_seen",
                                                  Category::Ui};
 
     // Linux/MinGW may support (requires libdl support)

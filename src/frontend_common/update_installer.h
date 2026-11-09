@@ -92,7 +92,7 @@ bool IsProtected(const std::filesystem::path& relative);
 bool IsWritable(const std::filesystem::path& dir);
 
 // The folder of an unpacked package that holds `exe_name`: `unpacked` itself, or its only
-// subfolder (the zip's top folder, such as Fritchii-v5).
+// subfolder (the zip's top folder, such as Ocarina2-v5).
 std::optional<std::filesystem::path> FindPackageRoot(const std::filesystem::path& unpacked,
                                                      const std::filesystem::path& exe_name);
 
@@ -144,7 +144,7 @@ std::filesystem::path RunningExePath();
 bool IsUpdaterFolder(const std::filesystem::path& install_dir);
 
 // Set for a restarted process to the id of the process it replaces.
-inline constexpr char RestartWaitVariable[] = "LICHII_UPDATE_WAIT_PID";
+inline constexpr char RestartWaitVariable[] = "OCARINA2_UPDATE_WAIT_PID";
 
 // Wait (up to 30 seconds) for the process named by RestartWaitVariable to exit, so that it has
 // saved its settings and closed its log first, then clear the variable.

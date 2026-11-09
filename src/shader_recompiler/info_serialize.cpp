@@ -12,9 +12,9 @@ namespace {
 
 // Every field of Info is listed in VisitInfo below. An info that grows a field has to be listed
 // there too: this size check fails the build until it is (update the size with it).
-// Ported from zortos293/Lichii#896 for Fritchii. Our fork adds frag_color_components (its own
-// extension, not in base or fritchii): Info is 8 bytes larger and it is visited in VisitInfo.
-// StorageWriteExtent is fritchii's (storage buffer stores bound), visited via VisitWriteExtent.
+// Ported from zortos293/Lichii#896 for Ocarina2. Our fork adds frag_color_components (its own
+// extension, not in base or ocarina2): Info is 8 bytes larger and it is visited in VisitInfo.
+// StorageWriteExtent is ocarina2's (storage buffer stores bound), visited via VisitWriteExtent.
 // A new field here also needs VulkanPipelineCacheVersion (pipeline_cache_files.h) bumped, so kept
 // files written before it are rebuilt.
 #if defined(_MSC_VER) && defined(_WIN64)

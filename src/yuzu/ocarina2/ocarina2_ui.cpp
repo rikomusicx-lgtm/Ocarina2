@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include "yuzu/fritchii/fritchii_ui.h"
+#include "yuzu/ocarina2/ocarina2_ui.h"
 
 #include <map>
 #include <string_view>
@@ -34,7 +34,7 @@
 #include "video_core/post_processing/fx_preset.h"
 #endif
 
-namespace FritchiiUi {
+namespace Ocarina2Ui {
 namespace {
 
 // Graphite
@@ -45,7 +45,7 @@ const QColor Button{0x1f, 0x1f, 0x24};
 const QColor Text{0xec, 0xec, 0xf1};
 const QColor TextSecondary{0x9a, 0x9a, 0xa8};
 const QColor TextDisabled{0x55, 0x55, 0x5f};
-const QColor IconIdle{0x6b, 0x6b, 0x78};
+const QColor IconIdle{0xa4a0bb};
 const QColor Accent{0xa7, 0x8b, 0xfa};
 const QColor OnAccent{0x1c, 0x14, 0x33};
 
@@ -90,7 +90,7 @@ public:
     }
 };
 
-// The fritchii icons as QPainter strokes. The minimal Qt packages the project builds against
+// The ocarina2 icons as QPainter strokes. The minimal Qt packages the project builds against
 // have no SVG module, so the line glyphs are drawn here: each icon is its viewBox coordinates,
 // scaled to px (grid is square). Keep the shapes, the round caps and the 1.8 (24-grid) widths —
 // the strip, the rail and the play button all use them.
@@ -245,10 +245,10 @@ void Rename(QAction* action, const QString& text) {
 
 bool Enabled() {
     static const bool enabled = [] {
-        if (qEnvironmentVariableIntValue("FRITCHII_CLASSIC_UI") != 0) {
+        if (qEnvironmentVariableIntValue("OCARINA2_CLASSIC_UI") != 0) {
             return false;
         }
-        return std::string_view{Common::g_build_name} == "Fritchii";
+        return std::string_view{Common::g_build_name} == "Ocarina2";
     }();
     return enabled;
 }
@@ -260,8 +260,8 @@ bool ApplyTheme() {
     static bool once = false;
     if (!once) {
         once = true;
-        QFontDatabase::addApplicationFont(QStringLiteral(":/fritchii/fonts/Inter-Regular.ttf"));
-        QFontDatabase::addApplicationFont(QStringLiteral(":/fritchii/fonts/Inter-Medium.ttf"));
+        QFontDatabase::addApplicationFont(QStringLiteral(":/ocarina2/fonts/Inter-Regular.ttf"));
+        QFontDatabase::addApplicationFont(QStringLiteral(":/ocarina2/fonts/Inter-Medium.ttf"));
         QApplication::setStyle(new GraphiteStyle);
     }
     QFont font(QStringLiteral("Inter"));
@@ -271,7 +271,7 @@ bool ApplyTheme() {
     // Folder and refresh icons come from the dark icon set.
     QIcon::setThemeName(QStringLiteral("colorful_dark"));
 
-    QFile qss(QStringLiteral(":/fritchii/style.qss"));
+    QFile qss(QStringLiteral(":/ocarina2/style.qss"));
     if (qss.open(QFile::ReadOnly | QFile::Text)) {
         qApp->setStyleSheet(QString::fromUtf8(qss.readAll()));
     }
@@ -279,7 +279,7 @@ bool ApplyTheme() {
 }
 
 bool HidesSetting(const std::string& label) {
-    // No frame generation in Fritchii (real frames only), and its options are dev tools.
+    // No frame generation in Ocarina2 (real frames only), and its options are dev tools.
     return Enabled() && label.starts_with("frame_gen");
 }
 
@@ -415,7 +415,7 @@ void RestructureMenus(Ui::MainWindow& ui, QMainWindow& window, const MenuHooks& 
     Rename(ui.action_Load_Amiibo, tr("&Load or Remove Amiibo..."));
     Rename(ui.action_Firmware_From_Folder, tr("From &Folder..."));
     Rename(ui.action_Firmware_From_ZIP, tr("From &ZIP..."));
-    Rename(ui.action_About, tr("&About Fritchii"));
+    Rename(ui.action_About, tr("&About Ocarina2"));
     Rename(ui.action_Eden_Dependencies, tr("&Open-Source Components"));
 }
 
@@ -516,7 +516,7 @@ QWidget* SettingsPage(QWidget* page) {
         return page;
     }
     // One scroll area per page, kept on the page (it lives as long as the page's dialog).
-    if (auto* area = qobject_cast<QScrollArea*>(page->property("FritchiiScroll").value<QObject*>())) {
+    if (auto* area = qobject_cast<QScrollArea*>(page->property("Ocarina2Scroll").value<QObject*>())) {
         return area;
     }
     auto* area = new QScrollArea;
@@ -525,7 +525,7 @@ QWidget* SettingsPage(QWidget* page) {
     area->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     area->setWidget(page);
     area->setAccessibleName(page->accessibleName());
-    page->setProperty("FritchiiScroll", QVariant::fromValue<QObject*>(area));
+    page->setProperty("Ocarina2Scroll", QVariant::fromValue<QObject*>(area));
     return area;
 }
 
@@ -543,4 +543,4 @@ QProgressBar::chunk {
 })";
 }
 
-} // namespace FritchiiUi
+} // namespace Ocarina2Ui

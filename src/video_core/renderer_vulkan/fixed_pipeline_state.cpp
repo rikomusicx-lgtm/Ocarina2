@@ -417,7 +417,7 @@ void FixedPipelineState::DynamicState::Refresh3(const Maxwell& regs,
     }
 }
 
-// From zortos293/Lichii#895. Not called by draws or the disk cache loader in Fritchii yet: keying
+// From zortos293/Lichii#895. Not called by draws or the disk cache loader in Ocarina2 yet: keying
 // draws canonically changes the hashes the used list and the prebuild look up, which waits for
 // review (see port_895_report.md). Our draws already key attribute types by the input map
 // (VideoCommon::KeyedAttributeTypes), which is the first part of this.

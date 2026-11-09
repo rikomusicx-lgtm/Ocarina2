@@ -13,7 +13,7 @@ class QMenu;
 class QTimer;
 class QToolButton;
 
-namespace FritchiiUi {
+namespace Ocarina2Ui {
 
 struct GameControlHooks {
     std::function<QWidget*()> render;   ///< the game's render widget
@@ -55,4 +55,4 @@ private:
     bool shown_fullscreen = false;
 };
 
-} // namespace FritchiiUi
+} // namespace Ocarina2Ui

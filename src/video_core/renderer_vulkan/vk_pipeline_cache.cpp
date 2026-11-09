@@ -2428,9 +2428,9 @@ void PipelineCache::LoadDiskResources(u64 title_id, std::stop_token stop_loading
     used_pipelines_filename =
         VideoCommon::VersionedPipelineCachePath(base_dir, "vulkan_used", CACHE_VERSION);
     // This fork's files of an earlier version with the same records (52 before 2026-11-08; 54
-    // as Fritchii writes them) are copied to the current version's names, header rewritten,
+    // as Ocarina2 writes them) are copied to the current version's names, header rewritten,
     // used list and merge log with them. Copied, not renamed: older builds (a rollback to the
-    // previous release) keep their cache. Fritchii's files import as well.
+    // previous release) keep their cache. Ocarina2's files import as well.
     for (const auto& [cache_stem, used_stem] :
          std::array{std::pair{"vulkan", "vulkan_used"},
                     std::pair{"vulkan-frizti", "vulkan_used-frizti"}}) {
@@ -3681,7 +3681,7 @@ void PipelineCache::PreparePrecompiled(const std::filesystem::path& base_dir,
                                        std::stop_token stop_loading,
                                        const VideoCore::DiskResourceLoadCallback& callback,
                                        const std::filesystem::path& file, bool force) {
-    // Ported from #895 for Fritchii: it runs beside the game (precompile_thread) instead of
+    // Ported from #895 for Ocarina2: it runs beside the game (precompile_thread) instead of
     // before the first frame, on threads of its own at idle priority instead of the boot's
     // pipeline workers, and reads each record from the file when it is built instead of
     // holding all of them (Ocarina of Time: 132,606 records, ~140 MB of keys).

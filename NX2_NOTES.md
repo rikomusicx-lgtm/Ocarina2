@@ -378,7 +378,7 @@ reproduced on this PC in build-121 with flash watch (EDEN_NX2_FLASH_WATCH=... pa
 all flashes are in one render pass - the half-resolution scene-color pass, B10G11R11_FLOAT at
 0x8114f02000/0x8114302000, 21 draws, shaders d9edd60c82c0d73c plus 13 more - its mean collapses
 from ~0.087 to ~0.0002 in bursts; surrounding passes (bloom, composite) stay clean. It is NOT
-the Fritchii null-texture handle fix (EXP21, A/B'd off: same flicker), NOT the DLSS replacement
+the Ocarina2 null-texture handle fix (EXP21, A/B'd off: same flicker), NOT the DLSS replacement
 (DLSS never engaged here: inputs fail the checks), NOT rescale-only, NOT missing pipelines
 (rejected: [], no unbuilt draws at flash time). Root cause: the mesh/task indirect-draw buffer
 is read before the GPU writer commits the page-map entry that publishes it (the split-thread
@@ -413,7 +413,7 @@ scenes is the HMMA upscale at 4K plus ASTC recompression stalls and pipeline reb
 entries - the same Kokiri-class wall. The intro cutscene is native 30 FPS by design and cannot
 be improved emulator-side. Audio pipeline is healthy (48 kHz cubeb, no underruns in any log).
 
-## 2026-11-08 - build-121 candidate (branch fritchii-merge)
+## 2026-11-08 - build-121 candidate (branch ocarina2-merge)
 
 
 Delta on top of build-120 while the release was held, built and booted on this PC.

@@ -1590,7 +1590,7 @@ bool FileEnvironment::AnswersHoldFor(Shader::Environment& live, const char** why
         live.LocalMemorySize() != local_memory_size || live.IsNativeProgram() != IsNativeProgram()) {
         return fail("program");
     }
-    // Fritchii: the bound texture buffer is the constant buffer bindless handles are read from
+    // Ocarina2: the bound texture buffer is the constant buffer bindless handles are read from
     // (texture_pass), and compute programs take their workgroup and shared memory sizes from the
     // environment; #896 leaves them to the key.
     if (live.TextureBoundBuffer() != texture_bound) {

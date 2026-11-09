@@ -17,7 +17,7 @@ class QStandardItemModel;
 class QTimer;
 class QToolButton;
 
-namespace FritchiiUi {
+namespace Ocarina2Ui {
 
 /// What the home screen asks the main window to do.
 struct HomeHooks {
@@ -37,7 +37,7 @@ struct HomeHooks {
     QList<QMenu*> classic_menus;  ///< File, Game, View, Tools, Help behind the rail's menu button
 };
 
-/// The Fritchii main screen: a left icon rail (Library, Settings, Help, and the classic menus
+/// The Ocarina2 main screen: a left icon rail (Library, Settings, Help, and the classic menus
 /// behind a button) and a home page with one big card for Ocarina of Time (or the first game)
 /// and the other games in a small row. The classic game list stays one click away
 /// ("All games"); the main window keeps managing it as before.
@@ -72,6 +72,7 @@ private:
     QWidget* page = nullptr;
     QToolButton* library_button = nullptr;
     QLabel* cover = nullptr;
+    QLabel* subtitle = nullptr;
     QLabel* title = nullptr;
     QPushButton* play = nullptr;
     QHBoxLayout* row = nullptr;
@@ -83,4 +84,4 @@ private:
     u64 hero_id = 0;
 };
 
-} // namespace FritchiiUi
+} // namespace Ocarina2Ui

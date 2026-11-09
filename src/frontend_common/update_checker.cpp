@@ -35,7 +35,7 @@ std::optional<u64> ParseBuildNumber(std::string_view tag) {
 
 constexpr std::string_view ReleaseRepo = "Frizti/Lichii";
 // Download URLs name the repository by its current name; GitHub redirects the old one.
-constexpr std::array RepoNames{std::string_view{"Lichii"}, std::string_view{"Fritchii"}};
+constexpr std::array RepoNames{std::string_view{"Lichii"}, std::string_view{"Ocarina2"}};
 
 std::optional<u32> ParseNumber(std::string_view text) {
     if (text.empty() || (text.size() > 1 && text.front() == '0') ||
@@ -50,9 +50,9 @@ std::optional<u32> ParseNumber(std::string_view text) {
     return number;
 }
 
-CheckResult CheckFritchii([[maybe_unused]] const FritchiiVersion& current) {
+CheckResult CheckOcarina2([[maybe_unused]] const Ocarina2Version& current) {
 #ifndef _WIN32
-    // Fritchii only publishes Windows packages.
+    // Ocarina2 only publishes Windows packages.
     return {};
 #else
     auto source = DefaultSource();
@@ -77,11 +77,11 @@ CheckResult CheckFritchii([[maybe_unused]] const FritchiiVersion& current) {
     }
     const auto releases = Common::Net::Release::ListFromJson(
         std::string_view{*response.body}, source.origin, std::string{ReleaseRepo});
-    auto update = SelectFritchiiUpdate(releases, current, source);
+    auto update = SelectOcarina2Update(releases, current, source);
     if (!update) {
         return {};
     }
-    auto asset = SelectFritchiiAsset(*update, source);
+    auto asset = SelectOcarina2Asset(*update, source);
     LOG_INFO(Frontend, "Received update {} ({})", update->title, update->tag);
     return {.update = std::move(update), .asset = std::move(asset)};
 #endif
@@ -118,7 +118,7 @@ std::optional<Common::Net::Release> SelectUpdate(std::span<const Common::Net::Re
 
 CheckResult Check() {
     if (const auto running = RunningVersion()) {
-        return CheckFritchii(*running);
+        return CheckOcarina2(*running);
     }
     if (!ParseBuildNumber(Common::g_build_release_tag) ||
         std::string_view{Common::g_build_release_platform}.empty()) {
@@ -145,55 +145,55 @@ std::optional<Common::Net::Release> GetUpdate() {
     return Check().update;
 }
 
-std::string FritchiiVersion::ToString() const {
+std::string Ocarina2Version::ToString() const {
     return minor == 0 ? fmt::format("{}", major) : fmt::format("{}.{}", major, minor);
 }
 
-std::optional<FritchiiVersion> ParseFritchiiVersion(std::string_view text) {
+std::optional<Ocarina2Version> ParseOcarina2Version(std::string_view text) {
     const auto dot = text.find('.');
     const auto major = ParseNumber(text.substr(0, dot));
     if (!major || *major == 0) {
         return std::nullopt;
     }
     if (dot == std::string_view::npos) {
-        return FritchiiVersion{.major = *major};
+        return Ocarina2Version{.major = *major};
     }
     // One decimal, and N.0 is spelled N, so each version has one tag and one package name.
     const auto decimal = text.substr(dot + 1);
     if (decimal.size() != 1 || decimal[0] < '1' || decimal[0] > '9') {
         return std::nullopt;
     }
-    return FritchiiVersion{.major = *major, .minor = static_cast<u32>(decimal[0] - '0')};
+    return Ocarina2Version{.major = *major, .minor = static_cast<u32>(decimal[0] - '0')};
 }
 
-std::optional<FritchiiVersion> ParseBuildVersion(std::string_view build_version) {
-    for (const std::string_view prefix : {"Fritchii v", "Frizti v"}) {
+std::optional<Ocarina2Version> ParseBuildVersion(std::string_view build_version) {
+    for (const std::string_view prefix : {"Ocarina2 v", "Frizti v"}) {
         if (build_version.starts_with(prefix)) {
-            return ParseFritchiiVersion(build_version.substr(prefix.size()));
+            return ParseOcarina2Version(build_version.substr(prefix.size()));
         }
     }
     return std::nullopt;
 }
 
-std::optional<FritchiiVersion> RunningVersion() {
-    // Fritchii builds carry the name apart from the version ("Fritchii" + "v4").
-    if (std::string_view{Common::g_build_name} == "Fritchii") {
-        return ParseBuildVersion(fmt::format("Fritchii {}", Common::g_build_version));
+std::optional<Ocarina2Version> RunningVersion() {
+    // Ocarina2 builds carry the name apart from the version ("Ocarina2" + "v4").
+    if (std::string_view{Common::g_build_name} == "Ocarina2") {
+        return ParseBuildVersion(fmt::format("Ocarina2 {}", Common::g_build_version));
     }
     return ParseBuildVersion(Common::g_build_version);
 }
 
-std::optional<FritchiiVersion> ParseFritchiiTag(std::string_view tag) {
-    for (const std::string_view prefix : {"fritchii-v", "frizti-v"}) {
+std::optional<Ocarina2Version> ParseOcarina2Tag(std::string_view tag) {
+    for (const std::string_view prefix : {"ocarina2-v", "frizti-v"}) {
         if (tag.starts_with(prefix)) {
-            return ParseFritchiiVersion(tag.substr(prefix.size()));
+            return ParseOcarina2Version(tag.substr(prefix.size()));
         }
     }
     return std::nullopt;
 }
 
-std::string FritchiiAssetName(const FritchiiVersion& version) {
-    return fmt::format("Fritchii-v{}-Windows-x64.zip", version.ToString());
+std::string Ocarina2AssetName(const Ocarina2Version& version) {
+    return fmt::format("Ocarina2-v{}-Windows-x64.zip", version.ToString());
 }
 
 Source DefaultSource() {
@@ -234,13 +234,13 @@ std::optional<Source> ParseSourceOverride(std::string_view url) {
                   .test = true};
 }
 
-std::optional<Common::Net::Asset> SelectFritchiiAsset(const Common::Net::Release& release,
+std::optional<Common::Net::Asset> SelectOcarina2Asset(const Common::Net::Release& release,
                                                       const Source& source) {
-    const auto version = ParseFritchiiTag(release.tag);
+    const auto version = ParseOcarina2Tag(release.tag);
     if (!version) {
         return std::nullopt;
     }
-    const auto filename = FritchiiAssetName(*version);
+    const auto filename = Ocarina2AssetName(*version);
     for (const auto& url : release.assets) {
         std::string origin;
         if (source.test) {
@@ -260,7 +260,7 @@ std::optional<Common::Net::Asset> SelectFritchiiAsset(const Common::Net::Release
         if (origin.empty()) {
             continue;
         }
-        Common::Net::Asset asset{.name = "Fritchii",
+        Common::Net::Asset asset{.name = "Ocarina2",
                                  .url = origin,
                                  .path = url.substr(origin.size()),
                                  .filename = filename};
@@ -273,14 +273,14 @@ std::optional<Common::Net::Asset> SelectFritchiiAsset(const Common::Net::Release
     return std::nullopt;
 }
 
-std::optional<Common::Net::Release> SelectFritchiiUpdate(
-    std::span<const Common::Net::Release> releases, const FritchiiVersion& current,
+std::optional<Common::Net::Release> SelectOcarina2Update(
+    std::span<const Common::Net::Release> releases, const Ocarina2Version& current,
     const Source& source) {
     const Common::Net::Release* selected = nullptr;
-    FritchiiVersion newest = current;
+    Ocarina2Version newest = current;
     for (const auto& release : releases) {
-        const auto version = ParseFritchiiTag(release.tag);
-        if (version && *version > newest && SelectFritchiiAsset(release, source)) {
+        const auto version = ParseOcarina2Tag(release.tag);
+        if (version && *version > newest && SelectOcarina2Asset(release, source)) {
             newest = *version;
             selected = &release;
         }

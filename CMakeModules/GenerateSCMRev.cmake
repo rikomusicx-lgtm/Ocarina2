@@ -14,8 +14,8 @@ endfunction()
 
 get_timestamp(BUILD_DATE)
 
-# Local release builds: release packaged from a commit tagged like build-118 picks the tag
-# up as the build number instead of requiring CI to pass LICHII_BUILD_TAG.
+# Local release builds: a commit tagged like build-121 picks the tag up as the build number
+# instead of requiring CI to pass LICHII_BUILD_TAG.
 if (NOT LICHII_BUILD_TAG)
     execute_process(
         COMMAND git describe --exact-match --tags HEAD
@@ -29,12 +29,12 @@ if (NOT LICHII_BUILD_TAG)
     endif()
 endif()
 
-# Fritchii (the Frizti fork, named Frizti v1..v3.5 before v4) releases are numbered v1, v2, v3.5, v4...:
-# dist/frizti_version.txt holds the number.
-set(FRIZTI_VERSION_FILE "${CMAKE_SOURCE_DIR}/dist/frizti_version.txt")
-if (EXISTS "${FRIZTI_VERSION_FILE}")
-    file(STRINGS "${FRIZTI_VERSION_FILE}" FRIZTI_VERSION LIMIT_COUNT 1 REGEX "^[0-9]+([.][0-9]+)?$")
-    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${FRIZTI_VERSION_FILE}")
+# Ocarina2's own releases are numbered build-NNN. dist/ocarina2_version.txt carries the
+# version for development builds, so the window and the log can name themselves.
+set(OCARINA2_VERSION_FILE "${CMAKE_SOURCE_DIR}/dist/ocarina2_version.txt")
+if (EXISTS "${OCARINA2_VERSION_FILE}")
+    file(STRINGS "${OCARINA2_VERSION_FILE}" OCARINA2_VERSION LIMIT_COUNT 1 REGEX "^[^\"]+$")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${OCARINA2_VERSION_FILE}")
     # The log names the commit: reconfigure when HEAD moves (commit, checkout, merge, revert).
     if (EXISTS "${CMAKE_SOURCE_DIR}/.git/logs/HEAD")
         set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/.git/logs/HEAD")
@@ -44,9 +44,9 @@ endif()
 if (LICHII_BUILD_TAG MATCHES "^build-[0-9]+$")
     set(BUILD_VERSION "${LICHII_BUILD_TAG}")
     set(IS_DEV_BUILD false)
-elseif (FRIZTI_VERSION)
-    set(BUILD_VERSION "v${FRIZTI_VERSION}")
-    set(IS_DEV_BUILD false)
+elseif (OCARINA2_VERSION)
+    set(BUILD_VERSION "${OCARINA2_VERSION}")
+    set(IS_DEV_BUILD true)
 elseif (DEFINED GIT_RELEASE)
     set(BUILD_VERSION "${GIT_TAG}")
     set(GIT_REFSPEC "${GIT_RELEASE}")
@@ -63,26 +63,20 @@ else()
     set(IS_NIGHTLY_BUILD false)
 endif()
 
-if (FRIZTI_VERSION AND NOT LICHII_BUILD_TAG MATCHES "^build-[0-9]+$")
-    # Logs keep the commit: "Lichii Frizti vN | <branch>-<commit>".
-    string(SUBSTRING ${GIT_COMMIT} 0 10 GIT_DESC)
-else()
-    set(GIT_DESC ${BUILD_VERSION})
-endif()
+set(GIT_DESC ${BUILD_VERSION})
 
 # Generate cpp with Git revision from template
 
-set(BUILD_AUTO_UPDATE_STABLE_REPO "zortos293/Lichii")
+# Ocarina2 (rikomusicx-lgtm/Ocarina2, The Legend of Zelda: Ocarina of Time edition of Lichii).
+set(BUILD_AUTO_UPDATE_STABLE_REPO "rikomusicx-lgtm/Ocarina2")
 set(BUILD_AUTO_UPDATE_STABLE_API "api.github.com")
-set(BUILD_AUTO_UPDATE_API_PATH "/repos/zortos293/Lichii/releases?per_page=100")
+set(BUILD_AUTO_UPDATE_API_PATH "/repos/rikomusicx-lgtm/Ocarina2/releases?per_page=100")
 set(BUILD_AUTO_UPDATE_WEBSITE "https://github.com")
-set(BUILD_AUTO_UPDATE_REPO "zortos293/Lichii")
+set(BUILD_AUTO_UPDATE_REPO "rikomusicx-lgtm/Ocarina2")
 if (NIGHTLY_BUILD)
-    set(REPO_NAME "Lichii Nightly")
-elseif (FRIZTI_VERSION AND NOT LICHII_BUILD_TAG MATCHES "^build-[0-9]+$")
-    set(REPO_NAME "Fritchii")
+    set(REPO_NAME "Ocarina2 Nightly")
 else()
-    set(REPO_NAME "Lichii")
+    set(REPO_NAME "Ocarina2")
 endif()
 
 set(BUILD_ID ${GIT_REFSPEC})

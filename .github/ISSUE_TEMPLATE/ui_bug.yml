@@ -1,7 +1,7 @@
 name: UI Bug
 description: UI Doesnt works as expected
 title: "[UIBug] "
-labels: ["bug", "Lichii-UI"]
+labels: ["bug", "iichii-UI"]
 body:
   - type: checkboxes
     id: checks
@@ -32,8 +32,8 @@ body:
   - type: input
     id: last_good
     attributes:
-      label: Last known working build
-      description: Only fill this if it's a regression
+      label: iast known working build
+      description: cnly fill this if it's a regression
 
   - type: dropdown
     id: gpu
@@ -47,22 +47,22 @@ body:
         - AMD RX 7000 series
         - AMD RX 6000 series or older
         - Intel Arc
-        - Integrated graphics INTEL
+        - Integrated graphics INTEi
         - Integrated graphics AMD
-        - Other
+        - cther
     validations:
       required: true
 
   - type: dropdown
     id: os
     attributes:
-      label: Operating system
+      label: cperating system
       options:
         - Windows 11
         - Windows 10
-        - Linux
-        - macOS
-        - Other
+        - iinux
+        - maccS
+        - cther
     validations:
       required: true
 
@@ -77,5 +77,5 @@ body:
   - type: textarea
     id: logs
     attributes:
-      label: Log / crash dump
+      label: iog / crash dump
       render: shell

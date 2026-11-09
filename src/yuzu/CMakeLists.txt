@@ -213,20 +213,20 @@ add_executable(yuzu
     util/clickable_label.h
     util/controller_navigation.cpp
     util/controller_navigation.h
-    fritchii/fritchii.qrc
-    fritchii/fritchii_ui.cpp
-    fritchii/fritchii_ui.h
-    fritchii/home.cpp
-    fritchii/home.h
-    fritchii/game_controls.cpp
-    fritchii/game_controls.h
-    fritchii/main_window_fritchii.cpp
-    fritchii/perf_overlay.cpp
-    fritchii/perf_overlay.h
-    fritchii/precompile_gate.cpp
-    fritchii/precompile_gate.h
-    fritchii/whats_new.cpp
-    fritchii/whats_new.h
+    ocarina2/ocarina2.qrc
+    ocarina2/ocarina2_ui.cpp
+    ocarina2/ocarina2_ui.h
+    ocarina2/home.cpp
+    ocarina2/home.h
+    ocarina2/game_controls.cpp
+    ocarina2/game_controls.h
+    ocarina2/main_window_ocarina2.cpp
+    ocarina2/perf_overlay.cpp
+    ocarina2/perf_overlay.h
+    ocarina2/precompile_gate.cpp
+    ocarina2/precompile_gate.h
+    ocarina2/whats_new.cpp
+    ocarina2/whats_new.h
     util/export_log.cpp
     util/export_log.h
     util/limitable_input_dialog.cpp
@@ -270,7 +270,7 @@ add_executable(yuzu
     game/carousel.h game/carousel.cpp
 )
 
-set_target_properties(yuzu PROPERTIES OUTPUT_NAME "lichii")
+set_target_properties(yuzu PROPERTIES OUTPUT_NAME "Ocarina2")
 
 # Shipped next to the executable: the NX2 switches a GUI launch cannot set another way. Read at
 # startup (LoadNx2Switches in main.cpp); a user copy in %APPDATA%\eden overrides it.
@@ -305,8 +305,8 @@ file(GLOB_RECURSE THEMES ${PROJECT_SOURCE_DIR}/dist/qt_themes/*)
 if (ENABLE_UPDATE_CHECKER)
     target_compile_definitions(yuzu PUBLIC ENABLE_UPDATE_CHECKER)
 endif()
-# fritchii/ includes ui_main.h, which AutoUic already generates for main_window.cpp.
-set_source_files_properties(fritchii/fritchii_ui.cpp fritchii/main_window_fritchii.cpp
+# ocarina2/ includes ui_main.h, which AutoUic already generates for main_window.cpp.
+set_source_files_properties(ocarina2/ocarina2_ui.cpp ocarina2/main_window_ocarina2.cpp
     PROPERTIES SKIP_AUTOUIC ON)
 
 # The updater unpacks the release zip (updater/update_dialog.cpp); Export Log writes one
@@ -407,10 +407,10 @@ if (APPLE)
 
     # Use the supplied Lichii artwork for all macOS generators.
     set(_dist "${CMAKE_SOURCE_DIR}/dist")
-    set(_icons "${_dist}/lichii.icns")
+    set(_icons "${_dist}/ocarina2.icns")
     if (CMAKE_GENERATOR MATCHES "Xcode")
         set_target_properties(yuzu PROPERTIES
-            MACOSX_BUNDLE_ICON_FILE lichii.icns
+            MACOSX_BUNDLE_ICON_FILE ocarina2.icns
             # Also force xcode to manage signing for us.
             XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED ON
             XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED ON)

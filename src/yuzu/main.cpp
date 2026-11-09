@@ -1,4 +1,4 @@
-﻿// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
+// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <QApplication>
@@ -27,7 +27,7 @@
 #endif
 
 #include "main_window.h"
-#include "fritchii/fritchii_ui.h"
+#include "ocarina2/ocarina2_ui.h"
 #ifdef ENABLE_UPDATE_CHECKER
 #include "updater/update_dialog.h"
 #endif
@@ -46,7 +46,7 @@ static void OverrideWindowsFont() {
 }
 #endif
 
-// Fritchii: caps Windows' scale (passed through) so the primary screen keeps at least 1350x900
+// Ocarina2: caps Windows' scale (passed through) so the primary screen keeps at least 1350x900
 // units for the windows, by a QT_SCALE_FACTOR below 1 when it would not. Leaves a
 // QT_SCALE_FACTOR the user set alone.
 static void FitHighDpiScaleToScreen() {
@@ -156,7 +156,7 @@ int main(int argc, char* argv[]) {
 
     // Init settings params
     QCoreApplication::setOrganizationName(QStringLiteral("eden"));
-    QCoreApplication::setApplicationName(QStringLiteral("Lichii"));
+    QCoreApplication::setApplicationName(QStringLiteral("Ocarina2"));
 
     // Increases the maximum open file limit.
     // TODO: This should be common to all frontends.
@@ -208,15 +208,15 @@ int main(int argc, char* argv[]) {
 
     // Fix the Wayland appId. This needs to match the name of the .desktop file without the .desktop
     // suffix.
-    QGuiApplication::setDesktopFileName(QStringLiteral("io.github.zortos293.lichii"));
+    QGuiApplication::setDesktopFileName(QStringLiteral("io.github.rikomusicx-lgtm.ocarina2"));
 #endif
 
-    // Fritchii: Windows' own scale (125%, 150%, 175%), as large as the screen leaves the windows
+    // Ocarina2: Windows' own scale (125%, 150%, 175%), as large as the screen leaves the windows
     // the room they were laid out for (1350x900, the rounding's minimum below). The rounding
     // turned a 4K screen at 150% into 200% and 125% into 100%; passing a large scale through as
     // is left a 1440p screen at 175% only ~820 units tall, below Game Settings' OK button.
     auto rounding_policy = GetHighDpiRoundingPolicy();
-    if (FritchiiUi::Enabled()) {
+    if (Ocarina2Ui::Enabled()) {
         rounding_policy = Qt::HighDpiScaleFactorRoundingPolicy::PassThrough;
         FitHighDpiScaleToScreen();
     }

@@ -51,8 +51,8 @@ std::string Read(const fs::path& file) {
 // An install of version 4 with user data, and the unpacked version 5 package beside it.
 struct Install {
     TempDir dir;
-    fs::path root = dir.path / "Fritchii";
-    fs::path package = root / UpdateInstaller::StagingName / "unpacked" / "Fritchii-v5";
+    fs::path root = dir.path / "Ocarina2";
+    fs::path package = root / UpdateInstaller::StagingName / "unpacked" / "Ocarina2-v5";
 
     Install() {
         Write(root / "lichii.exe", "v4");
@@ -445,7 +445,7 @@ TEST_CASE("A swap interrupted by a crash is undone at the next start", "[updater
     fs::rename(root / "lichii.exe", old_dir / "lichii.exe");
     fs::rename(install.package / "lichii.exe", root / "lichii.exe");
     Write(root / UpdateInstaller::JournalName,
-          "package update-staging/unpacked/Fritchii-v5\nrestore update-staging/previous-old\n"
+          "package update-staging/unpacked/Ocarina2-v5\nrestore update-staging/previous-old\n"
           "old lichii.exe\nnew lichii.exe\nold Qt6Core.dll\n");
 
     std::error_code ec;
@@ -465,7 +465,7 @@ TEST_CASE("A committed swap only has its cleanup finished", "[updater]") {
     const auto restore = install.root / UpdateInstaller::StagingName / "previous-old";
     Write(restore / "lichii.exe", "v3");
     Write(install.root / UpdateInstaller::JournalName,
-          "package update-staging/unpacked/Fritchii-v5\nrestore update-staging/previous-old\n"
+          "package update-staging/unpacked/Ocarina2-v5\nrestore update-staging/previous-old\n"
           "old lichii.exe\nnew lichii.exe\ncommit \n");
     std::error_code ec;
     CHECK(UpdateInstaller::Recover(install.root, ec) == UpdateInstaller::Recovery::Completed);
@@ -507,11 +507,11 @@ TEST_CASE("User data and the updater's own files are protected", "[updater]") {
 }
 
 TEST_CASE("Restarts never target the updater's own folders", "[updater]") {
-    CHECK(UpdateInstaller::IsUpdaterFolder(fs::path{"C:/Games/Fritchii/update-old"}));
-    CHECK(UpdateInstaller::IsUpdaterFolder(fs::path{"C:/Games/Fritchii/Update-Old"}));
+    CHECK(UpdateInstaller::IsUpdaterFolder(fs::path{"C:/Games/Ocarina2/update-old"}));
+    CHECK(UpdateInstaller::IsUpdaterFolder(fs::path{"C:/Games/Ocarina2/Update-Old"}));
     CHECK(UpdateInstaller::IsUpdaterFolder(
-        fs::path{"C:/Games/Fritchii/update-staging/unpacked/Fritchii-v5"}));
-    CHECK_FALSE(UpdateInstaller::IsUpdaterFolder(fs::path{"C:/Games/Fritchii"}));
+        fs::path{"C:/Games/Ocarina2/update-staging/unpacked/Ocarina2-v5"}));
+    CHECK_FALSE(UpdateInstaller::IsUpdaterFolder(fs::path{"C:/Games/Ocarina2"}));
     CHECK_FALSE(UpdateInstaller::IsUpdaterFolder(fs::path{"C:/Games/update-older"}));
 #if defined(_WIN32) || defined(__linux__)
     CHECK_FALSE(UpdateInstaller::RunningExePath().empty());
@@ -520,9 +520,9 @@ TEST_CASE("Restarts never target the updater's own folders", "[updater]") {
 
 TEST_CASE("The package root is the zip's top folder or the unpacked folder", "[updater]") {
     TempDir dir;
-    Write(dir.path / "one" / "Fritchii-v5" / "lichii.exe", "v5");
+    Write(dir.path / "one" / "Ocarina2-v5" / "lichii.exe", "v5");
     CHECK(UpdateInstaller::FindPackageRoot(dir.path / "one", Exe) ==
-          dir.path / "one" / "Fritchii-v5");
+          dir.path / "one" / "Ocarina2-v5");
     Write(dir.path / "flat" / "lichii.exe", "v5");
     CHECK(UpdateInstaller::FindPackageRoot(dir.path / "flat", Exe) == dir.path / "flat");
     Write(dir.path / "two" / "a" / "lichii.exe", "v5");

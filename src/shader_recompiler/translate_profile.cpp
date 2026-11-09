@@ -8,7 +8,7 @@
 namespace Shader::TranslateProfile {
 namespace {
 
-// -1 until the first translation reads EDEN_NX2_TRANSLATE_PROFILE (Fritchii: static init runs
+// -1 until the first translation reads EDEN_NX2_TRANSLATE_PROFILE (Ocarina2: static init runs
 // before nx2_switches.txt is applied, so the switch is read on first use).
 std::atomic<int> enabled_flag{-1};
 

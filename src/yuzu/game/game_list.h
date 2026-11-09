@@ -89,7 +89,7 @@ public:
 
     void ResetViewMode();
 
-    /// The game's right-click menu, for another view of the same game (Fritchii's home card).
+    /// The game's right-click menu, for another view of the same game (Ocarina2's home card).
     void AddGameMenu(QMenu& context_menu, u64 program_id, const std::string& path) {
         AddGamePopup(context_menu, program_id, path);
     }

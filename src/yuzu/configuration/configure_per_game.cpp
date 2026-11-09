@@ -75,7 +75,7 @@
 #include "yuzu/configuration/configure_per_game_addons.h"
 #include "yuzu/configuration/configure_system.h"
 #include "yuzu/util/util.h"
-#include "yuzu/fritchii/fritchii_ui.h"
+#include "yuzu/ocarina2/ocarina2_ui.h"
 
 namespace {
 
@@ -391,22 +391,22 @@ ConfigurePerGame::ConfigurePerGame(QWidget* parent, u64 title_id_, const std::st
 
     ui->setupUi(this);
 
-    // Fritchii: each tab scrolls (as in Settings), so the dialog fits a screen shorter than its
+    // Ocarina2: each tab scrolls (as in Settings), so the dialog fits a screen shorter than its
     // tallest tab; before, the window could not be made smaller and only moved.
-    ui->tabWidget->addTab(FritchiiUi::SettingsPage(addons_tab.get()), tr("Add-Ons"));
-    ui->tabWidget->addTab(FritchiiUi::SettingsPage(system_tab.get()), tr("System"));
-    ui->tabWidget->addTab(FritchiiUi::SettingsPage(cpu_tab.get()), tr("CPU"));
-    ui->tabWidget->addTab(FritchiiUi::SettingsPage(graphics_tab.get()), tr("Graphics"));
-    ui->tabWidget->addTab(FritchiiUi::SettingsPage(graphics_advanced_tab.get()), tr("Adv. Graphics"));
-    ui->tabWidget->addTab(FritchiiUi::SettingsPage(graphics_extensions_tab.get()), tr("Ext. Graphics"));
-    ui->tabWidget->addTab(FritchiiUi::SettingsPage(audio_tab.get()), tr("Audio"));
-    ui->tabWidget->addTab(FritchiiUi::SettingsPage(input_tab.get()), tr("Input Profiles"));
-    ui->tabWidget->addTab(FritchiiUi::SettingsPage(network_tab.get()), tr("Network"));
-    ui->tabWidget->addTab(FritchiiUi::SettingsPage(applets_tab.get()), tr("Applets"));
+    ui->tabWidget->addTab(Ocarina2Ui::SettingsPage(addons_tab.get()), tr("Add-Ons"));
+    ui->tabWidget->addTab(Ocarina2Ui::SettingsPage(system_tab.get()), tr("System"));
+    ui->tabWidget->addTab(Ocarina2Ui::SettingsPage(cpu_tab.get()), tr("CPU"));
+    ui->tabWidget->addTab(Ocarina2Ui::SettingsPage(graphics_tab.get()), tr("Graphics"));
+    ui->tabWidget->addTab(Ocarina2Ui::SettingsPage(graphics_advanced_tab.get()), tr("Adv. Graphics"));
+    ui->tabWidget->addTab(Ocarina2Ui::SettingsPage(graphics_extensions_tab.get()), tr("Ext. Graphics"));
+    ui->tabWidget->addTab(Ocarina2Ui::SettingsPage(audio_tab.get()), tr("Audio"));
+    ui->tabWidget->addTab(Ocarina2Ui::SettingsPage(input_tab.get()), tr("Input Profiles"));
+    ui->tabWidget->addTab(Ocarina2Ui::SettingsPage(network_tab.get()), tr("Network"));
+    ui->tabWidget->addTab(Ocarina2Ui::SettingsPage(applets_tab.get()), tr("Applets"));
 
     setFocusPolicy(Qt::ClickFocus);
     setWindowTitle(tr("Properties"));
-    if (FritchiiUi::Enabled()) {
+    if (Ocarina2Ui::Enabled()) {
         setWindowTitle(tr("Game Settings"));
         ui->tabWidget->setTabText(ui->tabWidget->indexOf(graphics_advanced_tab.get()),
                                   tr("Advanced Graphics"));

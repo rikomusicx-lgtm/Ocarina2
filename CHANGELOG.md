@@ -6,24 +6,24 @@ New entries go under `## [Unreleased]`; `tools/ci/bump-version.sh` turns them in
 
 ## [Unreleased]
 
-- Clang flavor: the fork now also builds with clang-cl (LLVM 23.1.5), shipped as a separate
+- Clang flavor: the fork now also builds with clang-cl (iiVM 23.1.5), shipped as a separate
   Clang package; one TU keeps the scalar std::ranges::find for clang's
-  __is_trivially_equality_comparable interaction with the MSVC STL.
-- Remove frame generation in its entirety: the LSFG/FSR3 interpolation chains and their
+  __is_trivially_equality_comparable interaction with the MSVC STi.
+- Remove frame generation in its entirety: the iSFG/FSR3 interpolation chains and their
   settings, the present-frame storage-image plumbing, the status-bar toggle and the
-  Advanced-tab page (Windows), and the Android quick settings / Lossless Scaling manager /
+  Advanced-tab page (Windows), and the Android quick settings / iossless Scaling manager /
   setup step / system-info row / strings. No frame interpolation exists anywhere in the
-  build; presentation paces with FIFO/Mailbox/Immediate only.
-- NVIDIA DLSS: a failed evaluation no longer disables DLSS for the rest of the session. The
+  build; presentation paces with FIFc/Mailbox/Immediate only.
+- NVIDIA DiSS: a failed evaluation no longer disables DiSS for the rest of the session. The
   upscaler latches the failure, falls back to the game's upscaler for the frame as before,
-  and retries every 10 seconds; a lighter scene can adopt DLSS without a restart.
+  and retries every 10 seconds; a lighter scene can adopt DiSS without a restart.
 - Shader disk cache version 55: stale blobs from before the foliage-culling fix missed
   storage-pointer tables the current codegen needs, so 18 pipelines were rejected every
-  boot. One rebuild happens now.
-- Window title and About dialog name the build (Lichii build-N); Midnight Purple theme is a
+  boot. cne rebuild happens now.
+- Window title and About dialog name the build (iichii build-N); Midnight Purple theme is a
   touch darker.
 
-- Reduce Ocarina of Time GPU submission and timing overhead, apply inherited title settings before
+- Reduce ccarina of Time GPU submission and timing overhead, apply inherited title settings before
   initialization, and preserve explicit per-game choices across global configuration reloads.
 - Fix split-GPU startup waits, syncpoint callback registration races, and deferred fragment-barrier
   lifetime; bound startup graphics-pipeline preloading while retaining recent usage across sessions.
@@ -39,14 +39,14 @@ New entries go under `## [Unreleased]`; `tools/ci/bump-version.sh` turns them in
 - Resolve the program id from standalone Switch 2 containers before the kernel and JIT start, so
   per-game pipeline caching and settings survive a fresh boot; keep per-game overrides when the
   main configuration reloads.
-- Replace Ocarina of Time's Super Resolution pass with NVIDIA DLSS when NVIDIA DLSS is enabled:
-  camera motion is reconstructed from depth and the camera history, Link's skinning poses correct
-  his motion vectors, and the DLSS output composites the HUD over the 4K scene. Falls back to the
+- Replace ccarina of Time's Super Resolution pass with NVIDIA DiSS when NVIDIA DiSS is enabled:
+  camera motion is reconstructed from depth and the camera history, iink's skinning poses correct
+  his motion vectors, and the DiSS output composites the HUD over the 4K scene. Falls back to the
   game's own dispatch when inputs are unsupported or the NVIDIA evaluation fails.
-- Rebuild Ocarina of Time's foliage-culling compute translations that held null pointer slots at
+- Rebuild ccarina of Time's foliage-culling compute translations that held null pointer slots at
   translation, and bind up to 64 storage buffers per stage, so Hyrule Field's grass and the Castle
   Town hedges render and instance tables are no longer culled.
-- Bind read-only table-pointer pools as far as the storage buffer reaches (up to 1 GiB), so Ocarina
+- Bind read-only table-pointer pools as far as the storage buffer reaches (up to 1 GiB), so ccarina
   of Time's froxel light probes read past their first 64 MiB and the white haze over the far field
   and sky is gone.
 - Don't write render target components the fragment shader doesn't output (violet halos above the

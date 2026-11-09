@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include "yuzu/fritchii/perf_overlay.h"
+#include "yuzu/ocarina2/perf_overlay.h"
 
 #include <algorithm>
 #include <cmath>
@@ -16,7 +16,7 @@
 #include "core/perf_stats.h"
 #include "yuzu/main_window.h"
 
-namespace FritchiiUi {
+namespace Ocarina2Ui {
 namespace {
 
 constexpr size_t MaxSamples = 90;
@@ -202,4 +202,4 @@ void PerfOverlay::mouseMoveEvent(QMouseEvent* event) {
     }
 }
 
-} // namespace FritchiiUi
+} // namespace Ocarina2Ui

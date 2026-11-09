@@ -217,9 +217,9 @@ std::string BuildVersionString() {
     const auto build_id = std::string(Common::g_build_id);
 
     const auto yuzu_build =
-        std::string_view{Common::g_build_name} == "Fritchii"
-            ? fmt::format("Fritchii {} | {}-{}", Common::g_build_version, branch_name, description)
-            : fmt::format("Lichii Development Build | {}-{}", branch_name, description);
+        std::string_view{Common::g_build_name} == "Ocarina2"
+            ? fmt::format("Ocarina2 {} | {}-{}", Common::g_build_version, branch_name, description)
+            : fmt::format("Ocarina2 | {}-{}", branch_name, description);
     const auto override_build =
         fmt::format(fmt::runtime(std::string(Common::g_title_bar_format_idle)), build_id);
     return override_build.empty() ? yuzu_build : override_build;
@@ -247,7 +247,7 @@ void Init(QWidget* root) {
     const auto processor_count = std::thread::hardware_concurrency();
 
     // info logging
-    LOG_INFO(Frontend, "Lichii Version: {}", BuildVersionString());
+    LOG_INFO(Frontend, "Ocarina2 Version: {}", BuildVersionString());
     LogRuntimes();
 #ifdef ARCHITECTURE_x86_64
     const auto& caps = Common::g_cpu_caps;

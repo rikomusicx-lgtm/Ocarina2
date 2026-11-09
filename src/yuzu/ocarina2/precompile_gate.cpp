@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include "yuzu/fritchii/precompile_gate.h"
+#include "yuzu/ocarina2/precompile_gate.h"
 
 #include <algorithm>
 
@@ -24,7 +24,7 @@
 #include "video_core/shader_notify.h"
 #include "yuzu/loading_screen.h"
 
-namespace FritchiiUi {
+namespace Ocarina2Ui {
 namespace {
 
 // A check that is over this quickly (prepared already, nothing to prepare) never shows the
@@ -50,7 +50,7 @@ PrecompileGate::PrecompileGate(QMainWindow* window_, QStatusBar* status_bar_,
     connect(timer, &QTimer::timeout, this, &PrecompileGate::Poll);
 
     status_note = new QLabel;
-    status_note->setObjectName(QStringLiteral("FritchiiStatusNote"));
+    status_note->setObjectName(QStringLiteral("Ocarina2StatusNote"));
     status_note->hide();
     status_bar->addPermanentWidget(status_note);
 
@@ -171,7 +171,7 @@ void PrecompileGate::ShowScreen() {
         return;
     }
     screen = new QDialog(window, Qt::FramelessWindowHint | Qt::Dialog);
-    screen->setObjectName(QStringLiteral("FritchiiPrepare"));
+    screen->setObjectName(QStringLiteral("Ocarina2Prepare"));
     screen->setAttribute(Qt::WA_StyledBackground);
     screen->setModal(true);
     // Esc or Alt+F4 on the screen: play now (the preparation goes on in the background).
@@ -185,19 +185,19 @@ void PrecompileGate::ShowScreen() {
     column->setSpacing(0);
 
     auto* title = new QLabel(tr("Preparing shaders"));
-    title->setObjectName(QStringLiteral("FritchiiHeroTitle"));
+    title->setObjectName(QStringLiteral("Ocarina2HeroTitle"));
     column->addWidget(title);
     column->addSpacing(14);
 
     sentence = new QLabel(tr("This happens once, so %1 runs smoothly from the start.")
                               .arg(hooks.game_name()));
-    sentence->setObjectName(QStringLiteral("FritchiiLead"));
+    sentence->setObjectName(QStringLiteral("Ocarina2Lead"));
     sentence->setWordWrap(true);
     column->addWidget(sentence);
     column->addSpacing(32);
 
     bar = new QProgressBar;
-    bar->setObjectName(QStringLiteral("FritchiiPrepareBar"));
+    bar->setObjectName(QStringLiteral("Ocarina2PrepareBar"));
     bar->setTextVisible(false);
     bar->setFixedHeight(12);
     column->addWidget(bar);
@@ -205,9 +205,9 @@ void PrecompileGate::ShowScreen() {
 
     auto* numbers = new QHBoxLayout;
     count = new QLabel;
-    count->setObjectName(QStringLiteral("FritchiiLead"));
+    count->setObjectName(QStringLiteral("Ocarina2Lead"));
     eta = new QLabel;
-    eta->setObjectName(QStringLiteral("FritchiiLead"));
+    eta->setObjectName(QStringLiteral("Ocarina2Lead"));
     numbers->addWidget(count);
     numbers->addStretch(1);
     numbers->addWidget(eta);
@@ -317,4 +317,4 @@ bool PrecompileGate::eventFilter(QObject* watched, QEvent* event) {
     return QObject::eventFilter(watched, event);
 }
 
-} // namespace FritchiiUi
+} // namespace Ocarina2Ui

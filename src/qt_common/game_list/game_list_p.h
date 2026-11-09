@@ -80,7 +80,7 @@ public:
     static constexpr int FullPathRole = SortRole + 2;
     static constexpr int ProgramIdRole = SortRole + 3;
     static constexpr int FileTypeRole = SortRole + 4;
-    /// The game's icon file as read, before scaling (the Fritchii home cover).
+    /// The game's icon file as read, before scaling (the Ocarina2 home cover).
     static constexpr int IconDataRole = SortRole + 5;
 
     GameListItemPath() = default;

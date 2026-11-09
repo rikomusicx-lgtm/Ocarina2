@@ -1,4 +1,4 @@
-﻿// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
+// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <filesystem>
@@ -29,8 +29,8 @@
 #endif
 #include "ui_update_dialog.h"
 #include "update_dialog.h"
-#include "yuzu/fritchii/fritchii_ui.h"
-#include "yuzu/fritchii/whats_new.h"
+#include "yuzu/ocarina2/ocarina2_ui.h"
+#include "yuzu/ocarina2/whats_new.h"
 
 #include "common/httplib.h"
 
@@ -46,9 +46,9 @@ namespace fs = std::filesystem;
 
 namespace {
 
-constexpr wchar_t ExeName[] = L"lichii.exe";
+constexpr wchar_t ExeName[] = L"Ocarina2.exe";
 // Set for a restarted process to a note it shows once it is up, such as "v5 is installed".
-constexpr char RestartNoteVariable[] = "LICHII_UPDATE_NOTE";
+constexpr char RestartNoteVariable[] = "OCARINA2_UPDATE_NOTE";
 
 // Read in PrepareLaunch, before a swap can rename the running exe into update-old.
 fs::path& LaunchExe() {
@@ -86,9 +86,9 @@ std::string PathText(const fs::path& path) {
     return {text.begin(), text.end()};
 }
 
-QString FritchiiName(const QString& version) {
+QString Ocarina2Name(const QString& version) {
     return version.isEmpty() ? QCoreApplication::translate("UpdateDialog", "the previous version")
-                             : QStringLiteral("Fritchii v%1").arg(version);
+                             : QStringLiteral("Ocarina2 v%1").arg(version);
 }
 
 std::string RunningVersionText() {
@@ -108,9 +108,9 @@ QProcessEnvironment& LaunchEnvironment() {
 } // namespace
 
 UpdateDialog::UpdateDialog(const Common::Net::Release& release,
-                           std::optional<Common::Net::Asset> fritchii_asset, QWidget* parent)
+                           std::optional<Common::Net::Asset> ocarina2_asset, QWidget* parent)
     : QDialog(parent), ui(new Ui::UpdateDialog), m_release(release),
-      m_fritchii(fritchii_asset.has_value()) {
+      m_ocarina2(ocarina2_asset.has_value()) {
     ui->setupUi(this);
 
     ui->version->setText(
@@ -124,13 +124,13 @@ UpdateDialog::UpdateDialog(const Common::Net::Release& release,
     }
 
     ui->body->setMarkdown(QString::fromStdString(text));
-    if (FritchiiUi::Enabled()) {
+    if (Ocarina2Ui::Enabled()) {
         // The notes come first: no download instructions, roomier type.
         setWindowTitle(tr("Update"));
-        ui->body->setObjectName(QStringLiteral("FritchiiNotes"));
-        FritchiiUi::SetNotes(ui->body, FritchiiUi::CleanReleaseNotes(
+        ui->body->setObjectName(QStringLiteral("Ocarina2Notes"));
+        Ocarina2Ui::SetNotes(ui->body, Ocarina2Ui::CleanReleaseNotes(
                                            QString::fromStdString(release.body)));
-        ui->version->setObjectName(QStringLiteral("FritchiiDialogTitle"));
+        ui->version->setObjectName(QStringLiteral("Ocarina2DialogTitle"));
         ui->version->setWordWrap(true);
         resize(700, 640);
     }
@@ -139,13 +139,13 @@ UpdateDialog::UpdateDialog(const Common::Net::Release& release,
     auto* skip = ui->buttonBox->addButton(tr("Skip This Version"), QDialogButtonBox::ActionRole);
     connect(skip, &QPushButton::clicked, this, [this] { done(SkipVersion); });
 
-    if (m_fritchii) {
-        m_asset = *fritchii_asset;
+    if (m_ocarina2) {
+        m_asset = *ocarina2_asset;
         ui->groupBox->setHidden(true);
         ui->version->setText(
-            FritchiiUi::Enabled()
+            Ocarina2Ui::Enabled()
                 ? tr("%1 is ready").arg(QString::fromStdString(release.title))
-                : tr("%1 is available. You have Fritchii v%2.")
+                : tr("%1 is available. You have Ocarina2 v%2.")
                       .arg(QString::fromStdString(release.title),
                            QString::fromStdString(RunningVersionText())));
         auto* install = ui->buttonBox->button(QDialogButtonBox::Yes);
@@ -161,7 +161,7 @@ UpdateDialog::UpdateDialog(const Common::Net::Release& release,
         }
         install->setText(tr("Install"));
         ui->label_2->setText(Updater::CanInstallInPlace()
-                                 ? tr("Fritchii will download the update, install it and restart. "
+                                 ? tr("Ocarina2 will download the update, install it and restart. "
                                       "Your settings, saves and keys are not changed.")
                                  : tr("Would you like to download this update?"));
         connect(this, &QDialog::accepted, this, &UpdateDialog::Download);
@@ -259,9 +259,9 @@ void UpdateDialog::Restart(QWidget* window, const QString& target) {
 bool UpdateDialog::LaunchInstaller(QWidget* window, const QString& staging) {
     // The helper runs from a copy, because the installed one is replaced along with everything else.
     const QString helper =
-        QCoreApplication::applicationDirPath() + QStringLiteral("/lichii-updater.exe");
+        QCoreApplication::applicationDirPath() + QStringLiteral("/ocarina2-updater.exe");
     const QString copy = QDir::temp().filePath(
-        QStringLiteral("lichii-updater-%1.exe").arg(QCoreApplication::applicationPid()));
+        QStringLiteral("ocarina2-updater-%1.exe").arg(QCoreApplication::applicationPid()));
     QFile::remove(copy);
     if (!QFile::copy(helper, copy)) {
         LOG_ERROR(Frontend, "Could not copy the installer helper {}", helper.toStdString());
@@ -289,7 +289,7 @@ bool UpdateDialog::LaunchInstaller(QWidget* window, const QString& staging) {
 
 void UpdateDialog::Download() {
 #ifdef _WIN32
-    if (m_fritchii && Updater::CanInstallInPlace()) {
+    if (m_ocarina2 && Updater::CanInstallInPlace()) {
         if (UpdateInstaller::IsWritable(InstallDir())) {
             InstallInPlace();
             return;
@@ -297,9 +297,9 @@ void UpdateDialog::Download() {
         LOG_WARNING(Frontend, "Cannot write to {}, downloading the update instead",
                     PathText(InstallDir()));
         Notify(parentWidget(), QMessageBox::Information, tr("Update Needs to Be Installed by Hand"),
-               tr("Fritchii can't write to its folder (%1), so it can't update itself there. The "
+               tr("Ocarina2 can't write to its folder (%1), so it can't update itself there. The "
                   "update will be downloaded instead: unzip it and copy its contents over your "
-                  "Fritchii folder, or move Fritchii to a folder you can write to, such as "
+                  "Ocarina2 folder, or move Ocarina2 to a folder you can write to, such as "
                   "Documents.")
                    .arg(QDir::toNativeSeparators(QString::fromStdWString(InstallDir().wstring()))));
     }
@@ -307,7 +307,7 @@ void UpdateDialog::Download() {
         const std::filesystem::path exe{QCoreApplication::applicationFilePath().toStdWString()};
         if (UpdateInstaller::CanReplace(exe) &&
             QFile::exists(QCoreApplication::applicationDirPath() +
-                          QStringLiteral("/lichii-updater.exe"))) {
+                          QStringLiteral("/ocarina2-updater.exe"))) {
             InstallOnRestart(exe);
             return;
         }
@@ -355,7 +355,7 @@ void UpdateDialog::InstallInPlace(const std::filesystem::path& target) {
     const UpdateInstaller::Lock lock{UpdateInstaller::LockPath(target)};
     if (!lock.Held()) {
         QtCommon::Frontend::Critical(tr("Failed to install the update"),
-                                     tr("Another Lichii window is already updating this "
+                                     tr("Another Ocarina2 window is already updating this "
                                         "installation."));
         return;
     }
@@ -433,7 +433,7 @@ void UpdateDialog::InstallOnRestart(const std::filesystem::path& exe) {
 
     const auto button = QtCommon::Frontend::Question(
         tr("Update Ready"),
-        tr("Lichii will close, install the update and start again. The previous version is "
+        tr("Ocarina2 will close, install the update and start again. The previous version is "
            "kept, and your settings and data are not changed.\n\nRestart now?"),
         QtCommon::Frontend::Yes | QtCommon::Frontend::No);
     if (button == QtCommon::Frontend::Yes &&
@@ -448,12 +448,12 @@ void UpdateDialog::InstallInPlace() {
     const UpdateInstaller::Lock lock{install_dir / UpdateInstaller::LockName};
     if (!lock.Held()) {
         Notify(parentWidget(), QMessageBox::Critical, tr("Failed to install the update"),
-               tr("Another Fritchii window is already updating this folder."));
+               tr("Another Ocarina2 window is already updating this folder."));
         return;
     }
     if (fs::exists(install_dir / UpdateInstaller::JournalName)) {
         Notify(parentWidget(), QMessageBox::Critical, tr("Failed to install the update"),
-               tr("An earlier update is unfinished. Start Fritchii again to "
+               tr("An earlier update is unfinished. Start Ocarina2 again to "
                   "finish it first."));
         return;
     }
@@ -499,7 +499,7 @@ void UpdateDialog::InstallInPlace() {
 
     const auto package = UpdateInstaller::FindPackageRoot(unpacked, ExeName);
     if (!package) {
-        fail(tr("The downloaded update does not contain lichii.exe."));
+        fail(tr("The downloaded update does not contain Ocarina2.exe."));
         return;
     }
 
@@ -515,16 +515,16 @@ void UpdateDialog::InstallInPlace() {
         return;
     case UpdateInstaller::Outcome::Unchanged:
         LOG_ERROR(Frontend, "Could not install {}: {}", m_release.tag, ec.message());
-        fail(tr("Could not replace the files of this version (%1). Fritchii was not changed.")
+        fail(tr("Could not replace the files of this version (%1). Ocarina2 was not changed.")
                  .arg(ErrorText(ec)));
         return;
     case UpdateInstaller::Outcome::Interrupted:
         LOG_CRITICAL(Frontend, "Installing {} failed and could not be undone: {}", m_release.tag,
                      ec.message());
         Notify(parentWidget(), QMessageBox::Critical, tr("Failed to install the update"),
-               tr("The update failed (%1) and some files could not be put back. Close Fritchii and "
+               tr("The update failed (%1) and some files could not be put back. Close Ocarina2 and "
                   "start it again to restore the previous version. If it does not start, download "
-                  "the release again and unzip it over your Fritchii folder; your user data is not "
+                  "the release again and unzip it over your Ocarina2 folder; your user data is not "
                   "affected.")
                    .arg(ErrorText(ec)));
         return;
@@ -550,7 +550,7 @@ bool UpdateDialog::DownloadTo(const QString& filename) {
     client->set_read_timeout(timeout_seconds);
     client->set_write_timeout(timeout_seconds);
     client->set_follow_location(true);
-    client->set_default_headers({{"User-Agent", "Lichii"}});
+    client->set_default_headers({{"User-Agent", "Ocarina2"}});
 
 #ifdef YUZU_BUNDLED_OPENSSL
     client->load_ca_cert_store(kCert, sizeof(kCert));
@@ -653,9 +653,9 @@ bool UpdateDialog::DownloadTo(const QString& filename) {
         return false;
     }
 
-    // Fritchii packages are only kept when they match the digest the release list published.
+    // Ocarina2 packages are only kept when they match the digest the release list published.
     const bool wrong_size = m_asset.size != 0 && received != m_asset.size;
-    const bool wrong_hash = (m_fritchii || !m_asset.sha256.empty()) &&
+    const bool wrong_hash = (m_ocarina2 || !m_asset.sha256.empty()) &&
                             hash.result().toHex() != QByteArray::fromStdString(m_asset.sha256);
     if (wrong_size || wrong_hash) {
         LOG_ERROR(Frontend, "Downloaded {} does not match the published size or SHA-256",
@@ -719,7 +719,7 @@ bool FinishPendingSwap(QWidget* window) {
     }
     const UpdateInstaller::Lock lock{install_dir / UpdateInstaller::LockName};
     if (!lock.Held()) {
-        // Another Lichii window is installing or rolling back right now.
+        // Another Ocarina2 window is installing or rolling back right now.
         return false;
     }
     switch (UpdateInstaller::Recover(install_dir, ec)) {
@@ -741,9 +741,9 @@ bool FinishPendingSwap(QWidget* window) {
             QCoreApplication::translate("Updater", "Interrupted Update"),
             QCoreApplication::translate(
                 "Updater",
-                "An update was interrupted and could not be undone (%1). Close every Fritchii "
-                "window and start Fritchii again. If it keeps failing, download the release again "
-                "and unzip it over your Fritchii folder; your user data is not affected.")
+                "An update was interrupted and could not be undone (%1). Close every Ocarina2 "
+                "window and start Ocarina2 again. If it keeps failing, download the release again "
+                "and unzip it over your Ocarina2 folder; your user data is not affected.")
                 .arg(ErrorText(ec)));
         return false;
     }
@@ -767,17 +767,17 @@ void RollBack(QWidget* window) {
     const auto install_dir = InstallDir();
     if (!UpdateInstaller::IsWritable(install_dir)) {
         Notify(window, QMessageBox::Critical, title,
-               QCoreApplication::translate("Updater", "Fritchii can't write to its folder (%1).")
+               QCoreApplication::translate("Updater", "Ocarina2 can't write to its folder (%1).")
                    .arg(QDir::toNativeSeparators(QString::fromStdWString(InstallDir().wstring()))));
         return;
     }
     const auto answer =
         Notify(window, QMessageBox::Question, title,
                QCoreApplication::translate(
-                   "Updater", "Go back to %1? Fritchii will restart. Your settings, saves "
+                   "Updater", "Go back to %1? Ocarina2 will restart. Your settings, saves "
                               "and keys are not changed, and you can switch back to this "
                               "version the same way.")
-                   .arg(FritchiiName(*version)),
+                   .arg(Ocarina2Name(*version)),
                QMessageBox::Yes | QMessageBox::No);
     if (answer != QMessageBox::Yes) {
         return;
@@ -786,7 +786,7 @@ void RollBack(QWidget* window) {
     const UpdateInstaller::Lock lock{install_dir / UpdateInstaller::LockName};
     if (!lock.Held()) {
         Notify(window, QMessageBox::Critical, title,
-               QCoreApplication::translate("Updater", "Another Fritchii window is already "
+               QCoreApplication::translate("Updater", "Another Ocarina2 window is already "
                                                       "updating this folder."));
         return;
     }
@@ -799,14 +799,14 @@ void RollBack(QWidget* window) {
         Restart(window, QCoreApplication::translate("Updater", "%1 is back. Help > Roll Back to "
                                                                "the Previous Version switches to "
                                                                "the newer version again.")
-                            .arg(FritchiiName(*version)));
+                            .arg(Ocarina2Name(*version)));
         return;
     case UpdateInstaller::Outcome::Unchanged:
         LOG_ERROR(Frontend, "Could not roll back: {}", ec.message());
         UpdateInstaller::CleanStaging(install_dir);
         Notify(window, QMessageBox::Critical, title,
                QCoreApplication::translate("Updater",
-                                           "Could not roll back (%1). Fritchii was not changed.")
+                                           "Could not roll back (%1). Ocarina2 was not changed.")
                    .arg(ErrorText(ec)));
         return;
     case UpdateInstaller::Outcome::Interrupted:
@@ -814,7 +814,7 @@ void RollBack(QWidget* window) {
         Notify(window, QMessageBox::Critical, title,
                QCoreApplication::translate(
                    "Updater", "Rolling back failed (%1) and some files could not be put "
-                              "back. Close Fritchii and start it again to restore this version.")
+                              "back. Close Ocarina2 and start it again to restore this version.")
                    .arg(ErrorText(ec)));
         return;
     }
@@ -829,7 +829,7 @@ bool Restart(QWidget* window, const QString& note) {
         LOG_CRITICAL(Frontend, "Not restarting {}: it is not the installed version", PathText(exe));
         Notify(window, QMessageBox::Critical,
                QCoreApplication::translate("Updater", "Failed to restart"),
-               QCoreApplication::translate("Updater", "Please start Fritchii again yourself."));
+               QCoreApplication::translate("Updater", "Please start Ocarina2 again yourself."));
         return false;
     }
     std::vector<std::string> arguments;
@@ -859,7 +859,7 @@ bool Restart(QWidget* window, const QString& note) {
         LOG_ERROR(Frontend, "Could not start {}", program.toStdString());
         Notify(window, QMessageBox::Critical,
                QCoreApplication::translate("Updater", "Failed to restart"),
-               QCoreApplication::translate("Updater", "Please start Fritchii again yourself."));
+               QCoreApplication::translate("Updater", "Please start Ocarina2 again yourself."));
         return false;
     }
     LOG_INFO(Frontend, "Restarting {}", PathText(exe));

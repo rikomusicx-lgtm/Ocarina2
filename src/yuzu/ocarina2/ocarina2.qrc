@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
 <RCC>
-    <qresource prefix="fritchii">
+    <qresource prefix="ocarina2">
         <file>style.qss</file>
         <file>whats-new.md</file>
         <file>fonts/Inter-Regular.ttf</file>

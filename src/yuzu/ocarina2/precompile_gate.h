@@ -19,7 +19,7 @@ class QProgressBar;
 class QStatusBar;
 class QTimer;
 
-namespace FritchiiUi {
+namespace Ocarina2Ui {
 
 struct PrecompileHooks {
     std::function<void()> pause;           ///< hold the game (MainWindow::OnPauseGame)
@@ -27,7 +27,7 @@ struct PrecompileHooks {
     std::function<QString()> game_name;    ///< "OoT", or "the game"
 };
 
-/// Fritchii's "Preparing shaders" screen (EDEN_NX2_PRECOMPILE). Right after a game has loaded, it
+/// Ocarina2's "Preparing shaders" screen (EDEN_NX2_PRECOMPILE). Right after a game has loaded, it
 /// holds the game while the precompiled pipelines are looked for, assembled or prepared, and
 /// shows a screen with the progress while the preparation runs at full speed. "Play now" lets the
 /// game run and the preparation continue in the background; a status bar note shows it until it
@@ -75,4 +75,4 @@ private:
     std::deque<std::pair<qint64, size_t>> samples;
 };
 
-} // namespace FritchiiUi
+} // namespace Ocarina2Ui

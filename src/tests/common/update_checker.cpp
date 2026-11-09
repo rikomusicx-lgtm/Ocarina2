@@ -240,12 +240,12 @@ TEST_CASE("Release requests handle HTTP failures without throwing", "[updater]")
 
 namespace {
 
-using UpdateChecker::FritchiiVersion;
+using UpdateChecker::Ocarina2Version;
 
 const std::string ValidDigest =
     "sha256:597200A1BFFA3D2ECFB2F3F2A464515D57D7F6DC674060F16719830C790BADA7";
 
-Common::Net::Release MakeFritchiiRelease(const std::string& tag,
+Common::Net::Release MakeOcarina2Release(const std::string& tag,
                                          const std::vector<std::string>& urls,
                                          const std::string& digest = ValidDigest) {
     nlohmann::json assets = nlohmann::json::array();
@@ -254,7 +254,7 @@ Common::Net::Release MakeFritchiiRelease(const std::string& tag,
             {{"browser_download_url", url}, {"size", u64{68126892}}, {"digest", digest}});
     }
     const nlohmann::json json{
-        {"tag_name", tag}, {"name", "Fritchii " + tag}, {"prerelease", true}, {"assets", assets}};
+        {"tag_name", tag}, {"name", "Ocarina2 " + tag}, {"prerelease", true}, {"assets", assets}};
     return Common::Net::Release::FromJson(json, "https://api.github.com", "Frizti/Lichii").value();
 }
 
@@ -264,36 +264,36 @@ std::string GitHubUrl(std::string_view repo, std::string_view tag, std::string_v
 
 } // namespace
 
-TEST_CASE("Fritchii versions compare numerically with one decimal", "[updater]") {
-    CHECK(UpdateChecker::ParseFritchiiVersion("4") == FritchiiVersion{4, 0});
-    CHECK(UpdateChecker::ParseFritchiiVersion("3.5") == FritchiiVersion{3, 5});
-    CHECK(UpdateChecker::ParseFritchiiVersion("12") == FritchiiVersion{12, 0});
-    CHECK(FritchiiVersion{3, 5} < FritchiiVersion{4, 0});
-    CHECK(FritchiiVersion{4, 0} < FritchiiVersion{4, 1});
-    CHECK(FritchiiVersion{4, 9} < FritchiiVersion{5, 0});
-    CHECK(FritchiiVersion{9, 0} < FritchiiVersion{10, 0});
-    CHECK(FritchiiVersion{4, 1}.ToString() == "4.1");
-    CHECK(FritchiiVersion{4, 0}.ToString() == "4");
+TEST_CASE("Ocarina2 versions compare numerically with one decimal", "[updater]") {
+    CHECK(UpdateChecker::ParseOcarina2Version("4") == Ocarina2Version{4, 0});
+    CHECK(UpdateChecker::ParseOcarina2Version("3.5") == Ocarina2Version{3, 5});
+    CHECK(UpdateChecker::ParseOcarina2Version("12") == Ocarina2Version{12, 0});
+    CHECK(Ocarina2Version{3, 5} < Ocarina2Version{4, 0});
+    CHECK(Ocarina2Version{4, 0} < Ocarina2Version{4, 1});
+    CHECK(Ocarina2Version{4, 9} < Ocarina2Version{5, 0});
+    CHECK(Ocarina2Version{9, 0} < Ocarina2Version{10, 0});
+    CHECK(Ocarina2Version{4, 1}.ToString() == "4.1");
+    CHECK(Ocarina2Version{4, 0}.ToString() == "4");
 
     const std::string invalid = GENERATE("", "0", "04", "4.", "4.0", "4.10", "4.a", "v4", " 4",
                                          "4 ", "-1", "+4", "4.1.2", ".5", "99999999999");
-    CHECK_FALSE(UpdateChecker::ParseFritchiiVersion(invalid));
+    CHECK_FALSE(UpdateChecker::ParseOcarina2Version(invalid));
 }
 
-TEST_CASE("Fritchii tags and build versions accept the old Frizti names", "[updater]") {
-    CHECK(UpdateChecker::ParseFritchiiTag("fritchii-v4") == FritchiiVersion{4, 0});
-    CHECK(UpdateChecker::ParseFritchiiTag("fritchii-v4.1") == FritchiiVersion{4, 1});
-    CHECK(UpdateChecker::ParseFritchiiTag("frizti-v3") == FritchiiVersion{3, 0});
-    CHECK(UpdateChecker::ParseFritchiiTag("frizti-v3.5") == FritchiiVersion{3, 5});
-    CHECK(UpdateChecker::ParseBuildVersion("Fritchii v4") == FritchiiVersion{4, 0});
-    CHECK(UpdateChecker::ParseBuildVersion("Frizti v3.5") == FritchiiVersion{3, 5});
+TEST_CASE("Ocarina2 tags and build versions accept the old Frizti names", "[updater]") {
+    CHECK(UpdateChecker::ParseOcarina2Tag("ocarina2-v4") == Ocarina2Version{4, 0});
+    CHECK(UpdateChecker::ParseOcarina2Tag("ocarina2-v4.1") == Ocarina2Version{4, 1});
+    CHECK(UpdateChecker::ParseOcarina2Tag("frizti-v3") == Ocarina2Version{3, 0});
+    CHECK(UpdateChecker::ParseOcarina2Tag("frizti-v3.5") == Ocarina2Version{3, 5});
+    CHECK(UpdateChecker::ParseBuildVersion("Ocarina2 v4") == Ocarina2Version{4, 0});
+    CHECK(UpdateChecker::ParseBuildVersion("Frizti v3.5") == Ocarina2Version{3, 5});
 
     const std::string tag =
-        GENERATE("", "fritchii-v", "fritchii-4", "Fritchii-v4", "fritchii-v4-rc", "frizti-v4.0",
+        GENERATE("", "ocarina2-v", "ocarina2-4", "Ocarina2-v4", "ocarina2-v4-rc", "frizti-v4.0",
                  "build-71", "v4", "lichii-frizti-v4");
-    CHECK_FALSE(UpdateChecker::ParseFritchiiTag(tag));
-    const std::string version = GENERATE("", "build-71", "Lichii", "abc1234567-nx2", "Fritchii v",
-                                         "Fritchii v4 ", "fritchii v4", "Fritchii 4");
+    CHECK_FALSE(UpdateChecker::ParseOcarina2Tag(tag));
+    const std::string version = GENERATE("", "build-71", "Lichii", "abc1234567-nx2", "Ocarina2 v",
+                                         "Ocarina2 v4 ", "ocarina2 v4", "Ocarina2 4");
     CHECK_FALSE(UpdateChecker::ParseBuildVersion(version));
 }
 
@@ -308,73 +308,73 @@ TEST_CASE("GitHub digests are parsed only when they are SHA-256", "[updater]") {
     CHECK_FALSE(Common::Net::ParseSha256Digest(digest));
 }
 
-TEST_CASE("Fritchii selects only the Windows package from the Frizti repository", "[updater]") {
+TEST_CASE("Ocarina2 selects only the Windows package from the Frizti repository", "[updater]") {
     const auto source = UpdateChecker::DefaultSource();
     CHECK(source.origin == "https://api.github.com");
     CHECK(source.api_path == "/repos/Frizti/Lichii/releases?per_page=100");
     CHECK_FALSE(source.test);
 
-    const std::string tag = "fritchii-v5";
-    const std::string repo = GENERATE("Lichii", "Fritchii");
-    const auto release = MakeFritchiiRelease(
-        tag, {GitHubUrl(repo, tag, "Fritchii-v5-debug-symbols-not-needed-to-play.zip"),
-              GitHubUrl(repo, tag, "Fritchii-v5-Windows-x64.zip")});
-    const auto asset = UpdateChecker::SelectFritchiiAsset(release, source);
+    const std::string tag = "ocarina2-v5";
+    const std::string repo = GENERATE("Lichii", "Ocarina2");
+    const auto release = MakeOcarina2Release(
+        tag, {GitHubUrl(repo, tag, "Ocarina2-v5-debug-symbols-not-needed-to-play.zip"),
+              GitHubUrl(repo, tag, "Ocarina2-v5-Windows-x64.zip")});
+    const auto asset = UpdateChecker::SelectOcarina2Asset(release, source);
     REQUIRE(asset);
-    CHECK(asset->filename == "Fritchii-v5-Windows-x64.zip");
+    CHECK(asset->filename == "Ocarina2-v5-Windows-x64.zip");
     CHECK(asset->url == "https://github.com");
-    CHECK(asset->path == "/Frizti/" + repo + "/releases/download/fritchii-v5/" + asset->filename);
+    CHECK(asset->path == "/Frizti/" + repo + "/releases/download/ocarina2-v5/" + asset->filename);
     CHECK(asset->sha256 == "597200a1bffa3d2ecfb2f3f2a464515d57d7f6dc674060f16719830c790bada7");
     CHECK(asset->size == 68126892);
 
     // Selected, but the dialog refuses to install it without a digest.
-    const auto no_digest = MakeFritchiiRelease(
-        tag, {GitHubUrl(repo, tag, "Fritchii-v5-Windows-x64.zip")}, "sha256:short");
-    const auto unverified = UpdateChecker::SelectFritchiiAsset(no_digest, source);
+    const auto no_digest = MakeOcarina2Release(
+        tag, {GitHubUrl(repo, tag, "Ocarina2-v5-Windows-x64.zip")}, "sha256:short");
+    const auto unverified = UpdateChecker::SelectOcarina2Asset(no_digest, source);
     REQUIRE(unverified);
     CHECK(unverified->sha256.empty());
 }
 
-TEST_CASE("Fritchii ignores debug zips, old asset names and lookalike URLs", "[updater]") {
+TEST_CASE("Ocarina2 ignores debug zips, old asset names and lookalike URLs", "[updater]") {
     const std::string url = GENERATE(
-        GitHubUrl("Lichii", "fritchii-v5", "Fritchii-v5-debug-symbols-not-needed-to-play.zip"),
-        GitHubUrl("Lichii", "fritchii-v5", "Lichii-Frizti-v5-Windows-x64.zip"),
-        GitHubUrl("Lichii", "fritchii-v5", "Fritchii-v4-Windows-x64.zip"),
-        GitHubUrl("Lichii", "fritchii-v4", "Fritchii-v5-Windows-x64.zip"),
-        GitHubUrl("Other", "fritchii-v5", "Fritchii-v5-Windows-x64.zip"),
-        std::string{"https://github.com/zortos293/Lichii/releases/download/fritchii-v5/"
-                    "Fritchii-v5-Windows-x64.zip"},
-        std::string{"http://github.com/Frizti/Lichii/releases/download/fritchii-v5/"
-                    "Fritchii-v5-Windows-x64.zip"},
-        std::string{"https://github.com.evil.com/Frizti/Lichii/releases/download/fritchii-v5/"
-                    "Fritchii-v5-Windows-x64.zip"},
-        std::string{"http://127.0.0.1:8000/Fritchii-v5-Windows-x64.zip"},
-        std::string{"https://github.com/Frizti/Lichii/archive/refs/tags/fritchii-v5.zip"});
-    const auto release = MakeFritchiiRelease("fritchii-v5", {url});
-    CHECK_FALSE(UpdateChecker::SelectFritchiiAsset(release, UpdateChecker::DefaultSource()));
+        GitHubUrl("Lichii", "ocarina2-v5", "Ocarina2-v5-debug-symbols-not-needed-to-play.zip"),
+        GitHubUrl("Lichii", "ocarina2-v5", "Lichii-Frizti-v5-Windows-x64.zip"),
+        GitHubUrl("Lichii", "ocarina2-v5", "Ocarina2-v4-Windows-x64.zip"),
+        GitHubUrl("Lichii", "ocarina2-v4", "Ocarina2-v5-Windows-x64.zip"),
+        GitHubUrl("Other", "ocarina2-v5", "Ocarina2-v5-Windows-x64.zip"),
+        std::string{"https://github.com/zortos293/Lichii/releases/download/ocarina2-v5/"
+                    "Ocarina2-v5-Windows-x64.zip"},
+        std::string{"http://github.com/Frizti/Lichii/releases/download/ocarina2-v5/"
+                    "Ocarina2-v5-Windows-x64.zip"},
+        std::string{"https://github.com.evil.com/Frizti/Lichii/releases/download/ocarina2-v5/"
+                    "Ocarina2-v5-Windows-x64.zip"},
+        std::string{"http://127.0.0.1:8000/Ocarina2-v5-Windows-x64.zip"},
+        std::string{"https://github.com/Frizti/Lichii/archive/refs/tags/ocarina2-v5.zip"});
+    const auto release = MakeOcarina2Release("ocarina2-v5", {url});
+    CHECK_FALSE(UpdateChecker::SelectOcarina2Asset(release, UpdateChecker::DefaultSource()));
 }
 
-TEST_CASE("Fritchii picks the newest newer release that has a package", "[updater]") {
+TEST_CASE("Ocarina2 picks the newest newer release that has a package", "[updater]") {
     const auto make = [](const std::string& tag, const std::string& name) {
-        return MakeFritchiiRelease(tag, {GitHubUrl("Lichii", tag, name)});
+        return MakeOcarina2Release(tag, {GitHubUrl("Lichii", tag, name)});
     };
     const auto releases = std::array{
         make("frizti-v3", "Lichii-Frizti-v3-Windows-x64.zip"),
-        make("fritchii-v4", "Fritchii-v4-Windows-x64.zip"),
-        make("fritchii-v5", "Fritchii-v5-debug-symbols-not-needed-to-play.zip"),
-        make("fritchii-v4.1", "Fritchii-v4.1-Windows-x64.zip"),
+        make("ocarina2-v4", "Ocarina2-v4-Windows-x64.zip"),
+        make("ocarina2-v5", "Ocarina2-v5-debug-symbols-not-needed-to-play.zip"),
+        make("ocarina2-v4.1", "Ocarina2-v4.1-Windows-x64.zip"),
         make("build-99", "lichii-windows-x86_64.zip"),
     };
     const auto source = UpdateChecker::DefaultSource();
-    const auto select = [&](FritchiiVersion current) {
-        const auto update = UpdateChecker::SelectFritchiiUpdate(releases, current, source);
+    const auto select = [&](Ocarina2Version current) {
+        const auto update = UpdateChecker::SelectOcarina2Update(releases, current, source);
         return update ? update->tag : std::string{};
     };
-    CHECK(select({3, 5}) == "fritchii-v4.1");
-    CHECK(select({4, 0}) == "fritchii-v4.1");
+    CHECK(select({3, 5}) == "ocarina2-v4.1");
+    CHECK(select({4, 0}) == "ocarina2-v4.1");
     CHECK(select({4, 1}).empty());
     CHECK(select({6, 0}).empty());
-    CHECK_FALSE(UpdateChecker::SelectFritchiiUpdate({}, {4, 0}, source));
+    CHECK_FALSE(UpdateChecker::SelectOcarina2Update({}, {4, 0}, source));
 }
 
 TEST_CASE("EDEN_UPDATE_URL takes https anywhere and plain http only on loopback", "[updater]") {
@@ -402,18 +402,18 @@ TEST_CASE("A test source accepts packages only from its own origin", "[updater]"
     const auto source = UpdateChecker::ParseSourceOverride("http://127.0.0.1:8000/releases.json");
     REQUIRE(source);
     const auto local =
-        MakeFritchiiRelease("fritchii-v5", {"http://127.0.0.1:8000/Fritchii-v5-Windows-x64.zip"});
-    const auto asset = UpdateChecker::SelectFritchiiAsset(local, *source);
+        MakeOcarina2Release("ocarina2-v5", {"http://127.0.0.1:8000/Ocarina2-v5-Windows-x64.zip"});
+    const auto asset = UpdateChecker::SelectOcarina2Asset(local, *source);
     REQUIRE(asset);
     CHECK(asset->url == "http://127.0.0.1:8000");
-    CHECK(asset->path == "/Fritchii-v5-Windows-x64.zip");
+    CHECK(asset->path == "/Ocarina2-v5-Windows-x64.zip");
 
     const std::string url =
-        GENERATE(std::string{"http://127.0.0.1:9000/Fritchii-v5-Windows-x64.zip"},
-                 std::string{"http://127.0.0.1:80000/Fritchii-v5-Windows-x64.zip"},
-                 std::string{"http://127.0.0.1:8000/../Fritchii-v5-Windows-x64.zip"},
-                 std::string{"http://127.0.0.1:8000/x?/Fritchii-v5-Windows-x64.zip"},
-                 GitHubUrl("Lichii", "fritchii-v5", "Fritchii-v5-Windows-x64.zip"));
+        GENERATE(std::string{"http://127.0.0.1:9000/Ocarina2-v5-Windows-x64.zip"},
+                 std::string{"http://127.0.0.1:80000/Ocarina2-v5-Windows-x64.zip"},
+                 std::string{"http://127.0.0.1:8000/../Ocarina2-v5-Windows-x64.zip"},
+                 std::string{"http://127.0.0.1:8000/x?/Ocarina2-v5-Windows-x64.zip"},
+                 GitHubUrl("Lichii", "ocarina2-v5", "Ocarina2-v5-Windows-x64.zip"));
     CHECK_FALSE(
-        UpdateChecker::SelectFritchiiAsset(MakeFritchiiRelease("fritchii-v5", {url}), *source));
+        UpdateChecker::SelectOcarina2Asset(MakeOcarina2Release("ocarina2-v5", {url}), *source));
 }

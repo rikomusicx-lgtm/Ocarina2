@@ -23,7 +23,7 @@ std::map<std::uintptr_t, Range> ranges;
 
 bool Enabled() {
     static const bool enabled = [] {
-        // Opt-in only (Fritchii): the owner's setup always sets EDEN_NX2_DEBUG_SERVER, and every
+        // Opt-in only (Ocarina2): the owner's setup always sets EDEN_NX2_DEBUG_SERVER, and every
         // JIT block compile would otherwise take this lock and store a name nobody reads.
         const char* const value = std::getenv("EDEN_NX2_JIT_SYMBOLS");
         return value != nullptr && value[0] == '1';

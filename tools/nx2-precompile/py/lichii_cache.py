@@ -407,7 +407,7 @@ def parse_cache(data: bytes, mesh_fields: bool | None = None,
         raise CacheError("bad magic")
     version = struct.unpack_from("<I", data, 8)[0]
     if mesh_fields is None:
-        # Fritchii's v52 records carry them too (stored since 3a2c8980ad); upstream's from v53.
+        # Ocarina2's v52 records carry them too (stored since 3a2c8980ad); upstream's from v53.
         mesh_fields = version >= 52
     mv = memoryview(data)
     n = len(data)

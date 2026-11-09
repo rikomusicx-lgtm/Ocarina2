@@ -100,7 +100,7 @@ int Mode() {
     static const int mode = [] {
         const char* value = std::getenv("EDEN_NX2_PRECOMPILE");
         if (value == nullptr || *value == '\0') {
-            // On by default since 2026-11-09 (owner, with the Fritchii "Preparing shaders" screen):
+            // On by default since 2026-11-09 (owner, with the Ocarina2 "Preparing shaders" screen):
             // OoT first visit with an empty cache, prepared vs cold driver cache: worst walking
             // freezes ~700-850 ms -> 40-70 ms, 35 -> 43 fps. Only runs when a recipe exists.
             // EDEN_NX2_PRECOMPILE=0 turns it off.

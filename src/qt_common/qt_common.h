@@ -60,7 +60,7 @@ const QString tr(const std::string& str);
 /// The OS name and version, e.g. "Windows 11 Version 24H2 (Build 26100.2314)".
 [[nodiscard]] QString PrettyProductName();
 
-/// The version line the log starts with, e.g. "Fritchii v4.5 | branch-1a2b3c4d".
+/// The version line the log starts with, e.g. "Ocarina2 v4.5 | branch-1a2b3c4d".
 [[nodiscard]] std::string BuildVersionString();
 
 std::filesystem::path GetEdenCommand();

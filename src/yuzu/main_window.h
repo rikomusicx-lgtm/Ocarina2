@@ -69,7 +69,7 @@ class ConfigurePostProcessing;
 enum class GameListOpenTarget;
 enum class DumpRomFSTarget;
 class GameListPlaceholder;
-namespace FritchiiUi {
+namespace Ocarina2Ui {
 class Home;
 }
 
@@ -408,10 +408,10 @@ private slots:
     void OnOpenModFolder();
     void OnOpenLogFolder();
     void OnExportLog();
-    /// A critical error box; Fritchii builds add an "Export Log..." button next to OK.
+    /// A critical error box; Ocarina2 builds add an "Export Log..." button next to OK.
     void ShowErrorWithExportLog(const QString& title, const QString& text);
-    /// The Fritchii look (fritchii/main_window_fritchii.cpp); nothing in Lichii builds.
-    void SetUpFritchiiUi();
+    /// The Ocarina2 look (ocarina2/main_window_ocarina2.cpp); nothing in Lichii builds.
+    void SetUpOcarina2Ui();
     void OnVerifyInstalledContents();
     void OnInstallFirmware();
     void OnInstallFirmwareFromZIP();
@@ -535,7 +535,7 @@ private:
     bool update_check_manual = false;
     // An update waiting for the game to stop or for other dialogs to close.
     std::optional<UpdateChecker::CheckResult> pending_update;
-    // What the process this one replaced reported, such as "Fritchii v5 is installed".
+    // What the process this one replaced reported, such as "Ocarina2 v5 is installed".
     QString restart_note;
 #endif
 
@@ -554,13 +554,13 @@ private:
     QElapsedTimer emu_force_stop_clock;
     u64 shutdown_progress_seen{};
     OverlayDialog* shutdown_dialog{};
-    QWidget* perf_overlay = nullptr; ///< PerformanceOverlay, or Fritchii's (fritchii/perf_overlay)
+    QWidget* perf_overlay = nullptr; ///< PerformanceOverlay, or Ocarina2's (ocarina2/perf_overlay)
 #ifdef HAS_RESHADE
     ConfigurePostProcessing* post_processing_dialog = nullptr;
 #endif
 
     GameListPlaceholder* game_list_placeholder = nullptr;
-    FritchiiUi::Home* fritchii_home = nullptr;
+    Ocarina2Ui::Home* ocarina2_home = nullptr;
 
     std::vector<VkDeviceInfo::Record> vk_device_records;
 

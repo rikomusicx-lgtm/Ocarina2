@@ -754,15 +754,15 @@ endif()
 
 # TODO: Icon/install handling n such should be put into dist/CMakeLists.txt
 if(ENABLE_QT AND UNIX AND NOT APPLE)
-    install(FILES "dist/io.github.zortos293.lichii.desktop"
+    install(FILES "dist/io.github.rikomusicx-lgtm.ocarina2.desktop"
         DESTINATION "share/applications")
-    install(FILES "dist/lichii.png"
+    install(FILES "dist/ocarina2.png"
         DESTINATION "share/icons/hicolor/256x256/apps"
-        RENAME "io.github.zortos293.lichii.png")
+        RENAME "io.github.rikomusicx-lgtm.ocarina2.png")
 
-    install(FILES "dist/io.github.zortos293.lichii.xml"
+    install(FILES "dist/io.github.rikomusicx-lgtm.ocarina2.xml"
         DESTINATION "share/mime/packages")
-    install(FILES "dist/io.github.zortos293.lichii.metainfo.xml"
+    install(FILES "dist/io.github.rikomusicx-lgtm.ocarina2.metainfo.xml"
         DESTINATION "share/metainfo")
 endif()
 

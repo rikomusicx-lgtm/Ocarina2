@@ -3,20 +3,20 @@
 Builds Vulkan pipelines for a Switch 2 game's shaders before they are first drawn, so a new area does
 not stall while the driver compiles them.
 
-> **Fritchii.** Ported from zortos293/Lichii#895. Fritchii has no menu entry for recipes and does
+> **Ocarina2.** Ported from zortos293/Lichii#895. Ocarina2 has no menu entry for recipes and does
 > not prepare before the first frame. With `EDEN_NX2_PRECOMPILE=1` (off by default; `2` also on
 > drivers without their own pipeline cache) a title's boot looks for its precompiled file, or for a
 > recipe in `EDEN_NX2_PRECOMPILE_RECIPE`, the title's shader folder or `<exe dir>/recipes/`,
 > assembles the recipe with the running game's files when needed and prepares the pipelines on
 > idle-priority threads while the game runs (`EDEN_NX2_PRECOMPILE_THREADS`). Emulation > Prepare
 > Shaders Now prepares them again. `EDEN_NX2_PRECOMPILED=0/1` below is upstream's switch and is
-> not read by Fritchii. Recipes must be made against a Fritchii build: check
-> `nx2-precompile cache-version` (Fritchii uses upstream's numbering since cache version 54; its
+> not read by Ocarina2. Recipes must be made against a Ocarina2 build: check
+> `nx2-precompile cache-version` (Ocarina2 uses upstream's numbering since cache version 54; its
 > records equal upstream's 53/54 ones), record the caches with that build
-> (`vulkan-frizti.fork-v<N>.bin`), and note that Fritchii's older v52 records carry the task/mesh
+> (`vulkan-frizti.fork-v<N>.bin`), and note that Ocarina2's older v52 records carry the task/mesh
 > fields that upstream added in v53 (`lichii_cache.parse_cache` assumes them from v52 on).
 >
-> **Fritchii, zortos293/Lichii#896.** With `EDEN_NX2_PRECOMPILED_FAST=1` too (off by default) the
+> **Ocarina2, zortos293/Lichii#896.** With `EDEN_NX2_PRECOMPILED_FAST=1` too (off by default) the
 > preparation also keeps each pipeline's shader infos and SPIR-V in
 > `precompiled_infos.fork-v<N>.bin` (written as it goes, as `.part`, and resumed with the
 > checkpoint; layout in `src/video_core/renderer_vulkan/vk_precompiled_kept.h`), stamped with the

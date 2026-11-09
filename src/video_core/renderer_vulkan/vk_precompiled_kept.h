@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // The shader infos and SPIR-V the precompiled preparation keeps for each pipeline it builds
-// (zortos293/Lichii#896, re-implemented for Fritchii), so a draw of a precompiled pipeline can
+// (zortos293/Lichii#896, re-implemented for Ocarina2), so a draw of a precompiled pipeline can
 // be created from them instead of translating its programs on the GPU thread
 // (EDEN_NX2_PRECOMPILED_FAST, PipelineCache::CreatePrecompiledGraphicsPipeline).
 //

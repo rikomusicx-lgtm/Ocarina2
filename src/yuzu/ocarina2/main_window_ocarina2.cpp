@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// MainWindow's Fritchii setup, kept out of main_window.cpp so Lichii merges stay clean. It runs
+// MainWindow's Ocarina2 setup, kept out of main_window.cpp so Lichii merges stay clean. It runs
 // once at the end of the constructor and does nothing in a Lichii build.
 
 #include <QApplication>
@@ -13,19 +13,19 @@
 #include "qt_common/qt_common.h"
 #include "qt_common/util/game.h"
 #include "ui_main.h"
-#include "yuzu/fritchii/fritchii_ui.h"
+#include "yuzu/ocarina2/ocarina2_ui.h"
 #include "yuzu/bootmanager.h"
-#include "yuzu/fritchii/game_controls.h"
-#include "yuzu/fritchii/home.h"
-#include "yuzu/fritchii/precompile_gate.h"
-#include "yuzu/fritchii/whats_new.h"
+#include "yuzu/ocarina2/game_controls.h"
+#include "yuzu/ocarina2/home.h"
+#include "yuzu/ocarina2/precompile_gate.h"
+#include "yuzu/ocarina2/whats_new.h"
 #include "yuzu/game/game_list.h"
 #include "yuzu/main_window.h"
 #include "yuzu/multiplayer/state.h"
 #include "yuzu/util/clickable_label.h"
 
-void MainWindow::SetUpFritchiiUi() {
-    if (!FritchiiUi::Enabled()) {
+void MainWindow::SetUpOcarina2Ui() {
+    if (!Ocarina2Ui::Enabled()) {
         return;
     }
 
@@ -53,16 +53,16 @@ void MainWindow::SetUpFritchiiUi() {
         }
     };
 
-    FritchiiUi::RestructureMenus(
+    Ocarina2Ui::RestructureMenus(
         *ui, *this,
         {.export_log = [this] { OnExportLog(); },
-         .whats_new = [this] { FritchiiUi::ShowWhatsNew(this); },
+         .whats_new = [this] { Ocarina2Ui::ShowWhatsNew(this); },
          .delete_shader_cache = [delete_shader_cache] { delete_shader_cache(OcarinaOfTime); }});
 
     // "What's new" once per version after an update, when nothing else is on screen: no other
     // dialog (first-launch question, update offer, restart note) and no game running.
     const bool used_before = Settings::values.oot_fps_asked.GetValue();
-    if (FritchiiUi::ShouldShowWhatsNew(used_before)) {
+    if (Ocarina2Ui::ShouldShowWhatsNew(used_before)) {
         auto* timer = new QTimer(this);
         timer->setInterval(1500);
         connect(timer, &QTimer::timeout, this, [this, timer] {
@@ -74,9 +74,9 @@ void MainWindow::SetUpFritchiiUi() {
             }
             timer->stop();
             timer->deleteLater();
-            FritchiiUi::MarkWhatsNewSeen();
+            Ocarina2Ui::MarkWhatsNewSeen();
             OnSaveConfig();
-            FritchiiUi::ShowWhatsNew(this);
+            Ocarina2Ui::ShowWhatsNew(this);
         });
         timer->start();
     } else if (!used_before) {
@@ -97,7 +97,7 @@ void MainWindow::SetUpFritchiiUi() {
         }
     }
     multiplayer_state->GetStatusText()->hide();
-    FritchiiUi::GraphicsHooks graphics{
+    Ocarina2Ui::GraphicsHooks graphics{
         .refresh =
             [this] {
                 UpdateStatusButtons();
@@ -111,10 +111,10 @@ void MainWindow::SetUpFritchiiUi() {
         .open_effects = [this] { OnPostProcessingShaders(); },
 #endif
     };
-    statusBar()->insertPermanentWidget(0, FritchiiUi::MakeGraphicsButton(this, graphics));
+    statusBar()->insertPermanentWidget(0, Ocarina2Ui::MakeGraphicsButton(this, graphics));
 
     // Home screen and rail.
-    FritchiiUi::HomeHooks home{
+    Ocarina2Ui::HomeHooks home{
         .play = [this](const QString& path, u64 program_id) { OnGameListLoadFile(path, program_id); },
         .add_folder = [this] { OnGameListAddDirectory(); },
         .open_settings = [this] { OnConfigure(); },
@@ -135,13 +135,13 @@ void MainWindow::SetUpFritchiiUi() {
         .classic_menus = {ui->menu_File, ui->menu_Emulation, ui->menu_View, ui->menu_Tools,
                           ui->menu_Help},
     };
-    fritchii_home = new FritchiiUi::Home(this, ui->horizontalLayout, game_list,
+    ocarina2_home = new Ocarina2Ui::Home(this, ui->horizontalLayout, game_list,
                                          game_list_placeholder, std::move(home));
-    connect(this, &MainWindow::EmulationStarting, fritchii_home,
-            &FritchiiUi::Home::OnEmulationStarting);
+    connect(this, &MainWindow::EmulationStarting, ocarina2_home,
+            &Ocarina2Ui::Home::OnEmulationStarting);
 
     // In-game controls: the menu bar is gone and the rail steps aside while a game runs.
-    auto* controls = new FritchiiUi::GameControls(
+    auto* controls = new Ocarina2Ui::GameControls(
         this, {.render = [this] { return static_cast<QWidget*>(render_window); },
                .running = [] { return QtCommon::emu_thread && QtCommon::emu_thread->IsRunning(); },
                .pause = ui->action_Pause,
@@ -150,11 +150,11 @@ void MainWindow::SetUpFritchiiUi() {
                .fullscreen = ui->action_Fullscreen,
                .menus = {ui->menu_File, ui->menu_Emulation, ui->menu_View, ui->menu_Tools,
                          ui->menu_Help}});
-    connect(this, &MainWindow::EmulationStarting, controls, &FritchiiUi::GameControls::Start);
-    connect(this, &MainWindow::EmulationStopping, controls, &FritchiiUi::GameControls::Stop);
+    connect(this, &MainWindow::EmulationStarting, controls, &Ocarina2Ui::GameControls::Start);
+    connect(this, &MainWindow::EmulationStopping, controls, &Ocarina2Ui::GameControls::Stop);
 
     // "Preparing shaders" before the game starts when its precompiled pipelines need preparing.
-    auto* gate = new FritchiiUi::PrecompileGate(
+    auto* gate = new Ocarina2Ui::PrecompileGate(
         this, statusBar(),
         {.pause = [this] { OnPauseGame(); },
          .resume = [this] { OnStartGame(); },
@@ -165,7 +165,7 @@ void MainWindow::SetUpFritchiiUi() {
                         : tr("the game");
          }});
     connect(this, &MainWindow::EmulationStarting, gate,
-            &FritchiiUi::PrecompileGate::OnEmulationStarting);
+            &Ocarina2Ui::PrecompileGate::OnEmulationStarting);
     connect(this, &MainWindow::EmulationStopping, gate,
-            &FritchiiUi::PrecompileGate::OnEmulationStopping);
+            &Ocarina2Ui::PrecompileGate::OnEmulationStopping);
 }

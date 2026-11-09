@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include "yuzu/fritchii/home.h"
+#include "yuzu/ocarina2/home.h"
 
 #include <algorithm>
 #include <set>
@@ -11,6 +11,7 @@
 #include <QDir>
 #include <QEvent>
 #include <QFileInfo>
+#include <QGraphicsDropShadowEffect>
 #include <QLabel>
 #include <QMainWindow>
 #include <QMenu>
@@ -23,14 +24,14 @@
 #include <QToolButton>
 
 #include "qt_common/game_list/game_list_p.h"
-#include "yuzu/fritchii/fritchii_ui.h"
+#include "yuzu/ocarina2/ocarina2_ui.h"
 
-namespace FritchiiUi {
+namespace Ocarina2Ui {
 namespace {
 
 constexpr u64 OcarinaOfTime = 0x0400486024DEC000ULL;
-constexpr int CoverSize = 200;
-constexpr int TileIcon = 72;
+constexpr int CoverSize = 250;
+constexpr int TileIcon = 76;
 constexpr int MaxTiles = 7;
 
 struct Game {
@@ -129,7 +130,7 @@ std::vector<Game> CollectGames(QStandardItemModel* model, const QPixmap& fallbac
             game.icon = LocalCover(path);
         }
         if (IsBlank(game.icon)) {
-            // No icon in the dump and none next to it: Fritchii's own icon, not an empty square.
+            // No icon in the dump and none next to it: Ocarina2's own icon, not an empty square.
             game.icon = fallback;
         }
         games.push_back(std::move(game));
@@ -184,7 +185,7 @@ Home::Home(QMainWindow* window_, QBoxLayout* central, QWidget* game_list_, QWidg
 
 QToolButton* Home::RailButton(const QString& icon, const QString& tip) {
     auto* button = new QToolButton(rail);
-    button->setObjectName(QStringLiteral("FritchiiRailButton"));
+    button->setObjectName(QStringLiteral("Ocarina2RailButton"));
     button->setIcon(Icon(icon, 22));
     button->setIconSize(QSize(22, 22));
     button->setToolTip(tip);
@@ -195,7 +196,7 @@ QToolButton* Home::RailButton(const QString& icon, const QString& tip) {
 
 QWidget* Home::MakeRail() {
     rail = new QWidget;
-    rail->setObjectName(QStringLiteral("FritchiiRail"));
+    rail->setObjectName(QStringLiteral("Ocarina2Rail"));
     rail->setAttribute(Qt::WA_StyledBackground);
     rail->setFixedWidth(64);
     auto* layout = new QVBoxLayout(rail);
@@ -237,7 +238,7 @@ QWidget* Home::MakeRail() {
 
 QWidget* Home::MakePage() {
     page = new QWidget;
-    page->setObjectName(QStringLiteral("FritchiiHome"));
+    page->setObjectName(QStringLiteral("Ocarina2Home"));
     page->setAttribute(Qt::WA_StyledBackground);
     page->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(page, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
@@ -264,22 +265,34 @@ QWidget* Home::MakePage() {
     layout->setSpacing(0);
 
     auto* hero = new QHBoxLayout;
-    hero->setSpacing(36);
+    hero->setSpacing(40);
     cover = new QLabel;
     cover->setFixedSize(CoverSize, CoverSize);
+    auto* cover_effect = new QGraphicsDropShadowEffect;
+    cover_effect->setBlurRadius(64);
+    cover_effect->setOffset(0, 6);
+    cover_effect->setColor(QColor(139, 92, 246, 150));
+    cover->setGraphicsEffect(cover_effect);
     hero->addWidget(cover, 0, Qt::AlignTop);
 
     auto* side = new QVBoxLayout;
     side->setSpacing(0);
     side->addStretch(1);
+
+    subtitle = new QLabel;
+    subtitle->setObjectName(QStringLiteral("Ocarina2Subtitle"));
+    subtitle->setText(QObject::tr("The Legend of Zelda · Ocarina of Time"));
+    side->addWidget(subtitle, 0, Qt::AlignLeft);
+    side->addSpacing(6);
+
     title = new QLabel;
-    title->setObjectName(QStringLiteral("FritchiiHeroTitle"));
+    title->setObjectName(QStringLiteral("Ocarina2HeroTitle"));
     title->setWordWrap(true);
-    title->setMaximumWidth(680);
+    title->setMaximumWidth(720);
     side->addWidget(title);
-    side->addSpacing(24);
+    side->addSpacing(34);
     play = new QPushButton;
-    play->setObjectName(QStringLiteral("FritchiiPlay"));
+    play->setObjectName(QStringLiteral("Ocarina2Play"));
     play->setCursor(Qt::PointingHandCursor);
     play->setIconSize(QSize(18, 18));
     connect(play, &QPushButton::clicked, this, [this] {
@@ -290,6 +303,11 @@ QWidget* Home::MakePage() {
         }
     });
     side->addWidget(play, 0, Qt::AlignLeft);
+    auto* play_effect = new QGraphicsDropShadowEffect;
+    play_effect->setBlurRadius(36);
+    play_effect->setOffset(0, 4);
+    play_effect->setColor(QColor(139, 92, 246, 170));
+    play->setGraphicsEffect(play_effect);
     side->addStretch(1);
     hero->addLayout(side, 1);
     layout->addLayout(hero);
@@ -356,7 +374,7 @@ void Home::Refresh() {
     }
     const auto tile = [this](const QIcon& icon, const QString& text) {
         auto* button = new QToolButton(row_box);
-        button->setObjectName(QStringLiteral("FritchiiTile"));
+        button->setObjectName(QStringLiteral("Ocarina2Tile"));
         button->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
         button->setIcon(icon);
         button->setIconSize(QSize(TileIcon, TileIcon));
@@ -447,4 +465,4 @@ bool Home::eventFilter(QObject* watched, QEvent* event) {
     return QObject::eventFilter(watched, event);
 }
 
-} // namespace FritchiiUi
+} // namespace Ocarina2Ui

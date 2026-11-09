@@ -187,7 +187,7 @@ Dialog::Dialog(const Session& session, QNetworkAccessManager* network_, QWidget*
                       "not collected. Do not paste logs, paths, keys or private details."));
     setup_notice->setWordWrap(true);
     setup->addRow(setup_notice);
-    line(setup, QStringLiteral("build"), tr("Lichii build"), Known(session.build));
+    line(setup, QStringLiteral("build"), tr("Ocarina2 build"), Known(session.build));
     line(setup, QStringLiteral("gameVersion"), tr("Game version"), Known(session.game_version));
     line(setup, QStringLiteral("cpu"), tr("CPU"), Known(session.cpu));
     line(setup, QStringLiteral("gpu"), tr("GPU"), Known(session.gpu));
@@ -489,7 +489,7 @@ void Dialog::Request(bool submission, const QByteArray& payload) {
     request.setRawHeader("Accept", "application/json");
     if (submission) {
         request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
-        request.setRawHeader("X-Lichii-Client", "desktop/1");
+        request.setRawHeader("X-Ocarina2-Client", "desktop/1");
         request.setRawHeader("Idempotency-Key", submission_key);
     }
     auto* pending = submission ? network->post(request, payload) : network->get(request);

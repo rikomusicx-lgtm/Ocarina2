@@ -24,9 +24,9 @@ namespace VideoCommon {
 
 inline constexpr u32 OpenGLPipelineCacheVersion = 48;
 /// 56: info serialization adds this fork's frag_color_components to Info (written after
-/// stores_frag_color), which Fritchii's 55 files do not carry: their records are not byte-compatible,
+/// stores_frag_color), which Ocarina2's 55 files do not carry: their records are not byte-compatible,
 /// so they are not migrated. 55 was ours KeyedAttributeTypes (#408), written identically to
-/// Fritchii's 54, so shared caches and #895 recipes of 54 are taken as they are.
+/// Ocarina2's 54, so shared caches and #895 recipes of 54 are taken as they are.
 /// Moving to a later format is this number plus VulkanOwnPreviousVersions.
 inline constexpr u32 VulkanPipelineCacheVersion = 56;
 /// This fork's earlier versions of the same record format, newest first: their files are copied

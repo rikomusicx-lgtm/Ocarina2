@@ -86,7 +86,7 @@ jobs:
           # eglantine.profdata. Eden's profile (Eden-CI/PGO) comes from Switch 1 games: with it Mario
           # Kart World ran at about half the speed of the normal build, with eglantine.profdata at
           # about the same speed. Both Windows builds are clang-cl with ThinLTO; windows-x86_64-pgo
-          # adds lichii-windows.profdata, an MSVC-ABI profile trained on Ocarina of Time (see
+          # adds ocarina2-windows.profdata, an MSVC-ABI profile trained on Ocarina of Time (see
           # docs/CI.md). MSVC still builds for development.
           - platform: linux-x86_64-pgo
             runner: ubuntu-24.04
@@ -96,7 +96,7 @@ jobs:
           - platform: windows-x86_64-pgo
             runner: windows-2022
             pgo: true
-            profile: lichii-windows.profdata
+            profile: ocarina2-windows.profdata
           - platform: linux-aarch64
             runner: ubuntu-24.04-arm
           - platform: linux-aarch64-pgo
@@ -363,7 +363,7 @@ jobs:
         run: |
           if command -v ccache > /dev/null; then ccache --zero-stats; else sccache --zero-stats; fi
           targets="yuzu yuzu-cmd"
-          if [[ "${{ matrix.platform }}" == windows* ]]; then targets="$targets lichii-updater"; fi
+          if [[ "${{ matrix.platform }}" == windows* ]]; then targets="$targets ocarina2-updater"; fi
           cmake --build build/release --target $targets --parallel
           if command -v ccache > /dev/null; then ccache --show-stats; else sccache --show-stats; fi
 
@@ -390,10 +390,10 @@ jobs:
           set -euo pipefail
           test -x build/release/bin/lichii
           test -x build/release/bin/eden-cli
-          strip build/release/bin/lichii build/release/bin/eden-cli
-          tar -czf "lichii-${GITHUB_SHA}-${{ matrix.platform }}.tar.gz" \
-            -C build/release/bin lichii eden-cli nx2_switches.txt
-          ls -la "lichii-${GITHUB_SHA}-${{ matrix.platform }}.tar.gz"
+          strip build/release/bin/ocarina2 build/release/bin/eden-cli
+          tar -czf "ocarina2-${GITHUB_SHA}-${{ matrix.platform }}.tar.gz" \
+            -C build/release/bin ocarina2 eden-cli nx2_switches.txt
+          ls -la "ocarina2-${GITHUB_SHA}-${{ matrix.platform }}.tar.gz"
 
       # A self-contained AppImage: linuxdeploy bundles every library the two programs need except
       # the base system ones (glibc, X11/Wayland client libraries, the GPU driver and Vulkan loader),
@@ -414,8 +414,8 @@ jobs:
           https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-$arch.AppImage
           chmod +x "$tools"/*.AppImage
           # The desktop file names its icon io.github.zortos293.lichii.
-          icon="$RUNNER_TEMP/io.github.zortos293.lichii.png"
-          cp dist/lichii.png "$icon"
+          icon="$RUNNER_TEMP/io.github.zortos293.ocarina2.png"
+          cp dist/ocarina2.png "$icon"
           export APPIMAGE_EXTRACT_AND_RUN=1
           export QMAKE="$QT_ROOT_DIR/bin/qmake"
           # Include Wayland platform plugins and their graphics/shell integrations.
@@ -423,13 +423,13 @@ jobs:
           export EXTRA_PLATFORM_PLUGINS='libqwayland-egl.so;libqwayland-generic.so'
           # Embedded in the AppImage metadata; matches the release tag (build-N) plus the commit.
           export LDAI_VERSION="build-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
-          export LDAI_OUTPUT="lichii-${GITHUB_SHA}-${{ matrix.platform }}.AppImage"
+          export LDAI_OUTPUT="ocarina2-${GITHUB_SHA}-${{ matrix.platform }}.AppImage"
           export OUTPUT="$LDAI_OUTPUT"
           export ARCH="$arch"
           mkdir -p AppDir/usr/bin
           cp build/release/bin/nx2_switches.txt AppDir/usr/bin/
           "$tools/linuxdeploy-$arch.AppImage" --appdir AppDir \
-            --executable build/release/bin/lichii \
+            --executable build/release/bin/ocarina2 \
             --executable build/release/bin/eden-cli \
             --desktop-file dist/io.github.zortos293.lichii.desktop \
             --icon-file "$icon" \
@@ -442,12 +442,12 @@ jobs:
         if: startsWith(matrix.platform, 'windows')
         shell: pwsh
         run: |
-          foreach ($exe in 'lichii.exe', 'eden-cli.exe') {
+          foreach ($exe in 'Ocarina2.exe', 'eden-cli.exe') {
             if (-not (Test-Path "build/release/bin/$exe")) {
               throw "build/release/bin/$exe was not produced"
             }
           }
-          windeployqt --release --no-translations build/release/bin/lichii.exe
+          windeployqt --release --no-translations build/release/bin/Ocarina2.exe
 
       # A self-contained app bundle: macdeployqt copies Qt and every other Homebrew library both
       # programs load into the bundle, then the leftover Homebrew search paths are removed so a
@@ -457,7 +457,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          app=build/release/bin/lichii.app
+          app=build/release/bin/ocarina2.app
           test -x "$app/Contents/MacOS/lichii"
           test -x build/release/bin/eden-cli
           cp build/release/bin/eden-cli "$app/Contents/MacOS/eden-cli"
@@ -475,7 +475,7 @@ jobs:
               done
           done
           # Libraries that load their dependencies through @rpath find them in the bundle.
-          for program in lichii eden-cli; do
+          for program in ocarina2 eden-cli; do
             install_name_tool -add_rpath @executable_path/../Frameworks \
               "$app/Contents/MacOS/$program" 2> /dev/null
           done
@@ -498,15 +498,15 @@ jobs:
             codesign --force --sign - --entitlements dist/eglantine.entitlements "$app"
           fi
           codesign --verify --deep --strict "$app"
-          ditto -c -k --keepParent "$app" "lichii-${GITHUB_SHA}-${{ matrix.platform }}.zip"
-          ls -la "lichii-${GITHUB_SHA}-${{ matrix.platform }}.zip"
-          # Also ship a .dmg (drag lichii.app onto Applications).
+          ditto -c -k --keepParent "$app" "ocarina2-${GITHUB_SHA}-${{ matrix.platform }}.zip"
+          ls -la "ocarina2-${GITHUB_SHA}-${{ matrix.platform }}.zip"
+          # Also ship a .dmg (drag ocarina2.app onto Applications).
           dmgdir=$(mktemp -d)
-          ditto "$app" "$dmgdir/lichii.app"
+          ditto "$app" "$dmgdir/ocarina2.app"
           ln -s /Applications "$dmgdir/Applications"
-          hdiutil create -volname "Lichii" -srcfolder "$dmgdir" -ov -format UDZO \
-            "lichii-${GITHUB_SHA}-${{ matrix.platform }}.dmg"
-          ls -la "lichii-${GITHUB_SHA}-${{ matrix.platform }}.dmg"
+          hdiutil create -volname "Ocarina2" -srcfolder "$dmgdir" -ov -format UDZO \
+            "ocarina2-${GITHUB_SHA}-${{ matrix.platform }}.dmg"
+          ls -la "ocarina2-${GITHUB_SHA}-${{ matrix.platform }}.dmg"
 
       # The artifact is the bin folder itself: GitHub zips artifacts on download, and uploading a
       # zip gave a zip inside a zip. The release job zips it once for the release.
@@ -514,7 +514,7 @@ jobs:
         if: startsWith(matrix.platform, 'windows')
         uses: actions/upload-artifact@v7
         with:
-          name: lichii-${{ matrix.platform }}-${{ github.sha }}
+          name: ocarina2-${{ matrix.platform }}-${{ github.sha }}
           path: build/release/bin/
           if-no-files-found: error
           retention-days: 7
@@ -524,10 +524,10 @@ jobs:
         if: startsWith(matrix.platform, 'linux')
         uses: actions/upload-artifact@v7
         with:
-          name: lichii-${{ matrix.platform }}-${{ github.sha }}
+          name: ocarina2-${{ matrix.platform }}-${{ github.sha }}
           path: |
-            lichii-${{ github.sha }}-${{ matrix.platform }}.tar.gz
-            lichii-${{ github.sha }}-${{ matrix.platform }}.AppImage
+            ocarina2-${{ github.sha }}-${{ matrix.platform }}.tar.gz
+            ocarina2-${{ github.sha }}-${{ matrix.platform }}.AppImage
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
@@ -537,10 +537,10 @@ jobs:
         if: startsWith(matrix.platform, 'macos')
         uses: actions/upload-artifact@v7
         with:
-          name: lichii-${{ matrix.platform }}-${{ github.sha }}
+          name: ocarina2-${{ matrix.platform }}-${{ github.sha }}
           path: |
-            lichii-${{ github.sha }}-${{ matrix.platform }}.zip
-            lichii-${{ github.sha }}-${{ matrix.platform }}.dmg
+            ocarina2-${{ github.sha }}-${{ matrix.platform }}.zip
+            ocarina2-${{ github.sha }}-${{ matrix.platform }}.dmg
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
@@ -559,7 +559,7 @@ jobs:
       - name: Download binaries
         uses: actions/download-artifact@v7
         with:
-          pattern: lichii-*-${{ github.sha }}
+          pattern: ocarina2-*-${{ github.sha }}
           path: artifacts
 
       - name: Package release files
@@ -626,7 +626,7 @@ jobs:
           }
           pgo_note=""
           if [[ -n "$has_pgo" ]]; then
-            pgo_note="The PGO builds are the same programs compiled with profile-guided optimization. Linux uses clang with Eglantine's profile; Windows uses clang-cl and ThinLTO with a profile trained in Lichii on Ocarina of Time, so other games gain less. Prefer them when your CPU supports it."
+            pgo_note="The PGO builds are the same programs compiled with profile-guided optimization. Linux uses clang with Eglantine's profile; Windows uses clang-cl and ThinLTO with a profile trained in Ocarina2 on Ocarina of Time, so other games gain less. Prefer them when your CPU supports it."
           fi
 
           cat > notes.md <<EOF
@@ -637,21 +637,21 @@ jobs:
           Linux packages come as an AppImage (self-contained, needs glibc 2.39 or newer: Ubuntu 24.04, Fedora 40, Debian 13, Arch) and a tar.gz (uses your system libraries, so Qt 6 and the usual libraries must be installed).
 
           $({
-            row amd64 "$(appimage_tar lichii-linux-x86_64)" "$(appimage_tar lichii-linux-x86_64-pgo)" "Make the AppImage executable (\`chmod +x\`) and run it"
-            row "ARM (aarch64)" "$(appimage_tar lichii-linux-aarch64)" "$(appimage_tar lichii-linux-aarch64-pgo)" ""
+            row amd64 "$(appimage_tar ocarina2-linux-x86_64)" "$(appimage_tar ocarina2-linux-x86_64-pgo)" "Make the AppImage executable (\`chmod +x\`) and run it"
+            row "ARM (aarch64)" "$(appimage_tar ocarina2-linux-aarch64)" "$(appimage_tar ocarina2-linux-aarch64-pgo)" ""
           } | table)
 
           ## Windows
 
-          Windows packages are in-place zip files: extract and run \`lichii.exe\`, or \`eden-cli.exe\` from a terminal.
+          Windows packages are in-place zip files: extract and run \`Ocarina2.exe\`, or \`eden-cli.exe\` from a terminal.
 
           $({
-            row "amd64 / x86_64" "$(link zip lichii-windows-x86_64.zip)" "$(link "PGO zip" lichii-windows-x86_64-pgo.zip)" "Both built with clang-cl and ThinLTO; the PGO zip adds a profile trained on Ocarina of Time"
+            row "amd64 / x86_64" "$(link zip ocarina2-windows-x86_64.zip)" "$(link "PGO zip" ocarina2-windows-x86_64-pgo.zip)" "Both built with clang-cl and ThinLTO; the PGO zip adds a profile trained on Ocarina of Time"
           } | table)
 
           ## macOS
 
-          $(row "arm64 (Apple Silicon)" "$(link zip lichii-macos-arm64.zip)" "" "macOS 15 or newer. Not notarized: right-click and choose Open the first time, or run \`xattr -dr com.apple.quarantine lichii.app\`. \`eden-cli\` is inside the app, in \`Contents/MacOS\`" | table)
+          $(row "arm64 (Apple Silicon)" "$(link zip ocarina2-macos-arm64.zip)" "" "macOS 15 or newer. Not notarized: right-click and choose Open the first time, or run \`xattr -dr com.apple.quarantine ocarina2.app\`. \`eden-cli\` is inside the app, in \`Contents/MacOS\`" | table)
 
           ${pgo_note}
           EOF
@@ -660,7 +660,7 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" \
             --verify-tag \
             --prerelease \
-            --title "Lichii ${GITHUB_REF_NAME} build ${GITHUB_RUN_NUMBER} (${GITHUB_SHA::7})" \
+            --title "Ocarina2 ${GITHUB_REF_NAME} build ${GITHUB_RUN_NUMBER} (${GITHUB_SHA::7})" \
             --notes-file notes.md
 
       # LICHII_BUILD_TAG is baked into every binary as build-<run number>, and the update checker

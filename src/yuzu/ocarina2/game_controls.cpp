@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include "yuzu/fritchii/game_controls.h"
+#include "yuzu/ocarina2/game_controls.h"
 
 #include <QAction>
 #include <QApplication>
@@ -11,9 +11,9 @@
 #include <QTimer>
 #include <QToolButton>
 
-#include "yuzu/fritchii/fritchii_ui.h"
+#include "yuzu/ocarina2/ocarina2_ui.h"
 
-namespace FritchiiUi {
+namespace Ocarina2Ui {
 namespace {
 
 constexpr Qt::WindowFlags StripFlags = Qt::Tool | Qt::FramelessWindowHint |
@@ -29,7 +29,7 @@ constexpr unsigned IconColor = 0xececf1;
 
 GameControls::GameControls(QWidget* owner, GameControlHooks hooks_)
     : QWidget(owner, StripFlags), hooks{std::move(hooks_)} {
-    setObjectName(QStringLiteral("FritchiiStrip"));
+    setObjectName(QStringLiteral("Ocarina2Strip"));
     setAttribute(Qt::WA_TranslucentBackground);
     setAttribute(Qt::WA_ShowWithoutActivating);
 
@@ -62,7 +62,7 @@ GameControls::GameControls(QWidget* owner, GameControlHooks hooks_)
 
 QToolButton* GameControls::Button(const QString& icon, const QString& tip, QAction* action) {
     auto* button = new QToolButton(this);
-    button->setObjectName(QStringLiteral("FritchiiStripButton"));
+    button->setObjectName(QStringLiteral("Ocarina2StripButton"));
     button->setIcon(Glyph(icon, IconColor, 22));
     button->setIconSize(QSize(22, 22));
     button->setFixedSize(44, 44);
@@ -149,4 +149,4 @@ void GameControls::paintEvent(QPaintEvent*) {
     painter.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 14, 14);
 }
 
-} // namespace FritchiiUi
+} // namespace Ocarina2Ui

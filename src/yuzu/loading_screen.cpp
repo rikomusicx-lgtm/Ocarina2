@@ -19,7 +19,7 @@
 #include "ui_loading_screen.h"
 #include "video_core/rasterizer_interface.h"
 #include "yuzu/loading_screen.h"
-#include "yuzu/fritchii/fritchii_ui.h"
+#include "yuzu/ocarina2/ocarina2_ui.h"
 
 // Mingw seems to not have QMovie at all. If QMovie is missing then use a single frame instead of an
 // showing the full animation
@@ -93,14 +93,14 @@ LoadingScreen::LoadingScreen(QWidget* parent)
         {VideoCore::LoadCallbackStage::Build, PROGRESSBAR_STYLE_BUILD},
         {VideoCore::LoadCallbackStage::Complete, PROGRESSBAR_STYLE_COMPLETE},
     };
-    if (FritchiiUi::Enabled()) {
+    if (Ocarina2Ui::Enabled()) {
         stage_translations = {
             {VideoCore::LoadCallbackStage::Prepare, tr("Starting...")},
             {VideoCore::LoadCallbackStage::Build, tr("Preparing shaders %1 / %2")},
             {VideoCore::LoadCallbackStage::Complete, tr("Almost ready...")},
         };
-        progressbar_style[VideoCore::LoadCallbackStage::Build] = FritchiiUi::LoadingBarStyle();
-        progressbar_style[VideoCore::LoadCallbackStage::Complete] = FritchiiUi::LoadingBarStyle();
+        progressbar_style[VideoCore::LoadCallbackStage::Build] = Ocarina2Ui::LoadingBarStyle();
+        progressbar_style[VideoCore::LoadCallbackStage::Complete] = Ocarina2Ui::LoadingBarStyle();
         ui->progress_bar->setFixedHeight(6);
     }
 }

@@ -1,0 +1,218 @@
+/* Ocarina2: near-black OLED background, one Switch-style violet accent (#9a7cf5),
+   soft rounded controls (12-14px), generous spacing and a Spotify-ish title weight. */
+
+QToolTip {
+    background: #221d33;
+    color: #ececf1;
+    border: 1px solid #332e4d;
+    border-radius: 8px;
+    padding: 7px 10px;
+}
+
+QMenuBar { background: #0d0b16; }
+QMenuBar::item { padding: 7px 12px; background: transparent; border-radius: 8px; }
+QMenuBar::item:selected { background: #221d33; }
+
+QMenu {
+    background: #1d1930;
+    border: 1px solid #332e4d;
+    border-radius: 14px;
+    padding: 7px;
+}
+QMenu::item { padding: 8px 32px 8px 16px; border-radius: 8px; }
+QMenu::item:selected { background: #322a52; color: #ececf1; }
+QMenu::item:disabled { color: #55555f; }
+QMenu::separator { height: 1px; background: #332e4d; margin: 6px 10px; }
+QMenu::indicator { width: 15px; height: 15px; left: 7px; }
+
+QPushButton {
+    background: #221d33;
+    border: 1px solid #332e4d;
+    border-radius: 12px;
+    padding: 9px 20px;
+}
+QPushButton:hover { background: #2a2540; border-color: #4b4269; }
+QPushButton:pressed { background: #322a52; }
+QPushButton:default { background: #9a7cf5; color: #1c1433; border: 1px solid #9a7cf5; }
+QPushButton:default:hover { background: #b49cf8; }
+QPushButton:disabled { color: #55555f; background: #181622; }
+
+QLineEdit, QComboBox, QPlainTextEdit, QTextEdit {
+    background: #1a162a;
+    border: 1px solid #332e4d;
+    border-radius: 12px;
+    padding: 8px 12px;
+}
+QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus, QTextEdit:focus { border-color: #a78bfa; }
+QComboBox:hover, QLineEdit:hover { border-color: #3a3a42; }
+QComboBox::drop-down { border: none; width: 26px; }
+QComboBox QAbstractItemView {
+    background: #1b1b1f;
+    border: 1px solid #2a2a30;
+    padding: 4px;
+    outline: none;
+    selection-background-color: #2b2640;
+    selection-color: #ececf1;
+}
+
+QCheckBox, QRadioButton { spacing: 10px; }
+QCheckBox::indicator {
+    width: 17px;
+    height: 17px;
+    border-radius: 6px;
+    border: 1px solid #4b4269;
+    background: #1a162a;
+}
+QCheckBox::indicator:hover { border-color: #9a7cf5; }
+QCheckBox::indicator:checked {
+    background: #9a7cf5;
+    border-color: #9a7cf5;
+}
+QCheckBox::indicator:disabled { background: #141324; border-color: #221d33; }
+
+QGroupBox {
+    border: 1px solid #2d2745;
+    border-radius: 16px;
+    margin-top: 26px;
+    padding: 16px 14px 12px 14px;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 6px;
+    color: #9a9aa8;
+}
+
+QTabWidget::pane { border: none; }
+QTabBar::tab {
+    background: transparent;
+    color: #9a9aa8;
+    padding: 8px 14px;
+    border: none;
+    border-bottom: 2px solid transparent;
+}
+QTabBar::tab:hover { color: #ececf1; }
+QTabBar::tab:selected { color: #ececf1; border-bottom: 2px solid #9a7cf5; }
+
+QScrollBar:vertical { background: transparent; width: 12px; margin: 0; }
+QScrollBar:horizontal { background: transparent; height: 12px; margin: 0; }
+QScrollBar::handle:vertical { background: #3a3452; border-radius: 6px; min-height: 36px; margin: 2px; }
+QScrollBar::handle:horizontal { background: #3a3452; border-radius: 6px; min-width: 36px; margin: 2px; }
+QScrollBar::handle:hover { background: #554e78; }
+QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
+QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
+
+QHeaderView::section {
+    background: #111113;
+    color: #9a9aa8;
+    border: none;
+    border-bottom: 1px solid #222227;
+    padding: 6px 10px;
+}
+QTreeView, QListView, QTableView { border: none; outline: none; }
+QTreeView::item, QListView::item { padding: 4px; }
+QTreeView::item:selected, QListView::item:selected, QTableView::item:selected {
+    background: #2b2640;
+    color: #ececf1;
+}
+
+QSlider::groove:horizontal { height: 4px; background: #2a2a30; border-radius: 2px; }
+QSlider::sub-page:horizontal { background: #9a7cf5; border-radius: 2px; }
+QSlider::handle:horizontal {
+    background: #ececf1;
+    width: 15px;
+    height: 15px;
+    margin: -6px 0;
+    border-radius: 8px;
+}
+
+QProgressBar {
+    background: #1a162a;
+    border: none;
+    border-radius: 6px;
+    text-align: center;
+    color: #ececf1;
+}
+QProgressBar::chunk { background: #9a7cf5; border-radius: 6px; }
+
+QStatusBar { background: #0d0b16; color: #9a93b8; }
+QStatusBar::item { border: none; }
+QStatusBar QLabel { color: #9a93b8; padding: 0 6px; }
+QPushButton#TogglableStatusBarButton, QPushButton#DockingStatusBarButton,
+QPushButton#OotFpsStatusBarButton, QPushButton#GPUStatusBarButton,
+QPushButton#RendererStatusBarButton, QPushButton#RefreshButton {
+    background: transparent;
+    border: none;
+    color: #9a93b8;
+    padding: 4px 12px;
+    border-radius: 8px;
+}
+QPushButton#TogglableStatusBarButton:hover, QPushButton#DockingStatusBarButton:hover,
+QPushButton#OotFpsStatusBarButton:hover, QPushButton#GPUStatusBarButton:hover,
+QPushButton#RendererStatusBarButton:hover, QPushButton#RefreshButton:hover {
+    background: #221d33;
+    color: #ececf1;
+}
+QPushButton#OotFpsStatusBarButton { color: #b49cf8; }
+
+/* Settings sidebar */
+QListWidget#selectorList { background: transparent; border: none; outline: none; }
+QListWidget#selectorList::item { padding: 10px 16px; border-radius: 10px; margin: 1px 0; }
+QListWidget#selectorList::item:hover { background: #1d1930; }
+QListWidget#selectorList::item:selected { background: #322a52; color: #ececf1; }
+
+/* What's New and the update dialog */
+QLabel#Ocarina2DialogTitle { font-size: 24px; font-weight: 600; color: #ececf1; }
+QTextBrowser#Ocarina2Notes { background: transparent; border: none; font-size: 15px; }
+QTextBrowser#Ocarina2Credits { background: transparent; border: none; font-size: 12px; }
+
+/* Preparing shaders (ocarina2/precompile_gate.cpp) */
+QDialog#Ocarina2Prepare { background: #0d0b16; }
+QLabel#Ocarina2Lead { font-size: 16px; color: #cfc9e3; }
+QProgressBar#Ocarina2PrepareBar { background: #1a162a; border: none; border-radius: 8px; }
+QProgressBar#Ocarina2PrepareBar::chunk { background: #9a7cf5; border-radius: 8px; }
+QLabel#Ocarina2StatusNote { color: #b49cf8; padding: 0 10px; }
+
+/* In-game control strip (ocarina2/game_controls.cpp) */
+QToolButton#Ocarina2StripButton { background: transparent; border: none; border-radius: 12px; }
+QToolButton#Ocarina2StripButton:hover { background: #322a52; }
+QToolButton#Ocarina2StripButton:pressed { background: #453a70; }
+
+/* Home and rail (ocarina2/home.cpp) */
+QWidget#Ocarina2Rail { background: #0d0b16; }
+QToolButton#Ocarina2RailButton {
+    background: transparent;
+    border: none;
+    border-radius: 14px;
+    padding: 11px;
+}
+QToolButton#Ocarina2RailButton:hover { background: #1d1930; }
+QToolButton#Ocarina2RailButton:checked { background: #241d3d; }
+QWidget#Ocarina2Home { background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+    stop: 0 #151026, stop: 0.4 #110d1f, stop: 1 #0d0b16); }
+QLabel#Ocarina2HeroTitle { font-size: 34px; font-weight: 600; color: #ececf1; }
+QLabel#Ocarina2Subtitle { font-size: 13px; color: #8f86ad; }
+QLabel#Ocarina2Section { font-size: 15px; color: #b7b2cd; }
+QPushButton#Ocarina2Play {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #8b5cf6, stop: 1 #6d28d9);
+    color: #ffffff;
+    border: none;
+    border-radius: 999px;
+    min-height: 50px;
+    max-height: 50px;
+    padding: 0 34px;
+    font-size: 17px;
+    font-weight: 600;
+}
+QPushButton#Ocarina2Play:hover { background: #a87ffa; }
+QPushButton#Ocarina2Play:pressed { background: #7c3aed; }
+QToolButton#Ocarina2Tile {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 16px;
+    padding: 10px;
+    color: #c9c6d8;
+    font-size: 13px;
+}
+QToolButton#Ocarina2Tile:hover { background: #1d1930; border-color: #332e4d; color: #ececf1; }
