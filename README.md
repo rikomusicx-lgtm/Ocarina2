@@ -6,6 +6,11 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 -->
 
+<h2 align="center">⚠️ Lichii has no official website ⚠️</h2>
+
+> [!CAUTION]
+> **Lichii has no official website.** The only site run by this project is the **game compatibility website, [lichii.zortos.me](https://lichii.zortos.me)**, for compatibility reports only. Download Lichii **only** from this repository's [releases page](https://github.com/zortos293/Lichii/releases). Any other "Lichii" website or download (such as lichii.org) is not ours and may contain malware ([#545](https://github.com/zortos293/Lichii/issues/545)).
+
 <p align="center">
   <img src="dist/ocarina2.png" alt="Ocarina2" width="600">
 </p>
@@ -15,6 +20,8 @@
 Ocarina2 is The Legend of Zelda: Ocarina of Time on Lichii — an experimental, open-source Nintendo Switch and Switch 2 emulator written in C++. It builds on Eglantine, Eden, yuzu and Sudachi, and this fork's work comes from zortos293's Lichii fork and Frizti's (Fritchii) line, with the focus kept on one game: 0400486024DEC000.
 
 This is an independent fork, not an official release of those upstream projects. Ocarina2 is not affiliated with Nintendo.
+
+There is no official Ocarina2 website. Only download Ocarina2 from this repository's releases page; anything else offering an "Ocarina2" download is not ours.
 
 ## Downloads and setup
 
