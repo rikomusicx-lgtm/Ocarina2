@@ -1962,7 +1962,7 @@ std::string DescribeProgramsKeyDiff(const GraphicsPipelineCacheKey& fast,
 }
 } // Anonymous namespace
 
-void PipelineCache::BuildCleanWatch(bool patch, bool blend_by_value) {
+void PipelineCache::BuildCleanWatch(bool patch, bool blend_by_value, bool patch_vertex) {
     using Range = CleanLookup::Range;
     const Maxwell& regs = maxwell3d->regs;
     const DynamicFeatures& features = dynamic_features;
@@ -2017,7 +2017,7 @@ void PipelineCache::BuildCleanWatch(bool patch, bool blend_by_value) {
     }
     watch(regs.point_size);
     // Dirty::VertexInput (both branches) and the static vertex repack:
-    if (!patch || !features.has_dynamic_vertex_input) {
+    if ((!patch && !patch_vertex) || !features.has_dynamic_vertex_input) {
         watch(regs.vertex_attrib_format);
     }
     const bool repack = !features.has_dynamic_vertex_input && features.has_static_vertex_repack;
@@ -2132,6 +2132,7 @@ void PipelineCache::BuildCleanWatch(bool patch, bool blend_by_value) {
     clean.blend_snapshot.assign(blend_words, 0);
     clean.built = true;
     clean.patch = patch;
+    clean.patch_vertex = patch_vertex;
     clean.blend_by_value = blend_by_value;
     clean.pipeline = nullptr;
     LOG_INFO(Render_Vulkan,
@@ -2239,16 +2240,22 @@ GraphicsPipeline* PipelineCache::CurrentGraphicsPipelineClean(bool patch) {
     }
     const int programs_mode = VideoCore::Nx2Debug::Experiment(52);
     const bool by_value = VideoCore::Nx2Debug::Experiment(50) != 0;
-    if (!clean.built || clean.patch != patch || clean.blend_by_value != by_value) {
-        BuildCleanWatch(patch, by_value);
+    // EDEN_NX2_EXP55 (live, 0 = off): patch the key's vertex attribute types when only the vertex
+    // input moved (dynamic vertex input), as EXP19=2 does, without its blend patching. In
+    // Castle Town every "other state" refresh is vertex input (~20k/s). 2 = also run the full
+    // Refresh after it and compare the keys (the verified/differ counts of the line).
+    const int vertex_mode = VideoCore::Nx2Debug::Experiment(55);
+    if (!clean.built || clean.patch != patch || clean.blend_by_value != by_value ||
+        clean.patch_vertex != (vertex_mode != 0)) {
+        BuildCleanWatch(patch, by_value, vertex_mode != 0);
     }
     auto& flags = maxwell3d->dirty.flags;
     const bool dynamic_blend = dynamic_features.has_extended_dynamic_state_3_blend;
     const bool blending_dirty = !dynamic_blend && flags[Dirty::Blending];
     const bool vertex_input_dirty = flags[Dirty::VertexInput];
     const bool patch_blending = patch && !by_value && blending_dirty;
-    const bool patch_vertex_input =
-        patch && vertex_input_dirty && dynamic_features.has_dynamic_vertex_input;
+    const bool patch_vertex_input = (patch || vertex_mode != 0) && vertex_input_dirty &&
+                                    dynamic_features.has_dynamic_vertex_input;
     // The first reason the last Refresh's key may not stand (index into clean.miss_reasons),
     // EDEN_NX2_EXP54 (live, 0 = off): with extended dynamic state 1 and 2 the key holds only the
     // topology's class (FixedPipelineState::KeyTopology) and the draw sets the topology itself, so
@@ -2347,7 +2354,7 @@ GraphicsPipeline* PipelineCache::CurrentGraphicsPipelineClean(bool patch) {
                      per_second(clean.hits), per_second(clean.patches), by_value ? " on" : " off",
                      per_second(clean.blend_saved), programs_mode,
                      per_second(clean.programs_only),
-                     programs_mode == 2
+                     programs_mode == 2 || vertex_mode == 2
                          ? fmt::format(", verified {} in {:.0f} s, {} differ",
                                        clean.programs_verified, seconds,
                                        clean.programs_mismatches)
@@ -2405,7 +2412,7 @@ GraphicsPipeline* PipelineCache::CurrentGraphicsPipelineClean(bool patch) {
             }
             TakeCleanBlendSnapshot(); // No ranges unless by_value
         }
-        if (programs_only && programs_mode == 2) {
+        if ((programs_only && programs_mode == 2) || (patch_vertex_input && vertex_mode == 2)) {
             // Verify: the full Refresh must build the same key, byte for byte. Its key is kept
             // (and its flag clears, as a miss would do them).
             const GraphicsPipelineCacheKey fast = graphics_key;
@@ -2416,7 +2423,7 @@ GraphicsPipeline* PipelineCache::CurrentGraphicsPipelineClean(bool patch) {
                 if (clean.programs_mismatches_logged < 16) {
                     ++clean.programs_mismatches_logged;
                     LOG_WARNING(Render_Vulkan,
-                                "Programs-only key (EXP52=2) differs from Refresh{} (programs "
+                                "Patched key (EXP52=2 / EXP55=2) differs from Refresh{} (programs "
                                 "{:016x}):{}",
                                 fast == graphics_key ? " outside the hashed bytes" : "",
                                 fmt::join(graphics_key.unique_hashes, " "),
