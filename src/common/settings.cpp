@@ -19,6 +19,7 @@
 #include <deque>
 #include <fmt/core.h>
 
+#include "common/scm_rev.h"
 #include "common/settings_enums.h"
 #include "common/assert.h"
 #include "common/fs/fs_util.h"
@@ -393,6 +394,25 @@ void UpdateRescalingInfo() {
     const auto setup = values.resolution_setup.GetValue();
     auto& info = values.resolution_info;
     TranslateResolutionInfo(setup, info);
+}
+
+// The Ocarina2 fork removed frame generation entirely (it caused camera flicker). These
+// permanently-disabled shims exist only so call sites merged from Fritchii keep working;
+// frame generation never runs here, exactly like the upstream "Fritchii" build behaviour.
+u32 FrameGenMultiplier() {
+    return 1;
+}
+
+bool FrameGenActive() {
+    return false;
+}
+
+size_t FrameGenGenerations() {
+    return 0;
+}
+
+size_t FrameGenMaxGenerations() {
+    return 0;
 }
 
 void RestoreGlobalState(bool is_powered_on) {
