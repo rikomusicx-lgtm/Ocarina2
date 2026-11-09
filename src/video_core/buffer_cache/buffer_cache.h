@@ -2940,37 +2940,6 @@ void BufferCache<P>::Nx2NoteListSynced(DAddr page) {
 template <class P>
 void BufferCache<P>::Nx2FlushListPages(std::span<const DAddr> pages) {
     constexpr u64 page_size = u64{1} << Tegra::Nx2WrittenPageBits;
-    std::vector<std::pair<DAddr, u64>> ranges;
-    for (const DAddr page : pages) {
-        ranges.emplace_back(page, page_size);
-    }
-    std::vector<std::pair<DAddr, u64>> drawn;
-    if constexpr (!IS_OPENGL) {
-        std::scoped_lock lock{nx2_list_mutex};
-        for (const auto& [page, entry] : nx2_list_pages) {
-            if (entry.draw_written && entry.synced_writes != entry.writes) {
-                ranges.emplace_back(page, page_size);
-                drawn.emplace_back(page, entry.writes);
-            }
-        }
-    }
-    DownloadMemoryRanges(ranges);
-    if constexpr (!IS_OPENGL) {
-        std::scoped_lock lock{nx2_list_mutex};
-        for (const auto& [page, writes] : drawn) {
-            Nx2ListPage& entry = nx2_list_pages[page];
-            if (entry.writes == writes) {
-                entry.synced_writes = writes;
-                entry.gpu_words.reset();
-                entry.flushed = true;
-            }
-        }
-    }
-}
-
-template <class P>
-void BufferCache<P>::Nx2FlushListPages(std::span<const DAddr> pages) {
-    constexpr u64 page_size = u64{1} << Tegra::Nx2WrittenPageBits;
     boost::container::small_vector<std::pair<DAddr, u64>, 16> ranges;
     for (const DAddr page : pages) {
         ranges.emplace_back(page, page_size);

@@ -259,6 +259,7 @@ private:
     const Device& device;
     MemoryAllocator& memory_allocator;
     Scheduler& scheduler;
+    FrameDumpSchedule schedule;
 
     /// EDEN_NX2_FRAME_DUMP_SAMPLED_FROM: passes before this one do not read back sampled textures.
     u32 sampled_from_pass{};

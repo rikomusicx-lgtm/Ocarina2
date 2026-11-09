@@ -2065,7 +2065,8 @@ void Maxwell3D::FrontNoteMemoryWrite(VideoCommon::GpuSplit& split, FrontState& f
     split.SetWriteStampTag(fs.upload_tag);
     split.NoteMemoryWriteData(fs.upload_device + fs.upload_offset, words, whole);
     if (whole < count && remaining_bytes % 4 != 0) {
-        split.NoteMemoryWrite(fs.upload_device + fs.upload_offset + whole * 4, remaining_bytes % 4);
+        split.NoteMemoryWrite(fs.upload_device + fs.upload_offset + whole * 4, remaining_bytes % 4,
+                              "upload tail");
     }
     split.SetWriteStampTag(0);
     if (VideoCommon::QmdPrediction::MirrorMode()) {
