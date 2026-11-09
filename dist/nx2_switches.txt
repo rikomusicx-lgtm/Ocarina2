@@ -10,9 +10,9 @@
 #
 # Restart the emulator after editing.
 
-# GPU thread split: NOT forced on by default. On low-end docked hardware the mesh/task indirect
+# GPU thread split: NOT forced on by default. On low-end hardware the mesh/task indirect
 # draws read before the GPU writers commit the page map and the scene goes black in bursts
-# (measured with EDEN_NX2_FLASH_WATCH); the OOT docked preset disables the split for that reason.
+# (measured with EDEN_NX2_FLASH_WATCH); the OOT preset disables the split for that reason.
 # If your card is not VRAM-bound and you want +54% in the menus/between scenes, set
 # EDEN_NX2_SPLIT=2 in your own nx2_switches.txt (%APPDATA%\eden\nx2_switches.txt) - your copy
 # wins over this one, and over the preset.
@@ -47,13 +47,6 @@ EDEN_NX2_FENCE_BATCH=1
 # asking at the boot dialog, and enable the built-in Dynamic FPS and Max Resolution patches.
 # Useful for test harnesses and automated benchmarking; has no effect on other games.
 #EDEN_NX2_OOT_PRESET=1
-#
-# Internal resolution override for the OOT preset. The OOT preset renders at 0.75x so low-end
-# cards can drive the scene. Set to 1X to render natively: 1X keeps every guest image at its
-# true size (including depth), which is what the NVIDIA DLSS replacement in this fork needs to
-# run. Use with EDEN_NX2_GRAPHICS_SCALE=20 to shrink the game's output to its 1440p mode, which
-# fits NGX on 6 GB of VRAM and lets DLSS actually engage.
-#EDEN_NX2_OOT_RESOLUTION=1X
 #
 # Graphics scale reported to Switch 2 titles via the nx2 graphics-scale service. 10 = the
 # game's default, 20 = a lower render/output mode, 30 = the lowest. For The Legend of Zelda:

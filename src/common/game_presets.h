@@ -3,7 +3,6 @@
 #pragma once
 
 #include <cstdlib>
-#include <string_view>
 #include "common/settings.h"
 
 namespace Settings {
@@ -52,36 +51,42 @@ inline void SetOcarinaOfTimePerformanceSettings(Values& settings, bool global,
         setting.SetValue(value);
     };
     session(settings.renderer_backend, RendererBackend::Vulkan);
-    // 1080p docked: render at 0.75x (1080p native presentation), which still leaves the game
-    // at its native docked resolution. The 1440p internal path the remake asks for exceeds
-    // what a 6 GB card can drive at 30 FPS in this scene, and NativeSeqRef at 1080p is the
-    // baseline this fork exists for on low-end PCs.
-    // EDEN_NX2_OOT_RESOLUTION=1X overrides the downscale: at 0.75x the emulator rescales guest
-    // images (for the host) and the depth view stops matching the DLSS input contract, so DLSS
-    // can never engage; 1X renders natively and lets DLSS replace the game's upscaler.
-    const char* const resolution_override = std::getenv("EDEN_NX2_OOT_RESOLUTION");
-    const ResolutionSetup resolution =
-        (resolution_override && std::string_view{resolution_override} == "1X")
-            ? ResolutionSetup::Res1X
-            : ResolutionSetup::Res3_4X;
-    session(settings.resolution_setup, resolution);
+    // The preset mirrors the owner's tuned handheld Ocarina of Time session: Fast GPU mode
+    // with immediate fences/VSync and unsafe DMA reads, 4 GB guest layout, aggressive VRAM
+    // usage and Force Max Clock - what the game needs to hold its frame rate on low-end PCs.
+    session(settings.resolution_setup, ResolutionSetup::Res1X);
     session(settings.gpu_accuracy, GpuAccuracy::Low);
+    session(settings.use_asynchronous_gpu_emulation, true);
     session(settings.use_asynchronous_shaders, true);
     session(settings.astc_recompression, AstcRecompression::Bc3);
-    session(settings.vram_usage_mode, VramUsageMode::Conservative);
+    session(settings.accelerate_astc, AstcDecodeMode::Gpu);
+    session(settings.vram_usage_mode, VramUsageMode::Aggressive);
     session(settings.nvdec_emulation, NvdecEmulation::Gpu);
     session(settings.use_reactive_flushing, false);
-    // Don't override the user's Docked/Handheld choice: the built-in Max Resolution patch keeps
-    // the render at 1080p either way, and the console mode only changes the guest's output size.
-    session(settings.scaling_filter, ScalingFilter::Bilinear);
+    session(settings.vsync_mode, VSyncMode::Immediate);
+    session(settings.gpu_fence_behavior, GpuFenceBehavior::Immediate);
+    session(settings.dma_accuracy, DmaAccuracy::Unsafe);
+    session(settings.async_presentation, true);
+    session(settings.renderer_force_max_clock, true);
+    session(settings.scaling_filter, ScalingFilter::Area);
     session(settings.anti_aliasing, AntiAliasing::None);
     session(settings.post_shader_enabled, false);
-    // Max Resolution is on by default: it fixes the render at 1080p, which is what users on a
-    // 3050-class card want. Turning it off only lowers internal resolution (about 2-3 fps).
-    // The GPU thread split is turned off for this preset: at docked the mesh-shader workload
-    // produces zero-indirect-draw frames when the indirect buffer is read before the GPU writer
-    // commits it (the page-map race) - empirically, water and the scene go black in bursts with
-    // the split on, and the flashes stop with it off.
+    session(settings.nvidia_dlss, false);
+    session(settings.max_anisotropy, AnisotropyMode::Automatic);
+    session(settings.frame_pacing_mode, FramePacingMode::Target_Auto);
+    session(settings.aspect_ratio, AspectRatio::R16_9);
+    session(settings.gpu_unswizzle_texture_size, GpuUnswizzleSize::VeryLarge);
+    session(settings.memory_layout_mode, MemoryLayout::Memory_4Gb);
+    session(settings.cpu_accuracy, CpuAccuracy::Unsafe);
+    session(settings.sync_core_speed, true);
+    session(settings.use_docked_mode, ConsoleMode::Handheld);
+    // Max Resolution is on by default: it fixes the render at the full scale for the console
+    // mode, which is what users on a 3050-class card want. Turning it off only lowers internal
+    // resolution (about 2-3 fps).
+    // The GPU thread split is turned off for this preset: the mesh-shader workload produces
+    // zero-indirect-draw frames when the indirect buffer is read before the GPU writer commits
+    // it (the page-map race) - empirically, water and the scene go black in bursts with the
+    // split on, and the flashes stop with it off.
     settings.oot_split_disabled = true;
     settings.oot_max_resolution_preset_enabled = max_resolution;
     settings.oot_dynamic_fps_preset_enabled = true;

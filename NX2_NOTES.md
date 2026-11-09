@@ -512,3 +512,28 @@ native-with-DLSS is in-game: set the graphics output to 1080p (a real docked TV)
 "Force Max Resolution" unchecked (the build-119 default on <= 6.5 GB cards); the game then
 renders dynamically and DLSS upscales to 1080p. Do not publish the release until this is
 measured.
+
+## 2026-11-09 - OOT 60 FPS preset is now the owner's tuned handheld session
+
+The water flicker in Fast mode (kokiri, docked runs) traces to the GPU-thread split reading the
+indirect-draw buffer before the GPU writer commits the page map (2026-11-08 night entry). The
+owner's own session config never picked up the split disable: `oot_split_disabled` is a runtime
+bool set only when the "Ocarina of Time 60 FPS settings" dialog is accepted (or
+EDEN_NX2_OOT_PRESET=1), and launching on his own tuned settings leaves the split on.
+
+The OOT preset now IS his session (the settings enabled throughout his emulator on 11-09,
+qt-config 0400486024DEC000.ini effective values): Vulkan, resolution Res1X (was 0.75x), GPU
+Fast (Low), handheld mode (was docked), 4 GB memory layout (was code default 8 GB), immediate
+VSync and GPU fences, unsafe DMA reads, aggressive VRAM usage, async shaders + presentation,
+reactive flushing off, Area scaling filter (was bilinear), no AA/post-processing, DLSS off
+(was on globally; the NGX 4K wall made it decline every frame anyway), Force Max Clock, very
+large GPU unswizzle, CPU Unsafe, sync-core-speed on. Still sets `oot_split_disabled` (the
+water fix) plus the Dynamic FPS / preflush / Max Resolution patch defaults. Unchanged: Add-Ons
+disables still win, MKW preset untouched, emulator code defaults untouched.
+
+`EDEN_NX2_OOT_RESOLUTION` is gone (the preset renders natively); `dist/nx2_switches.txt` no
+longer documents it. The boot dialog text describes the new preset. tests/common/game_presets.cpp
+locks the new values in. Note: memory_layout_mode=Memory_4Gb and CPU Unsafe are in the preset
+because the owner asked for exactly what he has enabled; they are the riskiest knobs on other
+hardware if anyone reports trouble - raise to Memory_8Gb / CPU Auto first.
+Not built or tagged as of this writing; verify a boot accepts the dialog and the water holds.

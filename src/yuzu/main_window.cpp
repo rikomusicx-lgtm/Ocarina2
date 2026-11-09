@@ -2141,10 +2141,10 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
         QMessageBox oot_settings_dialog(
             QMessageBox::Question, tr("Ocarina of Time 60 FPS settings"),
             tr("Use the 60 FPS settings for Ocarina of Time?\n\n"
-               "Vulkan, 1x resolution, GPU Low, asynchronous shaders, BC3, conservative VRAM, "
-               "GPU video decoding, bilinear scaling, no AA or post-processing, reactive "
-               "flushing off, the built-in Dynamic FPS patch, and DLSS Super Resolution for "
-               "the game's upscale pass when DLSS fits in VRAM.\n\n"
+               "Vulkan, 1x resolution, GPU Fast, handheld mode, 4 GB memory layout, immediate "
+               "VSync and GPU fences, unsafe DMA reads, aggressive VRAM usage, Force Max Clock, "
+               "asynchronous shaders and presentation, Area scaling, no AA or post-processing, "
+               "reactive flushing off, DLSS off, and the built-in Dynamic FPS patch.\n\n"
                "These settings apply until Lichii is closed. Your saved settings are not "
                "changed. Patches you disabled in Add-Ons stay disabled."),
             QMessageBox::Yes | QMessageBox::No, this);

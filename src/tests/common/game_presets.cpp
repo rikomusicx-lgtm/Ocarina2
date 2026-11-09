@@ -58,6 +58,25 @@ TEST_CASE("OOT 60 FPS preset applies with frame generation removed", "[game_pres
     CHECK(settings->oot_dynamic_fps_preset_enabled);
     CHECK(settings->oot_preflush_preset_enabled);
     CHECK(settings->oot_max_resolution_preset_enabled);
+    // The preset mirrors the owner's tuned handheld session (2026-11-09): Fast mode, immediate
+    // fences/VSync, unsafe DMA, aggressive VRAM, 4 GB layout, handheld console mode, DLSS off.
+    CHECK(settings->renderer_backend.GetValue() == Settings::RendererBackend::Vulkan);
+    CHECK(settings->resolution_setup.GetValue() == Settings::ResolutionSetup::Res1X);
+    CHECK(settings->gpu_accuracy.GetValue() == Settings::GpuAccuracy::Low);
+    CHECK(settings->use_asynchronous_shaders.GetValue());
+    CHECK(settings->astc_recompression.GetValue() == Settings::AstcRecompression::Bc3);
+    CHECK(settings->vsync_mode.GetValue() == Settings::VSyncMode::Immediate);
+    CHECK(settings->gpu_fence_behavior.GetValue() == Settings::GpuFenceBehavior::Immediate);
+    CHECK(settings->dma_accuracy.GetValue() == Settings::DmaAccuracy::Unsafe);
+    CHECK(settings->vram_usage_mode.GetValue() == Settings::VramUsageMode::Aggressive);
+    CHECK(settings->async_presentation.GetValue());
+    CHECK(settings->use_reactive_flushing.GetValue() == false);
+    CHECK(settings->nvidia_dlss.GetValue() == false);
+    CHECK(settings->post_shader_enabled.GetValue() == false);
+    CHECK(settings->memory_layout_mode.GetValue() == Settings::MemoryLayout::Memory_4Gb);
+    CHECK(settings->cpu_accuracy.GetValue() == Settings::CpuAccuracy::Unsafe);
+    CHECK(settings->use_docked_mode.GetValue() == Settings::ConsoleMode::Handheld);
+    CHECK(settings->oot_split_disabled);
     for (const auto& restore : settings->linkage.restore_functions) {
         restore();
     }
