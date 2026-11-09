@@ -27,7 +27,7 @@ TEST_CASE("Production pipeline build holds a draw without blocking its producer"
     std::promise<void> release, entered;
     auto gate = release.get_future().share();
     int output = 0;
-    PipelineBuild build{&workers, [reservation = std::shared_ptr{budget.TryAcquire(true)},
+    PipelineBuild build{&workers, [reservation = std::shared_ptr{budget.TryAcquire(true, true)},
                                    gate, &entered, &output] {
                             entered.set_value();
                             gate.wait();
@@ -35,7 +35,7 @@ TEST_CASE("Production pipeline build holds a draw without blocking its producer"
                         }};
     entered.get_future().wait();
     const bool building = !build.IsBuilt();
-    const bool saturated = !budget.TryAcquire(true);
+    const bool saturated = !budget.TryAcquire(true, true);
     auto draw = std::async(std::launch::async, [&] { build.Wait(); });
     const bool held = Pending(draw);
     int producer_progress = 0;
@@ -50,7 +50,7 @@ TEST_CASE("Production pipeline build holds a draw without blocking its producer"
     REQUIRE(build.IsBuilt());
     REQUIRE_FALSE(build.Failed());
     REQUIRE(budget.Pending() == 0);
-    REQUIRE(budget.TryAcquire(true));
+    REQUIRE(budget.TryAcquire(true, true));
 }
 
 TEST_CASE("Out of order pipeline completions preserve scheduler draw order",
@@ -86,7 +86,7 @@ TEST_CASE("Pipeline worker exceptions release captures and notify every draw wai
         EmissionBudget budget{1};
         std::promise<void> release, entered;
         auto gate = release.get_future().share();
-        PipelineBuild build{&workers, [reservation = std::shared_ptr{budget.TryAcquire(true)},
+        PipelineBuild build{&workers, [reservation = std::shared_ptr{budget.TryAcquire(true, true)},
                                        gate, &entered, standard_exception] {
                                 entered.set_value();
                                 gate.wait();
@@ -104,7 +104,7 @@ TEST_CASE("Pipeline worker exceptions release captures and notify every draw wai
         REQUIRE(build.IsBuilt());
         REQUIRE(build.Failed());
         REQUIRE(budget.Pending() == 0);
-        REQUIRE(budget.TryAcquire(true));
+        REQUIRE(budget.TryAcquire(true, true));
     }
 }
 
@@ -142,7 +142,7 @@ TEST_CASE("Pipeline destruction drains queued work before owner resources disapp
     entered.get_future().wait();
     auto resource = std::make_unique<int>(0);
     auto build = std::make_unique<PipelineBuild>(
-        &workers, [reservation = std::shared_ptr{budget.TryAcquire(true)},
+        &workers, [reservation = std::shared_ptr{budget.TryAcquire(true, true)},
                    output = resource.get()] { *output = 42; });
     build.reset();
     const int result = *resource;
@@ -161,7 +161,7 @@ TEST_CASE("Pipeline destruction waits for a running callback and its cleanup",
     auto gate = release.get_future().share();
     auto resource = std::make_unique<int>(0);
     auto build = std::make_unique<PipelineBuild>(
-        &workers, [reservation = std::shared_ptr{budget.TryAcquire(true)}, gate, &entered,
+        &workers, [reservation = std::shared_ptr{budget.TryAcquire(true, true)}, gate, &entered,
                    output = resource.get()] {
             entered.set_value();
             gate.wait();
@@ -180,14 +180,15 @@ TEST_CASE("Pipeline destruction waits for a running callback and its cleanup",
 TEST_CASE("Emission reservations enforce the production fallback and survive budget teardown",
           "[video_core][async_draw][pipeline_build]") {
     auto budget = std::make_unique<EmissionBudget>(2);
-    REQUIRE_FALSE(budget->TryAcquire(false));
-    auto first = budget->TryAcquire(true);
-    auto second = budget->TryAcquire(true);
+    REQUIRE_FALSE(budget->TryAcquire(false, true));
+    REQUIRE_FALSE(budget->TryAcquire(true, false));
+    auto first = budget->TryAcquire(true, true);
+    auto second = budget->TryAcquire(true, true);
     REQUIRE(first);
     REQUIRE(second);
-    REQUIRE_FALSE(budget->TryAcquire(true));
+    REQUIRE_FALSE(budget->TryAcquire(true, true));
     first.reset();
-    REQUIRE(budget->TryAcquire(true));
+    REQUIRE(budget->TryAcquire(true, true));
     REQUIRE(budget->Pending() == 1);
     budget.reset();
     second.reset();

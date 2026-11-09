@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
+#include <span>
 #include <array>
 #include <cstddef>
 #include <cstdlib>
@@ -48,10 +49,14 @@ constexpr std::array<const char*, 14> EXEFS_FILE_NAMES{
     "subsdk3", "subsdk4",   "subsdk5", "subsdk6", "subsdk7", "subsdk8", "subsdk9",
 };
 
+/// Bytes a built-in patch writes at an offset into the module's code (after the NSO header; an
+/// exefs IPS patch's offset is 0x100 more). With `checked`, the module must hold `original` there.
 struct BuiltinPatchRecord {
     size_t module_offset;
     std::span<const u8> bytes;
-    std::span<const u8> original;
+    bool checked = false;
+    u32 original = 0;
+    /// When set, the patch writes to zero-filled executable padding after the code (a code cave).
     bool executable_padding = false;
 };
 
@@ -66,15 +71,24 @@ struct BuiltinPatch {
     /// When set, the patch applies only while this environment variable is "1" (A/B before it
     /// becomes a default).
     const char* enable_env = nullptr;
+    /// When set, this environment variable at 1 skips the patch and at 0 applies it even when
+    /// Add-Ons has it off (A/B runs without touching the player's Add-Ons).
+    const char* disable_env = nullptr;
 };
 
-constexpr std::array<u8, 4> MAX_RESOLUTION_ORIGINAL{0xE8, 0x41, 0x00, 0x36};
-constexpr std::array<u8, 4> MAX_RESOLUTION_BRANCH{0x0F, 0x02, 0x00, 0x14};
+// Ocarina of Time takes its "dynamic resolution disabled" path, so the 3D renders at full scale
+// instead of following the GPU-time controller down to its 480p floor.
+constexpr std::array<u8, 4> MAX_RESOLUTION_BRANCH{0x0F, 0x02, 0x00, 0x14}; // b 0x80640c
 constexpr std::array MAX_RESOLUTION_RECORDS{
-    BuiltinPatchRecord{0x805BD0, MAX_RESOLUTION_BRANCH, MAX_RESOLUTION_ORIGINAL},
+    BuiltinPatchRecord{.module_offset = 0x805BD0,
+                       .bytes = MAX_RESOLUTION_BRANCH,
+                       .checked = true,
+                       .original = 0x360041E8}, // tbz w8, #0, 0x80640c
 };
 
-constexpr std::array<u8, 4> DYNAMIC_FPS_ORIGINAL{0x28, 0x18, 0x20, 0x1E};
+// Dynamic FPS by Dark (Eglantine Dev), bundled with his permission: the game's frame step follows
+// the time measured with the system counter instead of assuming 30 fps, so it runs at full speed
+// at any frame rate. A call (bl 0x3c46200) to a routine in unused space after the code.
 constexpr std::array<u8, 4> DYNAMIC_FPS_CALL{0x4F, 0x7D, 0xD5, 0x94};
 constexpr std::array<u8, 120> DYNAMIC_FPS_ROUTINE{
     0x28, 0x18, 0x20, 0x1E, 0xCA, 0x92, 0x00, 0xB0, 0x4A, 0x01, 0x38, 0x91, 0x2B, 0xE0, 0x3B,
@@ -89,33 +103,53 @@ constexpr std::array<u8, 120> DYNAMIC_FPS_ROUTINE{
     0x00, 0x00, 0x54, 0x48, 0x40, 0x20, 0x1E, 0xC0, 0x03, 0x5F, 0xD6, 0x0A, 0xD7, 0x83, 0x3F,
 };
 constexpr std::array DYNAMIC_FPS_RECORDS{
-    BuiltinPatchRecord{0x6E6CC4, DYNAMIC_FPS_CALL, DYNAMIC_FPS_ORIGINAL},
-    BuiltinPatchRecord{0x3C46200, DYNAMIC_FPS_ROUTINE, {}, true},
+    BuiltinPatchRecord{.module_offset = 0x6E6CC4,
+                       .bytes = DYNAMIC_FPS_CALL,
+                       .checked = true,
+                       .original = 0x1E201828}, // {0x28, 0x18, 0x20, 0x1E}, little-endian
+    BuiltinPatchRecord{.module_offset = 0x3C46200,
+                       .bytes = DYNAMIC_FPS_ROUTINE,
+                       .executable_padding = true},
 };
 
 // Occlusion Off (cLohan's community patch, from zortos293/Lichii#641): the game creates no
 // z-prepass occlusion queries and no samples-passed queries (ldrb w8, [x0] -> mov w8, wzr), so it
 // issues no occlusion reports and no conditional renders; every candidate object is drawn.
 constexpr std::array<u8, 4> MOV_W8_WZR{0xE8, 0x03, 0x1F, 0x2A};
-constexpr std::array<u8, 4> LDRB_W8_X0{0x08, 0x00, 0x40, 0x39};
+constexpr u32 LDRB_W8_X0 = 0x39400008;
 constexpr std::array OCCLUSION_OFF_RECORDS{
-    BuiltinPatchRecord{0x11ACE68, MOV_W8_WZR, LDRB_W8_X0},
-    BuiltinPatchRecord{0x11B828C, MOV_W8_WZR, LDRB_W8_X0},
-    BuiltinPatchRecord{0x11B82A4, MOV_W8_WZR, LDRB_W8_X0},
-    BuiltinPatchRecord{0x11ACEC8, MOV_W8_WZR, LDRB_W8_X0},
-    BuiltinPatchRecord{0x11B82DC, MOV_W8_WZR, LDRB_W8_X0},
-    BuiltinPatchRecord{0x11B82F4, MOV_W8_WZR, LDRB_W8_X0},
+    BuiltinPatchRecord{.module_offset = 0x11ACE68, .bytes = MOV_W8_WZR, .checked = true, .original = LDRB_W8_X0},
+    BuiltinPatchRecord{.module_offset = 0x11B828C, .bytes = MOV_W8_WZR, .checked = true, .original = LDRB_W8_X0},
+    BuiltinPatchRecord{.module_offset = 0x11B82A4, .bytes = MOV_W8_WZR, .checked = true, .original = LDRB_W8_X0},
+    BuiltinPatchRecord{.module_offset = 0x11ACEC8, .bytes = MOV_W8_WZR, .checked = true, .original = LDRB_W8_X0},
+    BuiltinPatchRecord{.module_offset = 0x11B82DC, .bytes = MOV_W8_WZR, .checked = true, .original = LDRB_W8_X0},
+    BuiltinPatchRecord{.module_offset = 0x11B82F4, .bytes = MOV_W8_WZR, .checked = true, .original = LDRB_W8_X0},
+};
+
+// Resource poll backoff (zortos293/Lichii#641): the resource request thread (main+0xF7A0)
+// rescans its pending requests at once when one is not ready (`tbz w8, #0, loop` at main+0x14ABC,
+// w8 = "all done"). That branch now goes through the zero padding at main+0x17088: `svc #0xf3`
+// (a short sleep while EXP25 is on, core/hle/kernel/svc/svc_nx2_oot_poll.cpp) and `b loop`.
+constexpr std::array<u8, 4> POLL_RESCAN_BRANCH{0x68, 0x2E, 0x01, 0x36};  // tbz w8, #0, 0x17088
+constexpr std::array<u8, 4> POLL_BACKOFF_SVC{0x61, 0x1E, 0x00, 0xD4};    // svc #0xf3
+constexpr std::array<u8, 4> POLL_BACKOFF_RETURN{0x0D, 0xE2, 0xFF, 0x17}; // b 0xf8c0
+constexpr std::array POLL_BACKOFF_RECORDS{
+    BuiltinPatchRecord{.module_offset = 0x14ABC,
+                       .bytes = POLL_RESCAN_BRANCH,
+                       .checked = true,
+                       .original = 0x36057028}, // tbz w8, #0, 0xf8c0
+    BuiltinPatchRecord{.module_offset = 0x17088, .bytes = POLL_BACKOFF_SVC, .checked = true, .original = 0},
+    BuiltinPatchRecord{.module_offset = 0x1708C, .bytes = POLL_BACKOFF_RETURN, .checked = true, .original = 0},
 };
 
 constexpr std::array BUILTIN_PATCHES{
-    // Ocarina of Time takes its "dynamic resolution disabled" path, so the 3D renders at full scale
-    // instead of following the GPU-time controller down to its 480p floor.
     BuiltinPatch{
         .name = "Max Resolution (built-in)",
         .title_id = 0x0400486024DEC000,
         .module = "main",
         .build_id = "E0F3CCFAF50065AE4EA01EB5AEB13B1A45DA3348",
         .records = MAX_RESOLUTION_RECORDS,
+        .disable_env = "EDEN_NX2_NO_MAX_RES",
     },
     BuiltinPatch{
         .name = "Dynamic FPS by Dark (built-in)",
@@ -133,6 +167,14 @@ constexpr std::array BUILTIN_PATCHES{
         .build_id = "E0F3CCFAF50065AE4EA01EB5AEB13B1A45DA3348",
         .records = OCCLUSION_OFF_RECORDS,
         .enable_env = "EDEN_NX2_OCCLUSION_OFF",
+    },
+    BuiltinPatch{
+        .name = "Resource poll backoff (built-in, EDEN_NX2_OOT_POLL_BACKOFF=1)",
+        .title_id = 0x0400486024DEC000,
+        .module = "main",
+        .build_id = "E0F3CCFAF50065AE4EA01EB5AEB13B1A45DA3348",
+        .records = POLL_BACKOFF_RECORDS,
+        .enable_env = "EDEN_NX2_OOT_POLL_BACKOFF",
     },
 };
 
@@ -423,7 +465,10 @@ VirtualDir PatchManager::PatchExeFS(VirtualDir exefs) const {
     const auto load_dir = GetModificationLoadRoot();
     const auto sdmc_load_dir = GetModificationLoadRoot(true);
 
-    std::vector<VirtualDir> patch_dirs = {sdmc_load_dir};
+    std::vector<VirtualDir> patch_dirs;
+    if (sdmc_load_dir != nullptr) {
+        patch_dirs.push_back(sdmc_load_dir);
+    }
     if (load_dir != nullptr) {
         const auto load_patch_dirs = load_dir->GetSubdirectories();
         patch_dirs.insert(patch_dirs.end(), load_patch_dirs.begin(), load_patch_dirs.end());
@@ -582,8 +627,15 @@ std::vector<u8> PatchManager::PatchNSO(const std::vector<u8>& nso, const std::st
                      patch.name);
             continue;
         }
-        if (user_disabled) {
-            // The preset must not override a patch the user disabled for this game in Add-Ons.
+        // disable_env=1 skips the patch, =0 applies it even when Add-Ons has it off (A/B runs).
+        const char* const ab_value = patch.disable_env ? std::getenv(patch.disable_env) : nullptr;
+        const std::string_view ab{ab_value ? ab_value : ""};
+        if (ab == "1") {
+            LOG_INFO(Loader, "    - Skipping \"{}\": {}=1", patch.name, patch.disable_env);
+            continue;
+        }
+        // The preset must not override a patch the user disabled for this game in Add-Ons.
+        if (ab != "0" && user_disabled) {
             LOG_INFO(Loader, "    - Skipping \"{}\": disabled in Add-Ons", patch.name);
             continue;
         }
@@ -625,17 +677,18 @@ std::vector<u8> PatchManager::PatchNSO(const std::vector<u8>& nso, const std::st
                 continue;
             }
         }
+        // Every record must fit and hold its original bytes, and none may have been patched by a
+        // user mod already (the mod's patch is used then, for all records).
         bool apply = true;
-        for (const auto& record : patch.records) {
+        for (const BuiltinPatchRecord& record : patch.records) {
+            const size_t offset = sizeof(Loader::NSOHeader) + record.module_offset;
             if (!fits(nso, record.module_offset, record.bytes.size()) ||
-                !fits(out, record.module_offset, record.bytes.size()) ||
-                !fits(nso, record.module_offset, record.original.size())) {
+                !fits(out, record.module_offset, record.bytes.size())) {
                 LOG_WARNING(Loader, "    - Skipping \"{}\": {}+{:#x} is past the module's end",
                             patch.name, name, record.module_offset);
                 apply = false;
                 break;
             }
-            const size_t offset = sizeof(Loader::NSOHeader) + record.module_offset;
             if (record.executable_padding) {
                 const auto& text = header.segments[0];
                 const u64 text_end = u64{text.location} + text.size;
@@ -652,15 +705,23 @@ std::vector<u8> PatchManager::PatchNSO(const std::vector<u8>& nso, const std::st
                     break;
                 }
             }
-            if (!std::equal(record.original.begin(), record.original.end(), nso.begin() + offset)) {
-                LOG_WARNING(Loader, "    - Skipping \"{}\": unexpected original bytes at {}+{:#x}",
-                            patch.name, name, record.module_offset);
-                apply = false;
-                break;
+            if (record.checked) {
+                u32 original;
+                std::memcpy(&original, nso.data() + offset, sizeof(original));
+                if (original != record.original) {
+                    LOG_WARNING(Loader,
+                                "    - Skipping \"{}\": {}+{:#x} holds {:#010x}, expected {:#010x}",
+                                patch.name, name, record.module_offset, original, record.original);
+                    apply = false;
+                    break;
+                }
             }
-            if (!std::equal(nso.begin() + offset, nso.begin() + offset + record.bytes.size(),
+            if (!std::equal(record.bytes.begin(), record.bytes.end(), nso.begin() + offset) &&
+                !std::equal(nso.begin() + offset, nso.begin() + offset + record.bytes.size(),
                             out.begin() + offset)) {
-                LOG_INFO(Loader, "    - Skipping \"{}\": a user mod already patched {}+{:#x}",
+                LOG_INFO(Loader,
+                         "    - Skipping \"{}\": a user mod already patched {}+{:#x}, the mod's "
+                         "patch is used",
                          patch.name, name, record.module_offset);
                 apply = false;
                 break;
@@ -669,7 +730,7 @@ std::vector<u8> PatchManager::PatchNSO(const std::vector<u8>& nso, const std::st
         if (!apply) {
             continue;
         }
-        for (const auto& record : patch.records) {
+        for (const BuiltinPatchRecord& record : patch.records) {
             std::memcpy(out.data() + sizeof(Loader::NSOHeader) + record.module_offset,
                         record.bytes.data(), record.bytes.size());
         }
@@ -761,8 +822,12 @@ void PatchManager::ApplyLayeredFS(VirtualFile& romfs, ContentRecordType type) co
     }
 
     const auto disabled = GetDisabledAddons();
-    std::vector<VirtualDir> patch_dirs = load_dir->GetSubdirectories();
-    if (std::find(disabled.cbegin(), disabled.cend(), "SDMC") == disabled.cend()) {
+    std::vector<VirtualDir> patch_dirs;
+    if (load_dir != nullptr) {
+        patch_dirs = load_dir->GetSubdirectories();
+    }
+    if (std::find(disabled.cbegin(), disabled.cend(), "SDMC") == disabled.cend() &&
+        sdmc_load_dir != nullptr) {
         patch_dirs.push_back(sdmc_load_dir);
     }
     std::sort(patch_dirs.begin(), patch_dirs.end(),
@@ -1229,7 +1294,10 @@ std::vector<Patch> PatchManager::GetPatches(VirtualFile update_raw) const {
     }
 
     for (const auto& patch : BUILTIN_PATCHES) {
-        if (patch.title_id != title_id) {
+        if (patch.title_id != title_id ||
+            (patch.enable_env != nullptr &&
+             std::string_view{std::getenv(patch.enable_env) ? std::getenv(patch.enable_env) : ""} !=
+                 "1")) {
             continue;
         }
         if (patch.enable_env != nullptr) {

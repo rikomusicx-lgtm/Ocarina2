@@ -7,6 +7,7 @@
 #pragma once
 
 #include <atomic>
+#include <cstdlib>
 #include <deque>
 #include <limits>
 #include <map>
@@ -39,6 +40,7 @@
 #include "video_core/delayed_destruction_ring.h"
 #include "video_core/engines/fermi_2d.h"
 #include "video_core/game_dlss_status.h"
+#include "video_core/nx2.h"
 #include "video_core/surface.h"
 #include "video_core/texture_cache/descriptor_table.h"
 #include "video_core/texture_cache/image_base.h"
@@ -78,6 +80,17 @@ struct AsyncDecodeContext {
 };
 
 using TextureCacheGPUMap = ::Common::unordered_map<u64, std::vector<ImageId>, Common::IdentityHash<u64>>;
+
+/// The current draw's render targets as the asynchronous shaders' skip rule sees them
+/// (TextureCache::ClassifyDrawTargets): the class of the draw, and the target that gave it (the
+/// first of the draw's least safe class; address 0 for a draw without targets).
+struct DrawTargets {
+    DrawTargetClass kind{DrawTargetClass::Recurring};
+    GPUVAddr gpu_addr{};
+    u32 width{};
+    u32 height{};
+    VideoCore::Surface::PixelFormat format{};
+};
 
 class TextureCacheChannelInfo : public ChannelInfo {
 public:
@@ -151,8 +164,8 @@ class TextureCache : public VideoCommon::ChannelSetupCaches<TextureCacheChannelI
 
     static constexpr s64 DEFAULT_EXPECTED_MEMORY = 1_GiB + 125_MiB;
     static constexpr s64 DEFAULT_CRITICAL_MEMORY = 1_GiB + 625_MiB;
-    /// The most device memory the collector lets the cache fill before it collects in earnest,
-    /// on every GPU (ApplyThresholdOverrides).
+    /// The most device memory the collector lets the cache fill before it collects in earnest on
+    /// cards up to 8 GiB; larger ones 5/8 of the driver's budget (ApplyThresholdOverrides).
     static constexpr u64 MaxCriticalMemory = 5_GiB;
     static constexpr size_t GC_EMERGENCY_COUNTS = 2;
 
@@ -279,6 +292,12 @@ public:
         return render_targets;
     }
 
+    /// EDEN_NX2_ASYNC_DISCARD: classifies the render targets the current registers bind (the
+    /// bound ones when they are current, otherwise the registered images at the registers'
+    /// addresses; nothing is created). Takes the cache's lock. Meant for a draw whose pipeline is
+    /// missing, so it runs per miss, not per draw.
+    [[nodiscard]] DrawTargets ClassifyDrawTargets();
+
     /// Mark images in a range as modified from the CPU
     void WriteMemory(DAddr cpu_addr, size_t size);
 
@@ -352,6 +371,96 @@ public:
 
     /// Prepare an image to be used
     void PrepareImage(ImageId image_id, bool is_modification, bool invalidate);
+
+    /// EDEN_NX2_EXP32 (texture binding memo, after zortos293/Lichii#717's BINDMEMO): what the
+    /// graphics texture bindings of a draw are resolved against. With the same state, the same
+    /// handles and the same guest TIC/TSC entries, VisitImageView and GetSamplerId give the same
+    /// view and sampler ids: a view leaves a descriptor only through RemoveImageViewReferences
+    /// (image deleted, joined or rescaled), which moves `epoch`, as do a new channel and the
+    /// collector's out of memory table reset (null views made again); null views of unmapped
+    /// addresses follow the mappings (`map_serial`). Samplers are never deleted.
+    struct TextureMemoState {
+        const void* channel{};
+        const void* memory{};
+        GPUVAddr tic_pool{};
+        GPUVAddr tsc_pool{};
+        u32 tic_limit{};
+        u32 tsc_limit{};
+        u64 map_serial{};
+        u64 epoch{};
+
+        [[nodiscard]] bool operator==(const TextureMemoState&) const noexcept = default;
+    };
+
+    /// One texture binding's guest entries as the draw that resolved it read them.
+    struct TextureMemoEntry {
+        u32 tic_index{}; ///< ~0U: the handle is out of the pool (null view whatever memory holds)
+        u32 tsc_index{}; ///< ~0U: out of the pool (null sampler)
+        TICEntry tic{};
+        TSCEntry tsc{};
+    };
+
+    [[nodiscard]] TextureMemoState GraphicsTextureMemoState() const noexcept;
+
+    /// The entries the graphics tables resolved `tic_handle` and `tsc_handle` from in this draw;
+    /// false when the tables no longer hold them as resolved to `view` and `sampler`.
+    [[nodiscard]] bool TakeTextureMemoEntry(u32 tic_handle, u32 tsc_handle, ImageViewId view,
+                                            SamplerId sampler, TextureMemoEntry& entry) const;
+
+    /// Whether guest memory still holds the entry's TIC and TSC entries (read as
+    /// DescriptorTable::Read reads them).
+    [[nodiscard]] bool TextureMemoEntryCurrent(const TextureMemoState& state,
+                                               const TextureMemoEntry& entry) const;
+
+    /// Whether preparing the view for sampling (PrepareImageView(view, false, false)) would do
+    /// nothing but touch its image in the LRU: no CPU modification to upload, no aliases.
+    [[nodiscard]] bool TextureMemoViewClean(ImageViewId view) const noexcept;
+
+    /// What preparing the view does once its contents are clean: the image's LRU touch.
+    void TouchTextureMemoView(ImageViewId view) noexcept;
+
+    [[nodiscard]] u64 FrameTick() const noexcept {
+        return frame_tick;
+    }
+
+    /// What a clear's render target lookups did (RasterizerVulkan::Clear's "Slow clear" line):
+    /// ResetRenderTargetStats before UpdateRenderTargets, TakeRenderTargetStats after
+    /// GetFramebuffer. Counts and times of JoinImages, RemoveFramebuffers and GetFramebufferId.
+    struct RenderTargetStats {
+        u64 images_created{};
+        u64 images_deleted{};
+        u64 uploaded_bytes{};
+        u32 joins{};
+        u32 overlaps_walked{};      ///< Images region_check looked at
+        u32 bad_overlaps{};
+        u32 framebuffers_removed{};
+        u32 framebuffers_scanned{}; ///< Framebuffer map entries RemoveFramebuffers looked at
+        u32 framebuffers_created{};
+        u32 pooled_images{};        ///< New images that took a pooled VkImage (EXP42)
+        u32 relocated_images{};     ///< Images moved instead of made (EXP43=2)
+        u32 retired_images{};       ///< Predecessors deleted at once (EXP43=1)
+        u64 walk_ns{};              ///< JoinImages' overlap walk
+        u64 create_ns{};            ///< Making the new image (vkCreateImage, memory)
+        u64 refresh_ns{};           ///< Its upload (RefreshContents) or layout transition
+        u64 delete_ns{};            ///< Deleting the images it replaced
+        u64 framebuffer_ns{};       ///< New framebuffers
+        u64 framebuffer_map_size{}; ///< At TakeRenderTargetStats
+        u64 image_count{};
+    };
+    void ResetRenderTargetStats() noexcept {
+        rt_stats = {};
+        rt_stats_base = {images_created, images_deleted, uploaded_bytes};
+    }
+    [[nodiscard]] RenderTargetStats TakeRenderTargetStats() const noexcept {
+        RenderTargetStats stats = rt_stats;
+        const auto delta = [](u64 now, u64 base) { return now >= base ? now - base : now; };
+        stats.images_created = delta(images_created, rt_stats_base[0]);
+        stats.images_deleted = delta(images_deleted, rt_stats_base[1]);
+        stats.uploaded_bytes = delta(uploaded_bytes, rt_stats_base[2]);
+        stats.framebuffer_map_size = framebuffers.size();
+        stats.image_count = slot_images.size();
+        return stats;
+    }
 
     Common::SpinRecursiveMutex mutex;
 
@@ -492,6 +601,163 @@ private:
     /// Remove framebuffers using the given image views from the cache
     void RemoveFramebuffers(std::span<const ImageViewId> removed_views);
 
+    /// Render target relocation (EXP43, fable_answer_12 2A). Per shape (format, size, samples,
+    /// levels, layers), sticky for the session: a shape whose GPU-written contents were read in a
+    /// later frame (sampled, rendered to without a clear) or read by the CPU never relocates or
+    /// retires early, since its predecessor's contents may still be wanted.
+    enum RelocationGuard : u8 {
+        GuardSampled = 1,  ///< Sampled or copied from in a frame after the GPU wrote it
+        GuardLoaded = 2,   ///< Rendered to without a clear in a frame after the GPU wrote it
+        GuardCpuRead = 4,  ///< Read by the CPU (GetFlushArea, DownloadMemory)
+    };
+    struct RelocationShape {
+        u8 guard{};
+        bool candidate_logged{};
+        bool relocated_logged{};
+        u32 same_frame_refused{}; ///< Since the last report (render-frame clock line)
+    };
+    ::Common::unordered_map<u64, RelocationShape> relocation_shapes;
+    /// The guard by address too: OoT draws every dialogue box's text into a render target at one
+    /// address, sized to the box. Per shape, each new box size was relocated once before its
+    /// guard tripped, and that box's text showed other images' contents (2026-11-09, the owner).
+    ::Common::unordered_map<GPUVAddr, u8> relocation_guarded_addresses;
+    /// Since the last report (TickFrame, every 600 frames once a candidate was seen).
+    u64 relocation_candidates{};
+    u64 relocation_guarded{};
+    u64 relocation_relocated{};
+    u64 relocation_retired{};
+    u64 relocation_crowded{}; ///< Cleared targets over two or more images of their shape
+    u64 relocation_same_frame{}; ///< Candidates whose only predecessors were written this frame
+    bool relocation_seen{};
+
+    /// The frame last_write_frame, CheckCrossFrameUse and RelocationCandidate's same-frame rule
+    /// count in. frame_tick advances at the composite, a sync request the back serves wherever it
+    /// is, so one host tick holds the end of one guest frame and the start of the next
+    /// (fable_answer_16 1a). With EDEN_NX2_RENDER_CLOCK=1 it follows Tegra::g_nx2_render_frame
+    /// instead (bumped where the frame's last GPU work is), falling back to frame_tick while that
+    /// does not advance (no word learned yet, other titles). Monotonic across the switches; the
+    /// LRU, the collector and the logs keep frame_tick.
+    [[nodiscard]] u64 RenderFrame() const noexcept {
+        const u64 source = render_clock_live
+                               ? Tegra::g_nx2_render_frame.load(std::memory_order_relaxed)
+                               : frame_tick;
+        return render_clock_base + (source - render_clock_source_base);
+    }
+    /// TickFrame: follows the counter, or falls back to frame_tick after two host frames
+    /// without a count; logs the rate next to the relocation line.
+    void TickRenderClock();
+    bool render_clock_live{};
+    bool render_clock_enabled{}; ///< Last tick: the clock wanted (Resume on the way back on)
+    bool render_clock_logged{};
+    u64 render_clock_base{};
+    u64 render_clock_source_base{};
+    u64 render_clock_last_counter{};
+    u64 render_clock_window_counter{}; ///< The counter at the last report
+    u32 render_clock_idle{};           ///< Host frames since the counter last advanced
+    u32 render_clock_live_frames{};    ///< Since the last report
+    u32 render_clock_switches{};
+
+    /// EXP43=4 (fable_answer_16 1c): relocation as 3, under the render-frame clock, and each
+    /// relocated image's old range kept for 2 render frames. A read that lands on it (an image
+    /// made at the old address and then sampled or rendered to without a clear, or a CPU read of
+    /// the old range while the image there was GPU-written) is what relocation would have gotten
+    /// wrong: counted and its first few logged. Must stay 0.
+    struct RelocationTombstone {
+        GPUVAddr gpu_addr;
+        DAddr cpu_addr;
+        u64 size;
+        u64 shape_key;
+        u64 render_frame;
+        GPUVAddr moved_to;
+        bool gpu_modified;
+    };
+    enum TombstoneRead : u8 { TombstoneSampled, TombstoneLoaded, TombstoneCpuRead, TombstoneReads };
+    void AddRelocationTombstone(const ImageBase& old_image, GPUVAddr moved_to);
+    /// JoinImages: a new image at a tombstoned address waits for its first PrepareImage.
+    void CheckTombstoneCreation(ImageId image_id, const ImageBase& image, bool overwritten);
+    void CheckTombstonePrepare(ImageId image_id, const ImageBase& image, bool is_modification,
+                               bool invalidate);
+    void CheckTombstoneCpuRead(DAddr cpu_addr, u64 size);
+    void NoteTombstoneHit(const RelocationTombstone& tombstone, TombstoneRead reason,
+                          GPUVAddr gpu_addr, const ImageInfo* info);
+    /// TickFrame: drops tombstones older than 2 render frames; logs every 600 frames.
+    void TickRelocationTombstones();
+    std::vector<RelocationTombstone> relocation_tombstones;
+    DAddr tombstone_cpu_begin{~DAddr{0}}; ///< Bounds of all tombstones (quick reject)
+    DAddr tombstone_cpu_end{};
+    struct TombstoneBorn {
+        ImageId image_id;
+        GPUVAddr gpu_addr;
+        RelocationTombstone tombstone;
+    };
+    boost::container::small_vector<TombstoneBorn, 4> tombstone_born;
+    std::array<u64, TombstoneReads> tombstone_hits{}; ///< Since the last report
+    u64 tombstones_made{};
+    u64 tombstone_overlap_reads{}; ///< New images read over one, not at its address
+    u32 tombstone_hits_logged{};
+
+    /// Cold sweep (EDEN_NX2_TC_COLD_FRAMES=K, 0 = off; fable_answer_16 3.2): a relocation-shaped
+    /// image with BadOverlap (a member of a drifted chain) untouched for K host frames, with no
+    /// download queued and not bound, is deleted in TickFrame (at most 16 a frame), so its
+    /// VkImage goes to the EXP42 pool instead of waiting for the collector, which only starts
+    /// near the device budget. Never a GPU-written image that may be read again: one that was
+    /// itself read in a later frame or by the CPU, or of a shape guarded as read by the CPU, and
+    /// unless EDEN_NX2_TC_COLD_GUARDED=1 of a shape guarded as sampled or rendered to without a
+    /// clear in a later frame. JoinImages puts the chain members it sees on the watch list.
+    void WatchColdImage(ImageId image_id);
+    void SweepColdImages();
+    std::vector<std::pair<ImageId, u64>> cold_watch; ///< Image, frame_tick it was put on
+    ::Common::unordered_set<ImageId> cold_watch_set;
+    u64 cold_deleted{};       ///< Since the last report
+    u64 cold_kept_guarded{};  ///< Dropped from the watch: GPU-written and guarded
+    u64 cold_kept_read{};     ///< Dropped from the watch: GPU-written and read later or by the CPU
+
+    [[nodiscard]] static bool RelocationShaped(const ImageInfo& info) noexcept {
+        return info.type == ImageType::e2D && info.resources.levels == 1 &&
+               info.resources.layers == 1 && info.num_samples == 1;
+    }
+    [[nodiscard]] static u64 RelocationShapeKey(const ImageInfo& info) noexcept {
+        return (u64{static_cast<u32>(info.format) & 0xFF} << 56) |
+               (u64{info.num_samples & 0xF} << 52) |
+               (u64{static_cast<u32>(info.resources.levels) & 0xF} << 48) |
+               (u64{static_cast<u32>(info.resources.layers) & 0xFFF} << 36) |
+               (u64{info.size.width & 0x3FFFF} << 18) | (info.size.height & 0x3FFFF);
+    }
+    /// JoinImages' only bad overlap, when the new render target could take its place: the same
+    /// single-level, single-layer 2D shape and layout, a drift of less than its size, nothing
+    /// unusual about it (sparse, converted, aliased, remapped, rescaled, CPU-read, a download
+    /// queued, bound as another target of this clear, registered in another channel). Else none.
+    [[nodiscard]] ImageId RelocationCandidate(const ImageInfo& new_info, GPUVAddr gpu_addr,
+                                              DAddr cpu_addr);
+    /// EXP43=2: moves the image to gpu_addr / cpu_addr in place of a new one (fable_answer_12 2A
+    /// steps 1-6); its VkImage, memory, views, framebuffers and scale state stay.
+    void RelocateImage(ImageId image_id, GPUVAddr gpu_addr, DAddr cpu_addr);
+    /// Drops the image's overlapping_images links from the other images (DeleteImage, relocation).
+    void DropOverlapLinks(ImageId image_id);
+    /// Sets `reason` on the image's shape (once per image and reason; logs the shape's first).
+    void NoteRelocationGuard(ImageBase& image, RelocationGuard reason);
+    /// The cross-frame read checks of PrepareImage and the texture memo's touch.
+    void CheckCrossFrameUse(ImageBase& image, bool is_modification, bool invalidate) {
+        if (image.last_write_frame == ~u64{0} || invalidate ||
+            image.last_write_frame == RenderFrame()) {
+            return;
+        }
+        const RelocationGuard reason = is_modification ? GuardLoaded : GuardSampled;
+        if ((image.relocation_guard_noted & reason) == 0 && RelocationShaped(image.info)) {
+            NoteRelocationGuard(image, reason);
+        }
+    }
+
+    /// Drops a framebuffer from framebuffers_by_view and framebuffer_keys.
+    void UnindexFramebuffer(FramebufferId framebuffer_id, const RenderTargets& key);
+
+    /// The framebuffers each image view is in, and each framebuffer's key: RemoveFramebuffers
+    /// takes a deleted image's framebuffers from here instead of scanning the whole map, which
+    /// grows by one entry per drifted render target a frame (fable_answer_12 2E).
+    ::Common::unordered_map<ImageViewId, boost::container::small_vector<FramebufferId, 4>>
+        framebuffers_by_view;
+    ::Common::unordered_map<FramebufferId, RenderTargets> framebuffer_keys;
+
     /// Mark an image as modified from the GPU
     void MarkModification(ImageBase& image) noexcept;
 
@@ -516,6 +782,10 @@ private:
 
     /// Returns true if the current clear's render area and scissor cover a width x height image
     [[nodiscard]] bool ClearCovers(u32 width, u32 height) const;
+
+    /// UpdateRenderTargets(true): records a full clear on the targets the clear writes (the
+    /// colour target it names, the depth target when depth is cleared), for ClassifyDrawTargets.
+    void NoteFullClears();
 
     [[nodiscard]] std::pair<u32, u32> PrepareDmaImage(ImageId dst_id, GPUVAddr base_addr,
                                                       bool mark_as_modified);
@@ -542,8 +812,37 @@ private:
     Tegra::MaxwellDeviceMemoryManager& device_memory;
     std::deque<TextureCacheGPUMap> gpu_page_table_storage;
 
+    /// EDEN_NX2_EXP31 (RT_FAST, zortos293/Lichii#717): whether UpdateRenderTargets' clean path
+    /// would change nothing: the same targets were prepared for a draw, no image was modified,
+    /// created or deleted since, in the same frame, and none needs an upload, alias sync or
+    /// sparse backing.
+    [[nodiscard]] bool RenderTargetsStillPrepared() const;
+    void NoteRenderTargetsPrepared();
+    /// EXP31 bit 2: the clean path ran although RenderTargetsStillPrepared; checks it changed
+    /// nothing but the targets' own modification ticks. False (and logs) on a difference.
+    bool VerifyRenderTargetsPrepared();
+
     RenderTargets render_targets;
     u64 render_targets_serial = 0;
+    struct RenderTargetsPrepared {
+        bool valid = false;
+        u64 serial = 0;
+        u64 modification_tick = 0;
+        u64 frame_tick = 0;
+        u64 bindings_epoch = 0;
+        std::array<ImageViewId, NUM_RT + 1> views{};
+    } rt_prepared;
+    /// EXP31 counts since the last report (TickFrame, every 600 frames while it is on).
+    u64 rt_fast_skips = 0;
+    u64 rt_fast_clean_paths = 0;
+    u64 rt_fast_verified = 0;
+    u64 rt_fast_mismatches = 0;
+    /// Changes whenever a prepared render target could need preparing again: images or views
+    /// created, deleted, rescaled or CPU modified, descriptor pools moved, and every frame
+    /// (zortos293/Lichii#717's bindings_epoch).
+    u64 bindings_epoch = 1;
+    /// See TextureMemoState::epoch (EXP32). 0 never matches.
+    u64 texture_memo_epoch = 1;
     u32 rt_active_mask = 0;
     std::array<ImageId, 8> rt_image_id{};
     ImageId rt_depth_image_id{};
@@ -563,6 +862,31 @@ private:
 
     /// Applies EDEN_NX2_TC_EXPECTED_MIB / EDEN_NX2_TC_CRITICAL_MIB and logs the thresholds.
     void ApplyThresholdOverrides(bool log = true);
+
+    /// A GPU-written image dropped without being written back leaves its
+    /// guest memory stale (the GPU's data is gone). Its whole pages are marked here and kept
+    /// tracked, so CPU writes, unmaps and write-backs clear them. An image made entirely on marked
+    /// pages starts without an upload: the upload would only copy stale bytes the GPU overwrites.
+    void MarkStale(const ImageBase& image);
+    void ClearStale(DAddr addr, size_t size);
+    void ClearStaleImage(const ImageBase& image);
+    /// Clears every device range [gpu_addr, gpu_addr + size) maps to.
+    void ClearStaleGpu(GPUVAddr gpu_addr, size_t size);
+    [[nodiscard]] bool IsAllStale(DAddr addr, size_t size) const;
+    void UpdateStaleTracking(u64 run_begin, u64 run_pages, s32 delta);
+    // Off here unless EDEN_NX2_TC_SKIP_STALE=1: no gain at an Ocarina of Time Hyrule Field save
+    // (fresh launches, walking 1% low 40.2 off vs 36.5 on); #463 measured +20% in Castle Town.
+    bool tc_skip_stale{[] {
+        const char* value = std::getenv("EDEN_NX2_TC_SKIP_STALE");
+        return value != nullptr && value[0] == '1';
+    }()};
+    /// Device memory pages (Core::Memory::YUZU_PAGEBITS), not this cache's 1 MiB lookup pages.
+    static constexpr u64 STALE_PAGE_BITS = 12;
+    std::vector<u64> stale_bits; ///< One bit per device page
+    u64 stale_page_count{};
+    u64 tc_stale_skips{};        ///< Uploads skipped (last 600 frames)
+    u64 tc_stale_skip_bytes{};
+    u64 tc_stale_gpu_written{};  ///< Stale but buffer-written pages: uploaded after all
 
     /// The CPU address an image at gpu_addr is keyed by: its backing, or a fixed stand-in.
     [[nodiscard]] std::optional<DAddr> ImageCpuAddress(GPUVAddr gpu_addr, size_t size) const;
@@ -668,6 +992,9 @@ private:
     };
     boost::container::small_vector<JoinCopy, 4> join_copies_to_do;
     ::Common::unordered_map<ImageId, size_t> join_alias_indices;
+
+    RenderTargetStats rt_stats;
+    std::array<u64, 3> rt_stats_base{}; ///< images_created, images_deleted, uploaded_bytes
 };
 
 } // namespace VideoCommon

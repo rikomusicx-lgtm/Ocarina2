@@ -209,7 +209,8 @@ ComputePipeline::ComputePipeline(const Device& device_, Scheduler& scheduler, vk
                                  Common::ThreadWorker* thread_worker,
                                  PipelineStatistics* pipeline_statistics,
                                  VideoCore::ShaderNotify* shader_notify, const Shader::Info& info_,
-                                 vk::ShaderModule spv_module_, u64 shader_hash_)
+                                 vk::ShaderModule spv_module_, u64 shader_hash_,
+                                 std::function<vk::ShaderModule()> make_module)
     : device{device_},
       pipeline_cache(pipeline_cache_), guest_descriptor_queue{guest_descriptor_queue_},
       descriptor_buffer_ring{descriptor_buffer_ring_}, info{info_},
@@ -250,7 +251,25 @@ ComputePipeline::ComputePipeline(const Device& device_, Scheduler& scheduler, vk
         }
     }
 
-    auto func{[this, shader_notify, pipeline_statistics] {
+    auto func{[this, shader_notify, pipeline_statistics, make_module = std::move(make_module)] {
+        if (make_module) {
+            // A precompiled pipeline's module, from the SPIR-V its preparation kept: made here,
+            // on the worker. Without one the build ends with no pipeline (BuildFailed), and the
+            // pipeline cache replaces it by a translated one at the next dispatch.
+            try {
+                spv_module = make_module();
+            } catch (const std::exception& exception) {
+                LOG_ERROR(Render_Vulkan, "Precompiled compute shader {:016X}: {}", shader_hash,
+                          exception.what());
+                std::scoped_lock lock{build_mutex};
+                is_built = true;
+                build_condvar.notify_one();
+                if (shader_notify) {
+                    shader_notify->MarkShaderComplete();
+                }
+                return;
+            }
+        }
         const VkPipelineShaderStageRequiredSubgroupSizeCreateInfoEXT subgroup_size_ci{
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO_EXT,
             .pNext = nullptr,
@@ -385,7 +404,9 @@ bool ComputePipeline::Configure(Tegra::Engines::KeplerCompute& kepler_compute,
     for (const auto& desc : info.storage_buffers_descriptors) {
         ASSERT(desc.count == 1);
         buffer_cache.BindComputeStorageBuffer(ssbo_index, desc.cbuf_index, desc.cbuf_offset,
-                                              desc.is_written, desc.indirect_offset);
+                                              desc.is_written, desc.indirect_offset,
+
+                                              desc.write_extent);
         ++ssbo_index;
     }
 
@@ -400,6 +421,11 @@ bool ComputePipeline::Configure(Tegra::Engines::KeplerCompute& kepler_compute,
     const auto read_handle{[&](const auto& desc, u32 index) {
         if (desc.handle_program != ~0U) {
             // Read by the shader from a storage buffer: computed for this dispatch.
+            // EDEN_NX2_HANDLE_ALIGN=0 reads the words at the unaligned address (A/B).
+            static const bool align_storage{[] {
+                const char* const value{std::getenv("EDEN_NX2_HANDLE_ALIGN")};
+                return value == nullptr || *value != '0';
+            }()};
             return TexturePair(VideoCommon::EvaluateTextureHandle(
                                    info, desc.handle_program, gpu_memory,
                                    [&](u32 cbuf) -> GPUVAddr {
@@ -409,7 +435,7 @@ bool ComputePipeline::Configure(Tegra::Engines::KeplerCompute& kepler_compute,
                                                   ? cbufs[cbuf].Address()
                                                   : GPUVAddr{};
                                    },
-                                   device.GetStorageBufferAlignment()),
+                                   align_storage ? device.GetStorageBufferAlignment() : 1),
                                via_header_index);
         }
         ASSERT(((qmd.const_buffer_enable_mask >> desc.cbuf_index) & 1) != 0);
@@ -423,12 +449,12 @@ bool ComputePipeline::Configure(Tegra::Engines::KeplerCompute& kepler_compute,
                 const u32 secondary_offset{desc.secondary_cbuf_offset};
                 const GPUVAddr separate_addr{cbufs[desc.secondary_cbuf_index].Address() +
                                              secondary_offset};
-                const u32 lhs_raw{gpu_memory.Read<u32>(addr) << desc.shift_left};
-                const u32 rhs_raw{gpu_memory.Read<u32>(separate_addr) << desc.secondary_shift_left};
+                const u32 lhs_raw{gpu_memory.ReadHandleWord(addr) << desc.shift_left};
+                const u32 rhs_raw{gpu_memory.ReadHandleWord(separate_addr) << desc.secondary_shift_left};
                 return TexturePair(lhs_raw | rhs_raw, via_header_index);
             }
         }
-        return TexturePair(gpu_memory.Read<u32>(addr), via_header_index);
+        return TexturePair(gpu_memory.ReadHandleWord(addr), via_header_index);
     }};
     const auto add_image{[&](const auto& desc, bool blacklist) {
         for (u32 index = 0; index < desc.count; ++index) {

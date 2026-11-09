@@ -89,6 +89,11 @@ public:
 
     void ResetViewMode();
 
+    /// The game's right-click menu, for another view of the same game (Fritchii's home card).
+    void AddGameMenu(QMenu& context_menu, u64 program_id, const std::string& path) {
+        AddGamePopup(context_menu, program_id, path);
+    }
+
 public slots:
     void SetNupConversionRunning(bool running);
     void RefreshGameDirectory();
@@ -103,6 +108,8 @@ signals:
     void OpenFolderRequested(u64 program_id, GameListOpenTarget target,
                              const std::string& game_path);
     void OpenTransferableShaderCacheRequested(u64 program_id);
+    void PrepareShaderWarmRequested(u64 program_id, const std::string& game_path);
+    void DeleteShaderWarmRequested(u64 program_id);
     void RemoveInstalledEntryRequested(u64 program_id, QtCommon::Game::InstalledEntryType type);
     void RemoveFileRequested(u64 program_id, QtCommon::Game::GameListRemoveTarget target,
                              const std::string& game_path);

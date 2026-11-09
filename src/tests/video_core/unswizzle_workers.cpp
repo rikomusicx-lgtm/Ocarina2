@@ -20,6 +20,7 @@
 #include "core/device_memory.h"
 #include "tests/core/system_test_context.h"
 #include "video_core/memory_manager.h"
+#include "video_core/nx2_perf.h"
 #include "video_core/texture_cache/util.h"
 #include "video_core/textures/decoders.h"
 #include "video_core/textures/unswizzle_worker.h"
@@ -125,6 +126,54 @@ TEST_CASE("Small and unsplittable unswizzles leave the original path untouched",
         layout.Parallel(std::span{output}.first(output.size() - 1), input, true, worker, pool));
     REQUIRE(std::ranges::all_of(output, [](u8 byte) { return byte == 0xCD; }));
     REQUIRE(layout.Parallel(output, input, true, worker, pool, true));
+}
+
+TEST_CASE("Banded unswizzle matches the original", "[unswizzle_workers]") {
+    for (const size_t threads : {size_t{1}, size_t{4}}) {
+        Common::ThreadWorker pool{threads, "UnswizzleBands"};
+        for (const bool native : {false, true}) {
+            for (const u32 bpp : {1U, 4U, 8U, 16U}) {
+                for (const u32 block_height : {0U, 2U, 4U}) {
+                    const Layout layout{4097 / bpp + 3, 1213, bpp, block_height,
+                                        6 - static_cast<u32>(std::countr_zero(bpp))};
+                    CAPTURE(threads, native, bpp, block_height);
+                    std::vector<u8> input(layout.GuestBytes());
+                    Fill(input);
+                    std::vector<u8> expected(layout.HostBytes() + 64, 0xCD);
+                    std::vector<u8> actual(expected.size(), 0xCD);
+                    layout.Serial(std::span{expected}.subspan(32, layout.HostBytes()), input,
+                                  native);
+                    REQUIRE(TryUnswizzleBands(std::span{actual}.subspan(32, layout.HostBytes()),
+                                              input, bpp, layout.width, layout.height, 1,
+                                              block_height, 0, layout.alignment, native, false,
+                                              &pool));
+                    REQUIRE(actual == expected);
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("Banded unswizzle finishes alone behind a saturated pool", "[unswizzle_workers]") {
+    const Layout layout{2048, 2048, 4, 4, 4};
+    std::vector<u8> input(layout.GuestBytes());
+    Fill(input);
+    std::vector<u8> expected(layout.HostBytes());
+    layout.Serial(expected, input, true);
+    Common::ThreadWorker pool{1, "BandsBlocked"};
+    std::promise<void> entered;
+    std::promise<void> release;
+    auto gate = release.get_future();
+    pool.QueueWork([&] {
+        entered.set_value();
+        gate.wait();
+    });
+    entered.get_future().wait();
+    std::vector<u8> actual(layout.HostBytes(), 0xCD);
+    REQUIRE(TryUnswizzleBands(actual, input, 4, 2048, 2048, 1, 4, 0, 4, true, false, &pool));
+    REQUIRE(actual == expected);
+    release.set_value();
+    pool.WaitForRequests();
 }
 
 TEST_CASE("Unswizzle leaves output untouched when a delayed worker saturates the pool",
@@ -233,6 +282,7 @@ TEST_CASE("Independent owners can share the texture pool", "[unswizzle_workers]"
 
 TEST_CASE("Full upload keeps mip layer offsets and compressed edge blocks", "[unswizzle_workers]") {
     using namespace VideoCommon;
+    REQUIRE_FALSE(Nx2Perf::On(Nx2Perf::Opt::SplitOverlap));
     ScopedSystemTestContext context;
     Core::System system;
     Core::DeviceMemory physical;

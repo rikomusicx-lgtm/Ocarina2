@@ -133,14 +133,13 @@ void Layer::ConfigureDraw(const Device& device, PresentPushConstants* out_push_c
         } else if (auto* smaa = std::get_if<SMAA>(&anti_alias)) {
             smaa->Draw(device, scheduler, image_index, &source_image, &source_image_view);
         }
-
+    }
 
 #ifdef HAS_RESHADE
     if (!already_upscaled && post_process.has_value()) {
         post_process->Draw(device, scheduler, image_index, &source_image, &source_image_view);
     }
 #endif
-    }
 
     auto crop_rect = Tegra::NormalizeCrop(framebuffer, texture_width, texture_height);
     const VkExtent2D render_extent{

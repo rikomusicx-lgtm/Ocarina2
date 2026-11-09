@@ -2152,8 +2152,8 @@ inline LoweredProgram LowerToMaxwellWith(std::span<const Instruction> code, u32 
             const bool half = signed_half || (opcode == 0x305 && (mode & ~0x100U) == 0x0010f000);
             const bool small = (mode & ~0xc000U) == 0x00212800;
             const bool short_trunc = opcode == 0x305 && (mode & ~0x100U) == 0x0021e800;
-            const bool absolute = opcode == 0x305 && !half && insn.Bits(62, 1);
-            const bool negate = opcode == 0x305 && !half && insn.Bits(63, 1);
+            const bool absolute = opcode != 0xd05 && !half && insn.Bits(62, 1);
+            const bool negate = opcode != 0xd05 && !half && insn.Bits(63, 1);
             const bool byte = (mode & ~0x10100U) == 0x0020e000;
             const bool word = (mode & ~0x1c100U) == 0x00203000;
             const bool extended_word =
@@ -2162,9 +2162,7 @@ inline LoweredProgram LowerToMaxwellWith(std::span<const Instruction> code, u32 
                 (signed_half && (insn.Bits(24, 8) || (insn.words[3] & 0xc00001ffU))) ||
                 ((byte || small || short_trunc || extended_word) &&
                  (insn.Bits(24, 8) || (insn.words[3] & 0xc00001ffU) ||
-                  (opcode == 0xb05 &&
-                   (insn.Bits(63, 1) || (!small && insn.Bits(62, 1)) ||
-                    (small && insn.Bits(59, 3)))) ||
+                  (opcode == 0xb05 && small && insn.Bits(59, 3)) ||
                   insn.Bits(91, 1) != static_cast<u32>(opcode == 0xd05))) ||
                 (opcode != 0xb05 && (insn.words[1] & ~(half ? 0x100000ffU :
                     0xffU | (absolute ? 0x40000000U : 0U) | (negate ? 0x80000000U : 0U)))) ||
@@ -2172,13 +2170,14 @@ inline LoweredProgram LowerToMaxwellWith(std::span<const Instruction> code, u32 
                 return fail(index, "native float-to-integer conversion mode");
             }
             const bool is_signed = insn.Bits(72, 1);
-            u32 source = opcode == 0xb05 ? materialize(2, 0, 252, small && insn.Bits(62, 1), false)
+            u32 source = opcode == 0xb05 ? materialize(2, 0, 252, absolute, negate)
                        : opcode == 0xd05 ? uniform_register(insn.Bits(32, 8)) : insn.Bits(32, 8);
             if (half) {
                 extract_half({source, insn.Bits(60, 1) ? 3U : 2U, false, false}, 0, 252);
                 source = 252;
             }
-            if (absolute || negate) source = materialize(0, source, 249, absolute, negate);
+            if (opcode == 0x305 && (absolute || negate))
+                source = materialize(0, source, 249, absolute, negate);
             if (signed_half) {
                 mov_imm(253, 0x47800000);
                 emit(0x5800000000000000ULL | predicate | 250 | (u64{252} << 8) |
@@ -2540,7 +2539,9 @@ inline LoweredProgram LowerToMaxwellWith(std::span<const Instruction> code, u32 
                 (half && (bindless || offsets || !insn.Bits(60, 1) || insn.Bits(80, 1) ||
                           insn.Bits(91, 1) ||
                           (source_b != 255 && source_b >= register_limit) ||
-                          mask != 15 || dest >= register_limit || second_dest >= register_limit)) ||
+                          dest >= register_limit ||
+                          // Up to two taps pack into dest alone (mask 3 with no second register).
+                          (std::popcount(mask) > 2 && second_dest >= register_limit))) ||
                 (offsets && (bindless || source_b == 255 || (source_a != 255 && source_a >= 245))) ||
                 (per_tap && (bindless || depth || insn.Bits(80, 1) || insn.Bits(91, 1))) ||
                 insn.Bits(89, 1) || mask == 0 ||
@@ -2688,11 +2689,13 @@ inline LoweredProgram LowerToMaxwellWith(std::span<const Instruction> code, u32 
                  (u64{per_tap ? 2U : offsets ? 1U : 0U} << 54) | (u64{insn.Bits(87, 2)} << 56));
             }
             if (half) {
-                for (u32 i = 0; i < 2; ++i) {
+                // The gather writes its taps packed from R250; an odd last tap pairs with RZ.
+                const u32 taps = static_cast<u32>(std::popcount(mask));
+                for (u32 i = 0; i * 2 < taps; ++i) {
                     emit(0x5ca8000000000000ULL | predicate | 246 | (u64{1} << 8) | (u64{2} << 10) |
                          (u64{250 + i * 2} << 20));
                     emit(0x5ca8000000000000ULL | predicate | 247 | (u64{1} << 8) | (u64{2} << 10) |
-                         (u64{251 + i * 2} << 20));
+                         (u64{i * 2 + 1 < taps ? 251 + i * 2 : 255U} << 20));
                     emit(0x5c18000000000000ULL | predicate | (i == 0 ? dest : second_dest) |
                          (u64{247} << 8) | (u64{246} << 20) | (u64{16} << 39));
                 }
@@ -4000,6 +4003,12 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code,
     u32 high_uniforms = 0;
     for (;;) {
         LoweredProgram lowered = LowerToMaxwellWith(code, high_uniforms, options);
+        // Shadowing borrows aligned quartets below the mirrors: their base must be 4-aligned.
+        if (!lowered && lowered.error == "native program uses lowering scratch registers" &&
+            (high_uniforms & 3) != 0) {
+            high_uniforms = (high_uniforms + 3) & ~3U;
+            continue;
+        }
         if (lowered || lowered.high_uniform_registers <= high_uniforms) return lowered;
         high_uniforms = lowered.high_uniform_registers;
     }

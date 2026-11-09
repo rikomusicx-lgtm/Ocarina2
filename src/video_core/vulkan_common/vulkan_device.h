@@ -336,6 +336,11 @@ public:
         return properties.properties.driverVersion;
     }
 
+    /// Returns the PCI device ID of the physical device.
+    u32 GetDeviceID() const {
+        return properties.properties.deviceID;
+    }
+
     /// Returns the device name.
     std::string_view GetModelName() const {
         return properties.properties.deviceName;
@@ -375,6 +380,22 @@ public:
         const VkDriverIdKHR id = GetDriverID();
         return id != VK_DRIVER_ID_AMD_PROPRIETARY && id != VK_DRIVER_ID_AMD_OPEN_SOURCE &&
                id != VK_DRIVER_ID_MESA_RADV;
+    }
+
+    /// Whether pipelines linked from graphics pipeline libraries without link time optimization
+    /// draw correctly. On AMD's Windows driver such links draw white fringes around alpha blended
+    /// effects (clouds, particles and glows in a test title, RX 7800 XT), while optimized links
+    /// and monolithic pipelines from the same SPIR-V do not, so libraries are linked optimized
+    /// there. EDEN_NX2_GPL_FAST_LINK=1 allows fast links on any driver, =0 on none.
+    bool CanFastLinkGraphicsLibraries() const {
+        static const char forced = [] {
+            const char* value = std::getenv("EDEN_NX2_GPL_FAST_LINK");
+            return value == nullptr ? '\0' : value[0];
+        }();
+        if (forced == '0' || forced == '1') {
+            return forced == '1';
+        }
+        return GetDriverID() != VK_DRIVER_ID_AMD_PROPRIETARY;
     }
 
     /// Returns true for tile-based deferred renderers.
@@ -688,6 +709,12 @@ FN_MAX_LIMIT_LIST
         return cooperative_hmma_16x16x16;
     }
 
+    /// Returns true if the guest's HMMA can run through shared memory as two 8x16x16 cooperative
+    /// matrix products of 16-bit floats, with compute subgroups forced to the guest's 32 lanes.
+    bool IsCooperativeHmma8x16x16Supported() const {
+        return cooperative_hmma_8x16x16;
+    }
+
     /// Returns true if the device supports VK_KHR_shader_quad_control.
     bool IsKhrShaderQuadControlSupported() const {
         return extensions.shader_quad_control && features.shader_quad_control.shaderQuadControl;
@@ -711,6 +738,12 @@ FN_MAX_LIMIT_LIST
     /// Whether presents can carry ids and be waited on until shown (the host frame pacer).
     bool IsKhrPresentWaitSupported() const {
         return extensions.present_id && extensions.present_wait;
+    }
+
+    /// EDEN_NX2_GPL=1 and the device has VK_EXT_graphics_pipeline_library with fast linking:
+    /// graphics pipelines are linked from per-stage libraries.
+    bool IsExtGraphicsPipelineLibrarySupported() const {
+        return graphics_pipeline_library_enabled;
     }
 
     bool IsExtMeshShaderSupported() const {
@@ -1080,6 +1113,8 @@ FN_MAX_LIMIT_LIST
     }
 
     u64 GetDeviceMemoryUsage() const;
+    /// GetDeviceMemoryUsage without EXP29's reuse: always asks the driver.
+    u64 QueryDeviceMemoryUsage() const;
 
     /// The driver's current memory budget for this process (VK_EXT_memory_budget), in
     /// GetDeviceMemoryUsage() terms: the usage at which the main device-local heap reaches its
@@ -1337,6 +1372,7 @@ private:
         VkPhysicalDeviceSubgroupSizeControlProperties subgroup_size_control{};
         VkPhysicalDeviceTransformFeedbackPropertiesEXT transform_feedback{};
         VkPhysicalDeviceMaintenance5PropertiesKHR maintenance5{};
+        VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT graphics_pipeline_library{};
         VkPhysicalDeviceDepthStencilResolveProperties depth_stencil_resolve{};
         VkPhysicalDeviceCustomBorderColorPropertiesEXT custom_border_color{};
         VkPhysicalDeviceCooperativeMatrixPropertiesKHR cooperative_matrix{};
@@ -1348,6 +1384,12 @@ private:
     Extensions extensions{};
     Features features{};
     Properties properties{};
+
+    /// EDEN_NX2_GPL: kept out of the extension tables so a run without the switch creates the
+    /// device exactly as before.
+    bool graphics_pipeline_library_requested{};
+    VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT graphics_pipeline_library_features{};
+    bool graphics_pipeline_library_enabled{};
 
     VkPhysicalDeviceFeatures2 features2{};
     VkPhysicalDeviceFaultFeaturesEXT device_fault_features{};
@@ -1361,6 +1403,7 @@ private:
     bool float16_math{};                       ///< Shaders may do float16 arithmetic.
     bool cooperative_hmma_16x8x16{};           ///< HMMA runs on the guest's matrix shape.
     bool cooperative_hmma_16x16x16{};          ///< HMMA runs on 16x16x16 matrices.
+    bool cooperative_hmma_8x16x16{};           ///< HMMA runs on two 8x16x16 products.
     bool is_integrated{};                      ///< Is GPU an iGPU.
     bool is_virtual{};                         ///< Is GPU a virtual GPU.
     bool is_non_gpu{};                         ///< Is SoftwareRasterizer, FPGA, non-GPU device.
@@ -1385,6 +1428,8 @@ private:
     bool dynamic_state3_alpha_to_one{};
     bool supports_conditional_barriers{};      ///< Allows barriers in conditional control flow.
     mutable std::atomic<size_t> custom_border_color_samplers_used{};
+    mutable std::atomic<u64> memory_usage_value{}; ///< EXP29 & 1: last GetDeviceMemoryUsage()
+    mutable std::atomic<s64> memory_usage_time{};  ///< When it was taken (steady clock ns)
     u64 device_access_memory{};                ///< Total size of device local memory in bytes.
     u32 sets_per_pool{};                       ///< Sets per Description Pool
     NvidiaArchitecture nvidia_arch{NvidiaArchitecture::Arch_AmpereOrNewer};

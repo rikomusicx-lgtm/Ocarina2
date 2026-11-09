@@ -53,6 +53,21 @@ public:
         return nullptr;
     }
 
+    std::unique_ptr<Reservation> TryAcquire(bool enabled, bool native) {
+        size_t count = pending->load(std::memory_order_relaxed);
+        if (!DefersShaderEmission(enabled, native, count, capacity)) {
+            return nullptr;
+        }
+        auto reservation = std::unique_ptr<Reservation>{new Reservation};
+        while (DefersShaderEmission(enabled, native, count, capacity)) {
+            if (pending->compare_exchange_weak(count, count + 1, std::memory_order_relaxed)) {
+                reservation->pending = pending;
+                return reservation;
+            }
+        }
+        return nullptr;
+    }
+
     size_t Pending() const {
         return pending->load(std::memory_order_relaxed);
     }

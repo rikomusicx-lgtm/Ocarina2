@@ -18,6 +18,7 @@
 #include "common/intrusive_list.h"
 
 #include "common/intrusive_red_black_tree.h"
+#include "common/nx2_timeline.h"
 #include "common/scratch_buffer.h"
 #include "core/arm/arm_interface.h"
 #include "core/hle/kernel/k_affinity_mask.h"
@@ -578,8 +579,16 @@ public:
         return this->GetDpc() != 0;
     }
 
-    void SetWaitReasonForDebugging(ThreadWaitReasonForDebugging reason) {
+    /// Every wait sets its reason right after BeginWait, under the scheduler lock: the timeline's
+    /// "guest wait" marker (EDEN_NX2_TIMELINE_GUEST) is recorded here. `timeline_key` is what a
+    /// Synchronization wait waits on (its first object), which the thread does not keep.
+    void SetWaitReasonForDebugging(ThreadWaitReasonForDebugging reason,
+                                   const void* timeline_key = nullptr) {
         m_wait_reason_for_debugging = reason;
+        if (Common::Nx2Timeline::Guest() && reason != ThreadWaitReasonForDebugging::None)
+            [[unlikely]] {
+            RecordWaitForTimeline(reason, timeline_key);
+        }
     }
 
     ThreadWaitReasonForDebugging GetWaitReasonForDebugging() const {
@@ -883,6 +892,10 @@ public:
     LockWithPriorityInheritanceInfo* FindHeldLock(KernelCore& kernel, KProcessAddress address_key, bool is_kernel_address_key);
 
 private:
+    /// SetWaitReasonForDebugging's "guest wait" marker: the thread, the reason and what it waits
+    /// on (see k_thread.cpp).
+    void RecordWaitForTimeline(ThreadWaitReasonForDebugging reason, const void* timeline_key) const;
+
     using LockWithPriorityInheritanceInfoList =
         Common::IntrusiveListBaseTraits<LockWithPriorityInheritanceInfo>::ListType;
 
@@ -989,6 +1002,12 @@ public:
     ConditionVariableThreadTree* GetConditionVariableTree() const {
         return m_condvar_tree;
     }
+
+    /// EDEN_NX2_ARB_SPIN (KAddressArbiter): how well this thread's pre-wait spins paid off
+    /// lately (0-16), and a counter that probes again now and then while it is 0. Touched only
+    /// by the thread itself, in its own SVCs.
+    u8 m_nx2_arb_spin_credit{8};
+    u8 m_nx2_arb_spin_probe{};
 };
 
 class KScopedDisableDispatch {

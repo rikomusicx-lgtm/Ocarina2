@@ -131,6 +131,20 @@ struct ImageBase {
     u64 modification_tick = 0;
     size_t lru_index = SIZE_MAX;
 
+    /// Render target relocation guard (EXP43): the frame the GPU last wrote the image (~0 =
+    /// never, or contents discarded), and the guard reasons this image already reported.
+    u64 last_write_frame = ~u64{0};
+    u8 relocation_guard_noted = 0;
+
+    /// Asynchronous shaders' skip rule (EDEN_NX2_ASYNC_DISCARD=2, ClassifyClearedTarget): the
+    /// render frames of the image's last two full clears that had a write between them (~0 =
+    /// none), and whether anything but a clear wrote it since the last one. Two clears with no
+    /// draw between count as one, so a tick that falls between them cannot make a layer the game
+    /// renders once look like a per-frame target.
+    u64 last_clear_frame = ~u64{0};
+    u64 previous_clear_frame = ~u64{0};
+    bool drawn_since_clear = false;
+
     std::array<u32, MAX_MIP_LEVELS> mip_level_offsets{};
 
     std::vector<ImageViewInfo> image_view_infos;

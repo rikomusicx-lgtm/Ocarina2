@@ -1863,6 +1863,10 @@ void EmulatedController::SetInputInjector(InputInjector injector_) {
     has_injector.store(static_cast<bool>(injector), std::memory_order_release);
 }
 
+bool EmulatedController::HasInputInjector() const {
+    return has_injector.load(std::memory_order_acquire);
+}
+
 std::optional<InjectedInput> EmulatedController::Injected() const {
     if (!has_injector.load(std::memory_order_acquire)) {
         return std::nullopt;

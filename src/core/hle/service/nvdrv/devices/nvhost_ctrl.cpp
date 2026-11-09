@@ -10,6 +10,7 @@
 #include <cstring>
 
 #include <fmt/ranges.h>
+#include "common/nx2_timeline.h"
 #include "common/assert.h"
 #include "common/logging.h"
 #include "common/scope_exit.h"
@@ -90,6 +91,9 @@ NvResult nvhost_ctrl::NvOsGetConfigU32(IocGetConfigParams& params) {
 }
 
 NvResult nvhost_ctrl::IocCtrlEventWait(IocCtrlEventWaitParams& params, bool is_allocation) {
+    Common::Nx2Timeline::ArgSpan timeline_span{"guest: GPU event wait",
+                                               {"syncpoint", params.fence.id},
+                                               {"threshold", params.fence.value}};
     LOG_DEBUG(Service_NVDRV, "syncpt_id={}, threshold={}, timeout={}, is_allocation={}",
               params.fence.id, params.fence.value, params.timeout, is_allocation);
 
@@ -203,6 +207,12 @@ NvResult nvhost_ctrl::IocCtrlEventWait(IocCtrlEventWaitParams& params, bool is_a
             auto& event_ = events[slot];
             if (event_.status.exchange(EventState::Signalling, std::memory_order_acq_rel) ==
                 EventState::Waiting) {
+                // The waker of the guest thread that waits on this event (critical_path.py).
+                if (Common::Nx2Timeline::Active()) {
+                    Common::Nx2Timeline::Instant("GPU event signalled",
+                                                 {"syncpoint", event_.assigned_syncpt},
+                                                 {"value", event_.assigned_value});
+                }
                 event_.kevent->Signal(system.Kernel());
             }
             event_.status.store(EventState::Signalled, std::memory_order_release);
@@ -333,6 +343,12 @@ void nvhost_ctrl::CreateNvEvent(u32 event_id) {
     ASSERT(!event.registered);
     ASSERT(!event.IsBeingUsed());
     event.kevent = events_interface.CreateEvent(fmt::format("NVCTRL::NvEvent_{}", event_id));
+    if (event.kevent != nullptr && Common::Nx2Timeline::GuestEnabled()) {
+        // A guest wait on it is a GPU fence wait (tools/nx2/critical_path.py's object kinds).
+        Common::Nx2Timeline::NameObject(
+            static_cast<const Kernel::KSynchronizationObject*>(&event.kevent->GetReadableEvent()),
+            fmt::format("nvhost event {}", event_id));
+    }
     event.status = EventState::Available;
     event.registered = true;
     const u64 mask = 1ULL << event_id;

@@ -6,6 +6,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <atomic>
+#include <chrono>
+#include <unordered_map>
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -37,6 +39,8 @@
 #include "video_core/gpu.h"
 #include "video_core/host1x/gpu_device_memory_manager.h"
 #include "video_core/host1x/host1x.h"
+#include "video_core/nx2.h"
+#include "video_core/nx2_debug_control.h"
 #include "video_core/rasterizer_download_area.h"
 
 namespace Core::Memory {
@@ -494,9 +498,57 @@ struct Memory::Impl {
         }
     }
 
+    // EDEN_NX2_MME_DMA_STATS: how often pages are protected again after an upload and
+    // unprotected by a CPU write, and how many distinct pages that is.
+    struct ProtectStats {
+        std::mutex mutex;
+        std::array<u64, 2> calls{};
+        std::array<u64, 2> pages{};
+        std::unordered_map<u64, u32> protected_pages;
+        std::chrono::steady_clock::time_point last_log{std::chrono::steady_clock::now()};
+
+        static ProtectStats* Get() {
+            static const bool enabled = std::getenv("EDEN_NX2_MME_DMA_STATS") != nullptr;
+            static ProtectStats stats;
+            return enabled ? &stats : nullptr;
+        }
+
+        void Note(u64 vaddr, u64 size, bool cached) {
+            std::scoped_lock lk{mutex};
+            const u64 first = vaddr >> YUZU_PAGEBITS;
+            const u64 last = (vaddr + size - 1) >> YUZU_PAGEBITS;
+            ++calls[cached];
+            pages[cached] += last - first + 1;
+            if (cached) {
+                for (u64 page = first; page <= last; ++page) {
+                    ++protected_pages[page];
+                }
+            }
+            const auto now = std::chrono::steady_clock::now();
+            if (now - last_log < std::chrono::seconds{5}) {
+                return;
+            }
+            last_log = now;
+            size_t hot = 0;
+            for (const auto& [page, count] : protected_pages) {
+                hot += count >= 100 ? 1 : 0;
+            }
+            LOG_INFO(HW_Memory,
+                     "Page protection (5 s): protect {} calls {} pages ({} distinct, {} protected "
+                     "100+ times), unprotect {} calls {} pages",
+                     calls[1], pages[1], protected_pages.size(), hot, calls[0], pages[0]);
+            calls = {};
+            pages = {};
+            protected_pages.clear();
+        }
+    };
+
     void RasterizerMarkRegionCached(u64 vaddr, u64 size, bool cached) {
         if (vaddr == 0 || !AddressSpaceContains(*current_page_table, vaddr, size)) {
             return;
+        }
+        if (auto* stats = ProtectStats::Get()) {
+            stats->Note(vaddr, size, cached);
         }
 
         if (current_page_table->fastmem_arena) {
@@ -951,9 +1003,26 @@ struct Memory::Impl {
             // It is often the case the games like to access wildly different addresses. Hence why I propose
             // we should let the compiler just do it's thing...
             if (current_area.last_address != subaddress) {
+                // EDEN_NX2_EXP35: a page no GPU write ever marked (bits that never clear) is
+                // collected like a GPU-modified one instead of asking OnCPUWrite under both
+                // caches' mutexes, which the split's back holds through each draw (4% of the
+                // guest cores' busy time at Castle Town). The back applies collected writes to
+                // both caches at its next FlushCaching, before each draw, dispatch and clear.
+                // EXP35=2: every page, GPU-written ones too (their writes are collected anyway
+                // when OnCPUWrite finds them GPU-modified; the clean ones' WriteMemory becomes the
+                // same marks at the back's next FlushCaching). The cache mutexes are held in bursts
+                // through the back's draws: guest threads slept 5-6 ms on them (Fable answer 11).
+                const int collect_mode = VideoCore::Nx2Debug::Experiment(35);
+                const bool collect_unasked =
+                    address != 0 && size != 0 && collect_mode != 0 &&
+                    Tegra::g_nx2_ampere.load(std::memory_order_relaxed) &&
+                    (collect_mode == 2 || !Tegra::Nx2MayBeGpuWritten(address, size));
+                if (collect_unasked) {
+                    Tegra::g_nx2_guest_writes_collected.fetch_add(1, std::memory_order_relaxed);
+                }
                 // Short circuit the need to check for address/size
-                auto const do_collection = (address != 0 && size != 0)
-                    && system.GPU().OnCPUWrite(address, size);
+                auto const do_collection = collect_unasked || ((address != 0 && size != 0)
+                    && system.GPU().OnCPUWrite(address, size));
                 if (do_collection) {
                     current_area.last_address = subaddress;
                 } else {
@@ -961,6 +1030,12 @@ struct Memory::Impl {
                 }
             }
             gpu_dirty_managers[core].Collect(address, size);
+            // A download writing to guest memory here may have looked at the collected writes
+            // before this one: its bytes would land over the ones stored after this returns.
+            VideoCore::DownloadLanding::Await(address, size);
+            // last_address stays on the page after its GPU-written state is gone, so these
+            // writes can land on pages the buffer cache holds as clean until the next gather.
+            g_collected_write_pages.Mark(address, size);
         });
     }
 

@@ -263,6 +263,22 @@ struct FixedPipelineState {
 
     void Refresh(Tegra::Engines::Maxwell3D& maxwell3d, DynamicFeatures& features);
 
+    /// The part of Refresh a raised Dirty::Blending redoes without dynamic blend state: the
+    /// attachments. Clears the flag.
+    void RefreshBlending(Tegra::Engines::Maxwell3D& maxwell3d);
+
+    /// attribute_types as Refresh computes it with dynamic vertex input.
+    [[nodiscard]] static u64 DynamicAttributeTypes(const Maxwell& regs) noexcept;
+
+    /// attachment0_dual_source_blend as Refresh computes it.
+    [[nodiscard]] static bool DualSourceBlend(const Maxwell& regs) noexcept;
+
+    /// Native (Switch 2) pipelines: clears state that cannot change the pipeline, so draws that
+    /// differ only there share one and precompiled keys match them: attribute types of inputs the
+    /// vertex program does not read (vertex input is dynamic), blend equations and factors of
+    /// attachments without blending, and attachments past the last colour target.
+    void CanonicalizeNative(u32 generic_read_mask) noexcept;
+
     size_t Hash() const noexcept;
 
     bool operator==(const FixedPipelineState& rhs) const noexcept;

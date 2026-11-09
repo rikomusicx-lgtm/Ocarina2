@@ -23,7 +23,13 @@
 namespace VideoCommon {
 
 inline constexpr u32 OpenGLPipelineCacheVersion = 48;
+/// 55: our KeyedAttributeTypes graphics key (#408), written identically to Fritchii's 54 (their
+/// adoption of the same change), so shared caches and #895 recipes of 54 are taken as they are.
+/// Moving to a later format is this number plus VulkanOwnPreviousVersions.
 inline constexpr u32 VulkanPipelineCacheVersion = 55;
+/// This fork's earlier versions of the same record format, newest first: their files are copied
+/// once to the current version's names (header version rewritten; records unchanged).
+inline constexpr std::array<u32, 2> VulkanOwnPreviousVersions{54, 52};
 
 // Official Eglantine (cache version 18 at c0cb3325) and this fork (a different version) both
 // used <shader dir>/<title>/vulkan.bin and vulkan_pipelines.bin. Each build deletes a file
@@ -67,49 +73,19 @@ inline bool AdoptLegacyPipelineCache(const std::filesystem::path& legacy,
     return !error;
 }
 
-/// Keeps only bounded record metadata; smaller usage ages are more recent.
-class PipelinePreloadSelection {
-public:
-    struct Record {
-        u8 age;
-        u64 hash;
-        std::streampos position;
-    };
-
-    explicit PipelinePreloadSelection(size_t limit_) : limit{limit_} {}
-
-    void Add(u8 age, u64 hash, std::streampos position) {
-        if (limit == 0) {
-            return;
-        }
-        const Record record{age, hash, position};
-        if (records.size() == limit) {
-            if (!MoreRecent(record, records.front())) {
-                return;
-            }
-            std::pop_heap(records.begin(), records.end(), MoreRecent);
-            records.back() = record;
-        } else {
-            records.push_back(record);
-        }
-        std::push_heap(records.begin(), records.end(), MoreRecent);
+/// Copies a file of this fork's earlier version that has no version in it (the used-pipelines
+/// list, the merge log) when the current one doesn't exist yet; the old file stays for older builds.
+inline void CopyOwnUnversionedFile(const std::filesystem::path& old_file,
+                                   const std::filesystem::path& new_file) {
+    std::error_code error;
+    if (!std::filesystem::exists(new_file, error) && std::filesystem::exists(old_file, error)) {
+        std::filesystem::copy_file(old_file, new_file, error);
     }
+}
 
-    /// Consumes the heap ordering after selection, returning newest records first.
-    std::span<const Record> OrderedRecords() {
-        std::sort_heap(records.begin(), records.end(), MoreRecent);
-        return records;
-    }
-
-private:
-    static bool MoreRecent(const Record& left, const Record& right) {
-        return std::tie(left.age, left.hash) < std::tie(right.age, right.hash);
-    }
-
-    size_t limit;
-    std::vector<Record> records;
-};
-
+/// Copies a cache whose records this build reads, written with another cache version, to
+/// `destination` with this build's version in its header (from zortos293/Lichii#194). The
+/// source is never changed; an existing destination is kept.
 inline bool CopyCompatiblePipelineCache(const std::filesystem::path& source,
                                         const std::filesystem::path& destination,
                                         const std::array<char, 8>& magic, u32 source_version,

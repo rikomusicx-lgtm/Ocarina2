@@ -198,23 +198,7 @@ void FixedPipelineState::Refresh(Tegra::Engines::Maxwell3D& maxwell3d, DynamicFe
     if (maxwell3d.dirty.flags[Dirty::VertexInput]) {
         if (features.has_dynamic_vertex_input) {
             // Dirty flag will be reset by the command buffer update
-            static constexpr std::array LUT{
-                0u, // Invalid
-                1u, // SignedNorm
-                1u, // UnsignedNorm
-                2u, // SignedInt
-                3u, // UnsignedInt
-                1u, // UnsignedScaled
-                1u, // SignedScaled
-                1u, // Float
-            };
-            const auto& attrs = regs.vertex_attrib_format;
-            attribute_types = 0;
-            for (size_t i = 0; i < Maxwell::NumVertexAttributes; ++i) {
-                const u32 mask = attrs[i].constant != 0 ? 0 : 3;
-                const u32 type = LUT[static_cast<size_t>(attrs[i].type.Value())];
-                attribute_types |= static_cast<u64>(type & mask) << (i * 2);
-            }
+            attribute_types = DynamicAttributeTypes(regs);
         } else {
             maxwell3d.dirty.flags[Dirty::VertexInput] = false;
             enabled_divisors = 0;
@@ -254,21 +238,10 @@ void FixedPipelineState::Refresh(Tegra::Engines::Maxwell3D& maxwell3d, DynamicFe
         dynamic_state.Refresh2(regs, topology_, extended_dynamic_state_2);
     }
     if (!extended_dynamic_state_3_blend) {
-        if (maxwell3d.dirty.flags[Dirty::Blending]) {
-            maxwell3d.dirty.flags[Dirty::Blending] = false;
-            for (size_t index = 0; index < attachments.size(); ++index) {
-                attachments[index].Refresh(regs, index);
-                auto& attachment = attachments[index];
-                if (color_write_enable_dynamic && attachment.mask_r == 0 &&
-                    attachment.mask_g == 0 && attachment.mask_b == 0 &&
-                    attachment.mask_a == 0) {
-                    attachment.mask_r.Assign(1);
-                    attachment.mask_g.Assign(1);
-                    attachment.mask_b.Assign(1);
-                    attachment.mask_a.Assign(1);
-                }
-            }
-        }
+        // Always rebuilt: a blend register written without raising Dirty::Blending (native
+        // Switch 2 command paths) left a stale state in the key (Ocarina forest fog drawn
+        // without blending = black screen on GPUs without dynamic blend state, e.g. AMD).
+        RefreshBlending(maxwell3d);
     }
     dynamic_state.Refresh3(regs, features);
     if (xfb_enabled) {
@@ -286,6 +259,47 @@ void FixedPipelineState::Refresh(Tegra::Engines::Maxwell3D& maxwell3d, DynamicFe
                 repack_mask, binding, regs.vertex_streams[binding].stride));
         }
     }
+}
+
+void FixedPipelineState::RefreshBlending(Tegra::Engines::Maxwell3D& maxwell3d) {
+    const Maxwell& regs = maxwell3d.regs;
+    maxwell3d.dirty.flags[Dirty::Blending] = false;
+    for (size_t index = 0; index < attachments.size(); ++index) {
+        attachments[index].Refresh(regs, index);
+        auto& attachment = attachments[index];
+        if (color_write_enable_dynamic && attachment.mask_r == 0 && attachment.mask_g == 0 &&
+            attachment.mask_b == 0 && attachment.mask_a == 0) {
+            attachment.mask_r.Assign(1);
+            attachment.mask_g.Assign(1);
+            attachment.mask_b.Assign(1);
+            attachment.mask_a.Assign(1);
+        }
+    }
+}
+
+u64 FixedPipelineState::DynamicAttributeTypes(const Maxwell& regs) noexcept {
+    static constexpr std::array LUT{
+        0u, // Invalid
+        1u, // SignedNorm
+        1u, // UnsignedNorm
+        2u, // SignedInt
+        3u, // UnsignedInt
+        1u, // UnsignedScaled
+        1u, // SignedScaled
+        1u, // Float
+    };
+    const auto& attrs = regs.vertex_attrib_format;
+    u64 types = 0;
+    for (size_t i = 0; i < Maxwell::NumVertexAttributes; ++i) {
+        const u32 mask = attrs[i].constant != 0 ? 0 : 3;
+        const u32 type = LUT[static_cast<size_t>(attrs[i].type.Value())];
+        types |= static_cast<u64>(type & mask) << (i * 2);
+    }
+    return types;
+}
+
+bool FixedPipelineState::DualSourceBlend(const Maxwell& regs) noexcept {
+    return ComputeAttachment0DualSourceBlend(regs);
 }
 
 void FixedPipelineState::BlendingAttachment::Refresh(const Maxwell& regs, size_t index) {
@@ -400,6 +414,46 @@ void FixedPipelineState::DynamicState::Refresh3(const Maxwell& regs,
     }
     if (!features.has_dynamic_state3_line_stipple_enable) {
         line_stipple_enable.Assign(regs.line_stipple_enable);
+    }
+}
+
+// From zortos293/Lichii#895. Not called by draws or the disk cache loader in Fritchii yet: keying
+// draws canonically changes the hashes the used list and the prebuild look up, which waits for
+// review (see port_895_report.md). Our draws already key attribute types by the input map
+// (VideoCommon::KeyedAttributeTypes), which is the first part of this.
+void FixedPipelineState::CanonicalizeNative(u32 generic_read_mask) noexcept {
+    if (dynamic_vertex_input) {
+        u64 keep = 0;
+        for (size_t index = 0; index < Maxwell::NumVertexAttributes; ++index) {
+            if ((generic_read_mask >> index) & 1) {
+                keep |= u64{3} << (index * 2);
+            }
+        }
+        attribute_types &= keep;
+    }
+    if (!extended_dynamic_state_3_blend) {
+        size_t used = 0;
+        for (size_t index = 0; index < Maxwell::NumRenderTargets; ++index) {
+            if (color_formats[index] != 0) {
+                used = index + 1;
+            }
+        }
+        for (size_t index = 0; index < Maxwell::NumRenderTargets; ++index) {
+            auto& attachment = attachments[index];
+            if (index >= used) {
+                attachment.raw = 0;
+            } else if (!attachment.enable) {
+                attachment.raw &= 0xF; // the colour write mask
+            }
+        }
+    }
+    // Outside the hashed bytes but given to the driver: depth bounds are dynamic state, and the
+    // stipple applies only with stippled lines.
+    depth_bounds_min = 0;
+    depth_bounds_max = 0;
+    if (!dynamic_state.line_stipple_enable) {
+        line_stipple_factor = 0;
+        line_stipple_pattern = 0;
     }
 }
 

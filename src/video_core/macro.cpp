@@ -1435,7 +1435,11 @@ void MacroEngine::Execute(Core::System& system, Engines::Maxwell3D& maxwell3d, u
                         }
                     }
                     // Accurate GPU mode holds report and semaphore writes in the query cache until a
-                    // fence: write them out, or occlusion predicates read stale values.
+                    // fence: write them out, or occlusion predicates read stale values. The query
+                    // cache belongs to the split's back, so this runs there (owns_caches); the flush
+                    // itself waits out the pending reports through the fence manager. Skipping it
+                    // under the split made macro DMA reads return stale occlusion counts, which the
+                    // guest acted on as "nothing is visible" (Ocarina's missing vegetation).
                     const bool owns_caches = !VideoCommon::GpuSplit::Get().Active() ||
                                              VideoCommon::GpuSplit::OnBackThread();
                     if (owns_caches && VideoCommon::QueryDma::TraceEnabled() &&

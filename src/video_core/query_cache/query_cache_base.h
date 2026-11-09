@@ -82,6 +82,16 @@ public:
         return result;
     }
 
+    /// Writes out the finalized reports in the region. True when some still wait for host results.
+    bool SemiFlushRegion(VAddr addr, std::size_t size) {
+        bool result = false;
+        // Visits every query in the range: each final value not written yet is written here.
+        IterateCache<false>(addr, size, [this, &result](QueryLocation location) {
+            result |= SemiFlushQueryDirty(location);
+        });
+        return result;
+    }
+
     static u64 BuildMask(std::span<const QueryType> types) {
         u64 mask = 0;
         for (auto query_type : types) {
@@ -127,7 +137,12 @@ public:
     bool HasUncommittedFlushes() const;
 
     /// Whether a new fence has queries to flush or host writes to sync for this cache.
-    bool HasPendingFenceWork() const;
+    /// `ignore_payload_sync` (EDEN_NX2_EXP28 & 1, zortos293/Lichii#717 FENCE_TRIM): payload
+    /// releases' host buffer syncs don't count; they wait for a later fence or wait for idle.
+    bool HasPendingFenceWork(bool ignore_payload_sync = false) const;
+
+    /// EXP28 & 1: a fence was skipped although payload releases wait for their host sync.
+    void NotePayloadSyncDeferred();
 
     bool ShouldWaitAsyncFlushes();
 
@@ -140,8 +155,10 @@ public:
 protected:
     template <bool remove_from_cache, typename Func>
     void IterateCache(VAddr addr, std::size_t size, Func&& func) {
+        // invoke_result_t: with invoke_result (the trait, never bool) callbacks returning bool
+        // never ended the walk early.
         static constexpr bool RETURNS_BOOL =
-            std::is_same_v<std::invoke_result<Func, QueryLocation>, bool>;
+            std::is_same_v<std::invoke_result_t<Func, QueryLocation>, bool>;
         const u64 addr_begin = addr;
         const u64 addr_end = addr_begin + size;
 

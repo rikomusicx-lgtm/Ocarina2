@@ -8,7 +8,6 @@
 #include <deque>
 #include <filesystem>
 #include <fstream>
-#include <limits>
 #include <mutex>
 #include <optional>
 #include <span>
@@ -49,6 +48,10 @@ public:
     /// Whether the capture was triggered by the `capture.now` file (as opposed to time/frame).
     [[nodiscard]] bool FileTriggered() const noexcept {
         return !trigger_file.empty();
+    }
+    /// The trigger file this capture listens to; empty for time/frame-triggered dumps.
+    [[nodiscard]] const std::filesystem::path& TriggerFile() const noexcept {
+        return trigger_file;
     }
     /// Once per presented frame: whether a capture starts with the next frame or has ended.
     Step Tick(double elapsed_seconds);
@@ -165,6 +168,28 @@ public:
     /// Returns true when copies were recorded, which ends the current render pass.
     bool BeginPass(const void* framebuffer, std::span<ImageView* const> colors);
     void NoteDraw(std::span<const u64> shader_hashes);
+    /// Starts counting the primitives and fragments of the draw about to be recorded; returns the
+    /// query to end after it. Sampled captures only.
+    std::optional<u32> BeginProbe();
+    struct Probe {
+        u32 draw;
+        bool mesh;
+        bool indirect;
+        u32 first;
+        u32 elements;
+        u32 instances;
+        u32 alpha_test; ///< Comparison op while the alpha test is enabled, else 0
+        f32 alpha_ref;
+        bool alpha_to_coverage;      ///< As the guest set it
+        bool host_alpha_to_coverage; ///< As last given to the host
+        bool color0;                 ///< The fragment program writes colour 0
+        bool kill;                   ///< The fragment program can discard
+        u32 zero_handles;            ///< Texture handles whose handle program gave 0
+    };
+    /// Ends the query; the draw index comes from BeginProbe.
+    void EndProbe(u32 query, Probe probe);
+    /// Records a draw or dispatch dropped because its program or pipeline is unavailable.
+    void NoteSkipped(bool compute, u64 program, GPUVAddr rt0, std::string_view reason);
     /// Captures the current pass; returns true when copies were recorded.
     bool EndPass();
     void CaptureDispatch(u64 shader_hash, std::span<ImageView* const> written);
@@ -218,6 +243,7 @@ private:
 
     std::optional<Target> MakeTarget(ImageView& view, u32 slot) const;
     static u32 TexelBytes(const Target& target);
+    static size_t TargetBytes(const Target& target);
     static int Decode(const Target& target, const u8* pixel, std::array<float, 4>& out);
     bool Record(const Target& target, std::string name, std::string tags);
     bool RecordSampled(const Sampled& texture, u32 index, std::string name, std::string tags);
@@ -228,23 +254,32 @@ private:
     void Write(const Job& job);
     void WriteBuffer(const Job& job);
     void WriteFile(const std::string& name, std::span<const u8> data);
-    void StopWriter();
+    void Rearm();
 
     const Device& device;
     MemoryAllocator& memory_allocator;
     Scheduler& scheduler;
 
-    FrameDumpSchedule schedule;
+    /// EDEN_NX2_FRAME_DUMP_SAMPLED_FROM: passes before this one do not read back sampled textures.
+    u32 sampled_from_pass{};
+    /// EDEN_NX2_FRAME_DUMP_CAP_MIB: read-back budget for one capture.
+    size_t size_cap{};
     bool truncated{};
     std::filesystem::path directory;
+    std::filesystem::path base_directory;
+    /// Captures so far after re-arming on capture.now: the next one lands in capture-N.
+    u32 captures{};
     /// EDEN_NX2_FRAME_DUMP_PAIR=1: a file-triggered capture is followed by one of the next frame
-    /// (both parities of an every-other-frame flicker). `pair` is the env, `pair_active` the one
-    /// pair already made.
+    /// (both parities of an every-other-frame flicker), appended into the same directory. `pair`
+    /// is the env, `pair_active` the one pair already made.
     bool pair{};
     bool pair_active{};
     std::chrono::steady_clock::time_point start;
 
     std::ofstream manifest;
+    static constexpr u32 MAX_PROBES = 8192;
+    vk::QueryPool probe_pool;
+    std::vector<Probe> probes;
     std::vector<Readback> readbacks;
     size_t pending_bytes{};
     size_t recorded_bytes{};
@@ -256,8 +291,12 @@ private:
     std::vector<Target> pass_targets;
     std::vector<u64> pass_hashes;
     std::vector<std::pair<GPUVAddr, u32>> pass_sampled;
+    std::vector<std::pair<u32, u32>> pass_null_sampled; ///< Stage and TIC of views with no image
     /// (compute shader hash, image address, format/level/layer) already read back this frame.
     std::vector<std::tuple<u64, GPUVAddr, u32>> dispatch_sampled;
+    /// (address, format, level, layer) of block-compressed textures already read back; the GPU
+    /// never writes them, so one copy per frame suffices.
+    std::vector<std::tuple<GPUVAddr, u32, s32, s32>> recorded_blocks;
     /// (shader hash, storage, binding index, device address, size) already recorded this frame.
     std::vector<std::tuple<u64, bool, u32, u64, u32>> seen_buffers;
     /// Content hashes of the buffer files written; writer thread only.

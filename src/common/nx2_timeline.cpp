@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <fmt/format.h>
@@ -23,22 +26,63 @@
 namespace Common::Nx2Timeline {
 namespace {
 
+using ArgSet = std::array<Arg, MaxArgs>;
+
 struct Event {
     u64 begin;
     u64 duration;
     const char* name;
-};
-
-struct ThreadBuffer {
-    std::mutex mutex;
-    std::vector<Event> events;
-    u64 thread_id{};
-    std::string name;
+    u32 args; ///< 1 + the index of the event's args in its buffer's arg chunks; 0 = none
 };
 
 // At most this many spans per thread and recording (the GPU threads make ~200,000 a second,
 // the front's macros over a million: consecutive spans of one name merge, see Record).
 constexpr size_t MaxEvents = size_t{1} << 22;
+// Spans are kept in chunks of this many: one vector grown to millions of spans was copied whole
+// at each growth, under the recording thread's span (GPUBack stalled 2.5 to 15.7 ms each time,
+// which showed as the longest fence-release drains in Ocarina of Time traces).
+constexpr size_t ChunkEvents = size_t{1} << 16;
+
+struct ThreadBuffer {
+    std::mutex mutex;
+    std::vector<std::vector<Event>> chunks;
+    size_t count{};
+    // The args of the events that have any, chunked like the events (drains carry them).
+    std::vector<std::vector<ArgSet>> arg_chunks;
+    size_t arg_count{};
+    u64 thread_id{};
+    std::string name;
+
+    [[nodiscard]] Event* Last() {
+        return count == 0 ? nullptr : &chunks.back().back();
+    }
+    void Push(const Event& event) {
+        if (chunks.empty() || chunks.back().size() == ChunkEvents) {
+            chunks.emplace_back().reserve(ChunkEvents);
+        }
+        chunks.back().push_back(event);
+        ++count;
+    }
+    /// Stores `args` and returns the Event::args slot that refers to them.
+    [[nodiscard]] u32 PushArgs(const ArgSet& args) {
+        if (arg_chunks.empty() || arg_chunks.back().size() == ChunkEvents) {
+            arg_chunks.emplace_back().reserve(ChunkEvents);
+        }
+        arg_chunks.back().push_back(args);
+        ++arg_count;
+        return static_cast<u32>(arg_count);
+    }
+    [[nodiscard]] ArgSet& ArgsOf(const Event& event) {
+        const size_t index = event.args - 1;
+        return arg_chunks[index / ChunkEvents][index % ChunkEvents];
+    }
+    void Clear() {
+        chunks.clear();
+        count = 0;
+        arg_chunks.clear();
+        arg_count = 0;
+    }
+};
 // Spans of the same name closer than this merge into one.
 constexpr u64 MergeGapNs = 2000;
 
@@ -48,8 +92,25 @@ std::atomic<bool> g_running{false};
 std::mutex g_last_mutex;
 std::string g_last_file;
 u64 g_start_ns{};
+// For merging with an ETW trace recorded on the performance counter clock (tools/nx2/
+// critical_path.py, round 2): the counter read right after g_start_ns, and its frequency. An ETW
+// event at counter value q is at (q - g_start_qpc) * 1e6 / g_qpc_frequency us on the timeline.
+s64 g_start_qpc{};
+s64 g_qpc_frequency{};
 
 thread_local std::shared_ptr<ThreadBuffer> t_buffer;
+
+// The guest layer's names: guest threads (by kernel thread id, per recording) and kernel objects
+// (by address, kept across recordings while GuestEnabled()).
+struct GuestThreadName {
+    std::string name;
+    u32 tries{};
+};
+// A thread whose nn::os name is not set yet is asked for again this many times.
+constexpr u32 MaxGuestNameTries = 64;
+std::mutex g_names_mutex;
+std::unordered_map<u64, GuestThreadName> g_guest_thread_names;
+std::unordered_map<const void*, std::string> g_object_names;
 
 std::string CurrentThreadName() {
 #ifdef _WIN32
@@ -108,7 +169,17 @@ void Write(const std::filesystem::path& path, double seconds) {
         std::scoped_lock lock{g_registry_mutex};
         buffers = g_buffers;
     }
-    std::string json = "{\"displayTimeUnit\":\"ms\",\"traceEvents\":[\n";
+    // otherData (ignored by trace viewers): the clock, for merging an ETW trace (g_start_qpc).
+#ifdef _WIN32
+    const u64 process_id = GetCurrentProcessId();
+#else
+    const u64 process_id = 0;
+#endif
+    std::string json = fmt::format(
+        "{{\"displayTimeUnit\":\"ms\",\"otherData\":{{\"clock\":\"steady_clock\","
+        "\"start_ns\":{},\"qpc_start\":{},\"qpc_frequency\":{},\"process_id\":{},"
+        "\"seconds\":{:.3f}}},\"traceEvents\":[\n",
+        g_start_ns, g_start_qpc, g_qpc_frequency, process_id, seconds);
     size_t total = 0;
     bool first = true;
     const auto comma = [&] {
@@ -117,13 +188,43 @@ void Write(const std::filesystem::path& path, double seconds) {
         }
         first = false;
     };
+    if (g_guest.load(std::memory_order_relaxed)) {
+        // The guest layer's names (tools/nx2/critical_path.py reads them; perfetto shows the
+        // guest threads' names as a second process).
+        std::scoped_lock lock{g_names_mutex};
+        comma();
+        json += R"({"name":"process_name","ph":"M","pid":2,"args":{"name":"guest threads"}})";
+        for (const auto& [thread_id, entry] : g_guest_thread_names) {
+            if (entry.name.empty()) {
+                continue;
+            }
+            comma();
+            json += fmt::format(R"({{"name":"thread_name","ph":"M","pid":2,"tid":{},"args":{{"name":")",
+                                thread_id);
+            AppendEscaped(json, entry.name);
+            json += "\"}}";
+        }
+        for (const auto& [object, name] : g_object_names) {
+            comma();
+            json += fmt::format(
+                R"({{"name":"object_name","ph":"M","pid":1,"tid":0,"args":{{"ptr":{},"name":")",
+                reinterpret_cast<uintptr_t>(object));
+            AppendEscaped(json, name);
+            json += "\"}}";
+        }
+    }
     for (const auto& buffer : buffers) {
-        std::vector<Event> events;
+        std::vector<std::vector<Event>> chunks;
+        std::vector<std::vector<ArgSet>> arg_chunks;
+        size_t count{};
         {
             std::scoped_lock lock{buffer->mutex};
-            events.swap(buffer->events);
+            chunks.swap(buffer->chunks);
+            count = std::exchange(buffer->count, 0);
+            arg_chunks.swap(buffer->arg_chunks);
+            buffer->arg_count = 0;
         }
-        if (events.empty()) {
+        if (count == 0) {
             continue;
         }
         comma();
@@ -131,6 +232,12 @@ void Write(const std::filesystem::path& path, double seconds) {
                             buffer->thread_id);
         AppendEscaped(json, buffer->name);
         json += "\"}}";
+        std::vector<Event> events;
+        events.reserve(count);
+        for (const auto& chunk : chunks) {
+            events.insert(events.end(), chunk.begin(), chunk.end());
+        }
+        chunks.clear();
         for (const Event& event : events) {
             comma();
             json += R"({"name":")";
@@ -143,9 +250,23 @@ void Write(const std::filesystem::path& path, double seconds) {
             } else {
                 json += R"(,"s":"t")";
             }
+            if (event.args != 0) {
+                const size_t slot = event.args - 1;
+                const ArgSet& args = arg_chunks[slot / ChunkEvents][slot % ChunkEvents];
+                json += R"(,"args":{)";
+                bool first_arg = true;
+                for (const Arg& arg : args) {
+                    if (arg.key == nullptr) {
+                        continue;
+                    }
+                    json += fmt::format(R"({}"{}":{})", first_arg ? "" : ",", arg.key, arg.value);
+                    first_arg = false;
+                }
+                json += '}';
+            }
             json += '}';
         }
-        total += events.size();
+        total += count;
     }
     json += "\n]}\n";
     std::error_code error;
@@ -167,37 +288,68 @@ u64 Now() {
                                 .count());
 }
 
-void Record(const char* name, u64 begin_ns, u64 end_ns) {
+namespace {
+
+void RecordSpan(const char* name, u64 begin_ns, u64 end_ns, const ArgSet* args) {
     ThreadBuffer& buffer = Buffer();
     std::scoped_lock lock{buffer.mutex};
     if (!Active()) {
         return;
     }
-    if (!buffer.events.empty()) {
-        Event& last = buffer.events.back();
-        const u64 last_end = last.begin + last.duration;
-        if (last.name == name && last.duration != 0 && begin_ns >= last_end &&
-            begin_ns - last_end < MergeGapNs) {
-            last.duration = end_ns - last.begin;
+    if (Event* const last = buffer.Last()) {
+        const u64 last_end = last->begin + last->duration;
+        if (last->name == name && last->duration != 0 && begin_ns >= last_end &&
+            begin_ns - last_end < MergeGapNs && (last->args != 0) == (args != nullptr)) {
+            last->duration = end_ns - last->begin;
+            if (args != nullptr) {
+                ArgSet& kept = buffer.ArgsOf(*last);
+                for (size_t i = 0; i < MaxArgs; ++i) {
+                    kept[i].value = (std::max)(kept[i].value, (*args)[i].value);
+                }
+            }
             return;
         }
     }
-    if (buffer.events.size() < MaxEvents) {
-        buffer.events.push_back({begin_ns, (std::max)(end_ns - begin_ns, u64{1}), name});
+    if (buffer.count < MaxEvents) {
+        const u32 slot = args != nullptr ? buffer.PushArgs(*args) : 0;
+        buffer.Push({begin_ns, (std::max)(end_ns - begin_ns, u64{1}), name, slot});
     }
 }
 
-void Instant(const char* name) {
+void RecordInstant(const char* name, const ArgSet* args) {
     if (!Active()) {
         return;
     }
     ThreadBuffer& buffer = Buffer();
     std::scoped_lock lock{buffer.mutex};
-    if (buffer.events.size() < MaxEvents && Active()) {
-        buffer.events.push_back({Now(), 0, name});
+    if (buffer.count < MaxEvents && Active()) {
+        const u32 slot = args != nullptr ? buffer.PushArgs(*args) : 0;
+        buffer.Push({Now(), 0, name, slot});
     }
 }
 
+} // Anonymous namespace
+
+void Record(const char* name, u64 begin_ns, u64 end_ns) {
+    RecordSpan(name, begin_ns, end_ns, nullptr);
+}
+
+void Record(const char* name, u64 begin_ns, u64 end_ns, Arg a, Arg b, Arg c) {
+    const ArgSet args{a, b, c};
+    RecordSpan(name, begin_ns, end_ns, &args);
+}
+
+void Instant(const char* name) {
+    RecordInstant(name, nullptr);
+}
+
+void Instant(const char* name, Arg a, Arg b, Arg c) {
+    if (!Active()) {
+        return;
+    }
+    const ArgSet args{a, b, c};
+    RecordInstant(name, &args);
+}
 bool Start(const std::filesystem::path& path, double seconds, bool detail) {
     if (g_running.exchange(true)) {
         return false;
@@ -207,13 +359,29 @@ bool Start(const std::filesystem::path& path, double seconds, bool detail) {
         std::scoped_lock lock{g_registry_mutex};
         for (const auto& buffer : g_buffers) {
             std::scoped_lock buffer_lock{buffer->mutex};
-            buffer->events.clear();
+            buffer->Clear();
         }
     }
     g_start_ns = Now();
+#ifdef _WIN32
+    {
+        LARGE_INTEGER counter{};
+        LARGE_INTEGER frequency{};
+        QueryPerformanceCounter(&counter);
+        QueryPerformanceFrequency(&frequency);
+        g_start_qpc = static_cast<s64>(counter.QuadPart);
+        g_qpc_frequency = static_cast<s64>(frequency.QuadPart);
+    }
+#endif
+    {
+        std::scoped_lock lock{g_names_mutex};
+        g_guest_thread_names.clear();
+    }
+    g_guest.store(GuestEnabled(), std::memory_order_relaxed);
     g_detail.store(detail, std::memory_order_relaxed);
     g_active.store(true, std::memory_order_release);
-    LOG_INFO(Debug, "Timeline: recording {:.1f} s", seconds);
+    LOG_INFO(Debug, "Timeline: recording {:.1f} s{}", seconds,
+             g_guest.load(std::memory_order_relaxed) ? " with the guest layer" : "");
     std::thread([path, seconds] {
         std::this_thread::sleep_for(std::chrono::duration<double>(seconds));
         g_active.store(false, std::memory_order_release);
@@ -228,6 +396,51 @@ bool Start(const std::filesystem::path& path, double seconds, bool detail) {
 std::string LastFile() {
     std::scoped_lock lock{g_last_mutex};
     return g_last_file;
+}
+
+bool GuestEnabled() {
+    static const bool enabled = [] {
+        const char* value = std::getenv("EDEN_NX2_TIMELINE_GUEST");
+        return value != nullptr && value[0] == '1';
+    }();
+    return enabled;
+}
+
+bool WantsGuestThreadName(u64 thread_id) {
+    if (!Guest()) {
+        return false;
+    }
+    std::scoped_lock lock{g_names_mutex};
+    GuestThreadName& entry = g_guest_thread_names[thread_id];
+    if (!entry.name.empty() || entry.tries >= MaxGuestNameTries) {
+        return false;
+    }
+    ++entry.tries;
+    return true;
+}
+
+void NameGuestThread(u64 thread_id, std::string_view name) {
+    if (name.empty()) {
+        return;
+    }
+    std::scoped_lock lock{g_names_mutex};
+    g_guest_thread_names[thread_id].name = name;
+}
+
+void NameObject(const void* object, std::string_view name) {
+    if (!GuestEnabled() || object == nullptr) {
+        return;
+    }
+    std::scoped_lock lock{g_names_mutex};
+    g_object_names[object] = name;
+}
+
+void ForgetObject(const void* object) {
+    if (!GuestEnabled()) {
+        return;
+    }
+    std::scoped_lock lock{g_names_mutex};
+    g_object_names.erase(object);
 }
 
 void OnPresent() {

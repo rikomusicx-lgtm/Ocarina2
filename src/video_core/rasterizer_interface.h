@@ -47,6 +47,11 @@ enum class LoadCallbackStage {
 };
 using DiskResourceLoadCallback = std::function<void(LoadCallbackStage, std::size_t, std::size_t)>;
 
+/// EXP33 (zortos293/Lichii#337): set while the query cache signals the fence that writes a
+/// fence-flagged report, so the fence manager makes that fence and delays its operation even when
+/// it is empty (FenceManager::SignalFence).
+inline thread_local bool g_signaling_query_report_fence = false;
+
 class RasterizerInterface {
 public:
     virtual ~RasterizerInterface() = default;
@@ -95,6 +100,17 @@ public:
     /// Release all pending fences.
     virtual void ReleaseFences(bool force = true) = 0;
 
+    /// GPU thread, between commands: whether ReleaseFences() would only invalidate the GPU cache
+    /// (FenceManager::FencesQuiet). `epoch` gets FenceWorkEpoch() as of the check.
+    virtual bool FencesQuiet([[maybe_unused]] bool strict, [[maybe_unused]] u64& epoch) {
+        return false;
+    }
+
+    /// Any thread: changes whenever a fence or a fence operation is added.
+    [[nodiscard]] virtual u64 FenceWorkEpoch() const {
+        return 0;
+    }
+
     /// Writes the region's query reports to guest memory, waiting for pending host results.
     virtual void FlushQueryResults(DAddr addr, u64 size) {
         FlushRegion(addr, size, VideoCommon::CacheType::QueryCache);
@@ -125,6 +141,9 @@ public:
     /// Switch 2: the front flushed this command list page with the split drained.
     virtual void NoteGpuWrittenCommandListSynced([[maybe_unused]] DAddr page) {}
 
+    /// Switch 2, on the split's back with the front waiting: flushes the command list pages
+    /// `pages` (4 KiB, device addresses) to guest memory, with every page draws wrote since it was
+    /// last flushed, in one GPU round trip.
     virtual void FlushGpuWrittenCommandListPages(std::span<const DAddr> pages) {
         for (const DAddr page : pages) {
             FlushRegion(page, 0x1000, VideoCommon::CacheType::BufferCache);

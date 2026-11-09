@@ -5,8 +5,10 @@
 // clang-format off
 #include <windows.h>
 #include <sysinfoapi.h>
+#include <psapi.h>
 // clang-format on
 #else
+#include <sys/resource.h>
 #include <sys/types.h>
 #if defined(__APPLE__) || defined(__FreeBSD__)
 #include <sys/sysctl.h>
@@ -67,6 +69,47 @@ static MemoryInfo Detect() {
 const MemoryInfo& GetMemInfo() {
     static MemoryInfo mem_info = Detect();
     return mem_info;
+}
+
+u64 GetProcessPageFaults() {
+#ifdef _WIN32
+    PROCESS_MEMORY_COUNTERS counters{};
+    counters.cb = sizeof(counters);
+    if (!K32GetProcessMemoryInfo(GetCurrentProcess(), &counters, sizeof(counters))) {
+        return 0;
+    }
+    return counters.PageFaultCount;
+#else
+    rusage usage{};
+    if (getrusage(RUSAGE_SELF, &usage) != 0) {
+        return 0;
+    }
+    return static_cast<u64>(usage.ru_minflt) + static_cast<u64>(usage.ru_majflt);
+#endif
+}
+
+ProcessMemoryUsage GetProcessMemoryUsage() {
+    ProcessMemoryUsage usage{};
+#ifdef _WIN32
+    PROCESS_MEMORY_COUNTERS_EX counters{};
+    counters.cb = sizeof(counters);
+    if (K32GetProcessMemoryInfo(GetCurrentProcess(),
+                                reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&counters),
+                                sizeof(counters))) {
+        usage.working_set = counters.WorkingSetSize;
+        usage.peak_working_set = counters.PeakWorkingSetSize;
+        usage.private_bytes = counters.PrivateUsage;
+        usage.peak_private_bytes = counters.PeakPagefileUsage;
+    }
+    MEMORYSTATUSEX status{};
+    status.dwLength = sizeof(status);
+    if (GlobalMemoryStatusEx(&status)) {
+        usage.system_commit = status.ullTotalPageFile - status.ullAvailPageFile;
+        usage.system_commit_limit = status.ullTotalPageFile;
+        usage.available_physical = status.ullAvailPhys;
+    }
+#endif
+    return usage;
 }
 
 } // namespace Common

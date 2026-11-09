@@ -39,7 +39,7 @@
 
 namespace VideoCommon {
 
-u64 VertexAttributeMaskOf(const Shader::Environment& environment) {
+u64 VertexAttributeMaskOf(const Shader::Environment& env) {
     static const bool key_all = [] {
         const char* value = std::getenv("EDEN_NX2_KEY_ALL_ATTRIBUTES");
         return value != nullptr && value[0] == '1';
@@ -47,13 +47,13 @@ u64 VertexAttributeMaskOf(const Shader::Environment& environment) {
     if (key_all) {
         return ~u64{0};
     }
-    const Shader::Stage stage{environment.ShaderStage()};
+    const Shader::Stage stage{env.ShaderStage()};
     if (stage == Shader::Stage::Task || stage == Shader::Stage::Mesh) {
         // No vertex input (Ocarina of Time: 191 keys for 31 sets of shaders, split only by the
         // attribute registers).
         return 0;
     }
-    if (stage != Shader::Stage::VertexB || !environment.IsNativeProgram()) {
+    if (stage != Shader::Stage::VertexB || !env.IsNativeProgram()) {
         return ~u64{0};
     }
     // The hardware only fetches the attributes in the input map, so a read outside it is never
@@ -61,9 +61,19 @@ u64 VertexAttributeMaskOf(const Shader::Environment& environment) {
     std::array<std::array<bool, 4>, Tegra::Engines::Maxwell3D::Regs::NumVertexAttributes>
         input_generic{};
     for (size_t index = 0; index < input_generic.size(); ++index) {
-        input_generic[index] = environment.SPH().vtg.InputGeneric(index);
+        input_generic[index] = env.SPH().vtg.InputGeneric(index);
     }
     return VertexAttributeMask(input_generic);
+}
+
+u32 GenericReadMask(const Shader::ProgramHeader& sph) noexcept {
+    u32 mask = 0;
+    for (size_t index = 0; index < 32; ++index) {
+        if ((sph.vtg.imap_generic_vector[index >> 1] >> ((index % 2) * 4)) & 0xF) {
+            mask |= 1U << index;
+        }
+    }
+    return mask;
 }
 
 void ShaderCache::InvalidateRegion(VAddr addr, size_t size) {
@@ -243,6 +253,7 @@ bool ShaderCache::RefreshStages(std::array<u64, 6>& unique_hashes) try {
             }
         }
         shader_infos[index] = shader_info;
+        vertex_attribute_masks[index] = shader_info->vertex_attribute_mask;
         unique_hashes[index] = shader_info->unique_hash;
         if (mesh && (program == Tegra::Engines::Maxwell3D::Regs::ShaderType::VertexB ||
                      program == Tegra::Engines::Maxwell3D::Regs::ShaderType::Tessellation)) {
@@ -355,16 +366,20 @@ void ShaderCache::RememberRejection(VAddr addr) {
         return;
     }
     rejected_native.emplace(addr, std::current_exception());
-    page_filter.Mark(addr, 1); // InnerInvalidation reaches InvalidatePagesInRegion for it
+    // InnerInvalidation only reaches InvalidateRegions on marked pages, and a rejection can
+    // outlive (or precede) the registration that marked its page.
+    page_filter.Mark(addr, 1);
     rejected_lowest.store((std::min)(rejected_lowest.load(std::memory_order_relaxed), addr),
                           std::memory_order_relaxed);
     rejected_highest.store((std::max)(rejected_highest.load(std::memory_order_relaxed), addr),
                            std::memory_order_relaxed);
 }
 
-void ShaderCache::GetGraphicsEnvironments(GraphicsEnvironments& result,
-                                          const std::array<u64, NUM_PROGRAMS>& unique_hashes) {
+size_t ShaderCache::GetGraphicsEnvironments(GraphicsEnvironments& result,
+                                            const std::array<u64, NUM_PROGRAMS>& unique_hashes,
+                                            bool snapshot) {
     size_t env_index{};
+    size_t snapshot_bytes{};
     const GPUVAddr base_addr{maxwell3d->regs.program_region.Address()};
     const bool native = maxwell3d->GetNativeMacroEngine().native_turing;
     for (size_t index = 0; index < NUM_PROGRAMS; ++index) {
@@ -381,8 +396,12 @@ void ShaderCache::GetGraphicsEnvironments(GraphicsEnvironments& result,
         env = GraphicsEnvironment{*maxwell3d, *gpu_memory, program, address, start_address,
                                   shader_infos[index]->lowered_native};
         env.SetCachedSize(shader_infos[index]->size_bytes);
+        if (snapshot) {
+            snapshot_bytes += env.TakeSnapshot();
+        }
         result.env_ptrs[env_index++] = &env;
     }
+    return snapshot_bytes;
 }
 
 ShaderInfo* ShaderCache::TryGet(VAddr addr) const {
@@ -528,6 +547,10 @@ const ShaderInfo* ShaderCache::MakeShaderInfo(GenericEnvironment& env, VAddr cpu
         info->size_bytes = env.ReadSizeBytes();
     }
     info->lowered_native = env.LoweredNative();
+    info->vertex_attribute_mask = VertexAttributeMaskOf(env);
+    if (env.IsNativeProgram() && env.ShaderStage() == Shader::Stage::VertexB) {
+        info->generic_read_mask = GenericReadMask(env.SPH());
+    }
     const size_t size_bytes{env.SourceSizeBytes() ? env.SourceSizeBytes() : info->size_bytes};
     const ShaderInfo* const result{info.get()};
     Register(std::move(info), cpu_addr, size_bytes);

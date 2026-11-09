@@ -213,6 +213,22 @@ add_executable(yuzu
     util/clickable_label.h
     util/controller_navigation.cpp
     util/controller_navigation.h
+    fritchii/fritchii.qrc
+    fritchii/fritchii_ui.cpp
+    fritchii/fritchii_ui.h
+    fritchii/home.cpp
+    fritchii/home.h
+    fritchii/game_controls.cpp
+    fritchii/game_controls.h
+    fritchii/main_window_fritchii.cpp
+    fritchii/perf_overlay.cpp
+    fritchii/perf_overlay.h
+    fritchii/precompile_gate.cpp
+    fritchii/precompile_gate.h
+    fritchii/whats_new.cpp
+    fritchii/whats_new.h
+    util/export_log.cpp
+    util/export_log.h
     util/limitable_input_dialog.cpp
     util/limitable_input_dialog.h
     util/overlay_dialog.cpp
@@ -233,6 +249,7 @@ add_executable(yuzu
     yuzu.rc
     migration_dialog.h migration_dialog.cpp
     nup_dialogs.h nup_dialogs.cpp
+    shader_warm_dialog.h shader_warm_dialog.cpp
     migration_worker.h migration_worker.cpp
     libqt_common.h libqt_common.cpp
 
@@ -288,6 +305,13 @@ file(GLOB_RECURSE THEMES ${PROJECT_SOURCE_DIR}/dist/qt_themes/*)
 if (ENABLE_UPDATE_CHECKER)
     target_compile_definitions(yuzu PUBLIC ENABLE_UPDATE_CHECKER)
 endif()
+# fritchii/ includes ui_main.h, which AutoUic already generates for main_window.cpp.
+set_source_files_properties(fritchii/fritchii_ui.cpp fritchii/main_window_fritchii.cpp
+    PROPERTIES SKIP_AUTOUIC ON)
+
+# The updater unpacks the release zip (updater/update_dialog.cpp); Export Log writes one
+# (util/export_log.cpp).
+target_link_libraries(yuzu PRIVATE QuaZip::QuaZip)
 
 if (ENABLE_QT_TRANSLATION)
     set(YUZU_QT_LANGUAGES "${PROJECT_SOURCE_DIR}/dist/languages" CACHE PATH "Path to the translation bundle for the Qt frontend")

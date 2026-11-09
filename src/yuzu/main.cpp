@@ -27,6 +27,10 @@
 #endif
 
 #include "main_window.h"
+#include "fritchii/fritchii_ui.h"
+#ifdef ENABLE_UPDATE_CHECKER
+#include "updater/update_dialog.h"
+#endif
 
 #ifdef _WIN32
 #include <QScreen>
@@ -41,6 +45,40 @@ static void OverrideWindowsFont() {
     }
 }
 #endif
+
+// Fritchii: caps Windows' scale (passed through) so the primary screen keeps at least 1350x900
+// units for the windows, by a QT_SCALE_FACTOR below 1 when it would not. Leaves a
+// QT_SCALE_FACTOR the user set alone.
+static void FitHighDpiScaleToScreen() {
+#ifdef _WIN32
+    if (qEnvironmentVariableIsSet("QT_SCALE_FACTOR")) {
+        return;
+    }
+    qreal fit = 1.0;
+    {
+        int temp_argc = 0;
+        char** temp_argv = nullptr;
+        QApplication temp{temp_argc, temp_argv};
+        const QScreen* primary_screen = QGuiApplication::primaryScreen();
+        if (primary_screen == nullptr) {
+            return;
+        }
+        const qreal ratio = primary_screen->devicePixelRatio();
+        const QRect area = primary_screen->availableGeometry();
+        const qreal pixels_wide = area.width() * ratio;
+        const qreal pixels_high = area.height() * ratio;
+        constexpr qreal minimum_width = 1350.0;
+        constexpr qreal minimum_height = 900.0;
+        const qreal largest = std::min(pixels_wide / minimum_width, pixels_high / minimum_height);
+        if (ratio > 1.0 && largest < ratio) {
+            fit = std::max(1.0, largest) / ratio;
+        }
+    }
+    if (fit < 0.99) {
+        qputenv("QT_SCALE_FACTOR", QByteArray::number(fit, 'f', 3));
+    }
+#endif
+}
 
 static Qt::HighDpiScaleFactorRoundingPolicy GetHighDpiRoundingPolicy() {
 #ifdef _WIN32
@@ -81,7 +119,100 @@ static Qt::HighDpiScaleFactorRoundingPolicy GetHighDpiRoundingPolicy() {
 #endif
 }
 
+// The NX2 switches are read from the environment (EDEN_NX2_*), which a GUI launch has no way to
+// set. nx2_switches.txt holds "NAME=VALUE" lines, one per line, '#' comments. A variable already
+// in the real environment always wins, so a launcher script can still override one run; between
+// files the later one wins, so the copy next to the executable (shipped with the build) can be
+// overridden by %APPDATA%\eden\nx2_switches.txt without editing the one that gets replaced.
+static void ParseSwitchFile(const std::filesystem::path& path,
+                            std::map<std::string, std::string>& entries) {
+    std::ifstream file{path};
+    if (!file) {
+        return;
+    }
+    constexpr const char* blank = " \t\r";
+    std::string line;
+    while (std::getline(file, line)) {
+        line.erase(0, line.find_first_not_of(blank));
+        line.erase(line.find_last_not_of(blank) + 1);
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+        const auto eq = line.find('=');
+        if (eq == std::string::npos) {
+            continue;
+        }
+        std::string name = line.substr(0, eq);
+        std::string value = line.substr(eq + 1);
+        name.erase(name.find_last_not_of(blank) + 1);
+        value.erase(0, value.find_first_not_of(blank));
+        if (value.size() >= 2 && value.front() == '"' && value.back() == '"') {
+            value = value.substr(1, value.size() - 2);
+        }
+        if (!name.empty()) {
+            entries.insert_or_assign(std::move(name), std::move(value));
+        }
+    }
+}
+
+static std::filesystem::path GetSwitchExeDirectory(const char* argv0) {
+#ifdef _WIN32
+    return Common::FS::GetExeDirectory();
+#else
+    std::error_code ec;
+#ifdef __linux__
+    if (auto exe = std::filesystem::read_symlink("/proc/self/exe", ec); !ec) {
+        return exe.parent_path();
+    }
+#endif
+    const auto exe = std::filesystem::absolute(argv0, ec);
+    return ec ? std::filesystem::path{} : exe.parent_path();
+#endif
+}
+
+// Built into the Frizti builds so players don't have to set anything: the switches tuned for
+// Ocarina of Time. Either nx2_switches.txt overrides any of them (=0 turns one off).
+constexpr std::pair<const char*, const char*> BuiltinSwitches[] = {
+    {"EDEN_NX2_GRAPHICS_SSBO_BARE", "0"}, {"EDEN_NX2_WRITTEN_SSBO_MARK_KIB", "64"},
+    {"EDEN_NX2_ACQUIRE_PRECHECK", "2"},   {"EDEN_NX2_MACRO_SINK", "1"},
+    {"EDEN_NX2_COMPUTE_SINK", "1"},       {"EDEN_NX2_RING_PAIRS", "1"},
+    {"EDEN_NX2_UBO_INPLACE", "1"},        {"EDEN_NX2_PIPELINE_CLEAN", "1"},
+    {"EDEN_NX2_LIST_WAIT_SKIP", "1"},     {"EDEN_NX2_PREFLUSH", "1"},
+    {"EDEN_NX2_SEM_FAST", "2"},
+};
+
+static void LoadNx2Switches(const char* argv0) {
+    // Later files overwrite earlier entries; the real environment is checked only at the end.
+    std::map<std::string, std::string> entries;
+    for (const auto& [name, value] : BuiltinSwitches) {
+        entries.emplace(name, value);
+    }
+    if (const auto exe_dir = GetSwitchExeDirectory(argv0); !exe_dir.empty()) {
+        ParseSwitchFile(exe_dir / "nx2_switches.txt", entries);
+    }
+#ifdef _WIN32
+    const auto config_dir = Common::FS::GetAppDataRoamingDirectory() / EDEN_DIR;
+#else
+    const auto config_dir = Common::FS::GetDataDirectory("XDG_CONFIG_HOME") / EDEN_DIR;
+#endif
+    ParseSwitchFile(config_dir / "nx2_switches.txt", entries);
+    for (const auto& [name, value] : entries) {
+        if (std::getenv(name.c_str()) != nullptr) {
+            continue;
+        }
+#ifdef _WIN32
+        _putenv_s(name.c_str(), value.c_str());
+#else
+        setenv(name.c_str(), value.c_str(), 1);
+#endif
+    }
+}
+
 int main(int argc, char* argv[]) {
+#ifdef ENABLE_UPDATE_CHECKER
+    // Before the switches are added to the environment, which a restart must not inherit.
+    Updater::PrepareLaunch();
+#endif
     LoadNx2Switches(argv[0]);
 #if YUZU_ROOM
     bool launch_room = false;
@@ -169,7 +300,15 @@ int main(int argc, char* argv[]) {
     QGuiApplication::setDesktopFileName(QStringLiteral("io.github.zortos293.lichii"));
 #endif
 
+    // Fritchii: Windows' own scale (125%, 150%, 175%), as large as the screen leaves the windows
+    // the room they were laid out for (1350x900, the rounding's minimum below). The rounding
+    // turned a 4K screen at 150% into 200% and 125% into 100%; passing a large scale through as
+    // is left a 1440p screen at 175% only ~820 units tall, below Game Settings' OK button.
     auto rounding_policy = GetHighDpiRoundingPolicy();
+    if (FritchiiUi::Enabled()) {
+        rounding_policy = Qt::HighDpiScaleFactorRoundingPolicy::PassThrough;
+        FitHighDpiScaleToScreen();
+    }
     QApplication::setHighDpiScaleFactorRoundingPolicy(rounding_policy);
 
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)

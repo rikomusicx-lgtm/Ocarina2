@@ -6,6 +6,8 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <unordered_map>
 #include <cstring>
 #include <cstdlib>
 #include <span>
@@ -80,7 +82,10 @@ vk::Buffer CreateBuffer(const Device& device, const MemoryAllocator& memory_allo
         VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
         VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
     if (device.IsExtTransformFeedbackSupported()) {
-        flags |= VK_BUFFER_USAGE_TRANSFORM_FEEDBACK_BUFFER_BIT_EXT;
+        // The counter usage too: draws can take their vertex count from any buffer
+        // (DrawIndirectByteCountEXT, nx2_indirect_grid.h).
+        flags |= VK_BUFFER_USAGE_TRANSFORM_FEEDBACK_BUFFER_BIT_EXT |
+                 VK_BUFFER_USAGE_TRANSFORM_FEEDBACK_COUNTER_BUFFER_BIT_EXT;
     }
     if (device.IsExtConditionalRendering()) {
         flags |= VK_BUFFER_USAGE_CONDITIONAL_RENDERING_BIT_EXT;
@@ -484,7 +489,93 @@ void BufferCacheRuntime::Wait(u64 tick) {
     scheduler.Wait(tick);
 }
 
-void BufferCacheRuntime::WaitSubmittedTick(u64 tick) {
+namespace {
+// EDEN_NX2_LIST_WAIT_TRACE=1: the front's waits for GPU-written command list copies, per writer
+// (the dispatch's shader hash, 0 for a DMA copy): count, time, and how many submissions the GPU
+// still had to finish when the wait began. Logged every 2 s.
+class ListWaitTrace {
+public:
+    static ListWaitTrace* Get() {
+        static const bool enabled = std::getenv("EDEN_NX2_LIST_WAIT_TRACE") != nullptr;
+        static ListWaitTrace trace;
+        return enabled ? &trace : nullptr;
+    }
+
+    void Note(u64 writer, u64 behind, bool unsubmitted, std::chrono::steady_clock::duration wait) {
+        const u64 us = static_cast<u64>(
+            std::chrono::duration_cast<std::chrono::microseconds>(wait).count());
+        Entry& entry = entries[writer];
+        ++entry.count;
+        entry.us += us;
+        entry.max_us = (std::max)(entry.max_us, us);
+        entry.behind += behind;
+        entry.unsubmitted += unsubmitted ? 1 : 0;
+        const auto now = std::chrono::steady_clock::now();
+        if (now - last < std::chrono::seconds{2}) {
+            return;
+        }
+        const double seconds = std::chrono::duration<double>(now - last).count();
+        last = now;
+        std::vector<std::pair<u64, Entry>> sorted(entries.begin(), entries.end());
+        std::ranges::sort(sorted, [](const auto& a, const auto& b) { return a.second.us > b.second.us; });
+        u64 total = 0;
+        u64 count = 0;
+        for (const auto& [key, value] : sorted) {
+            total += value.us;
+            count += value.count;
+        }
+        LOG_INFO(Render_Vulkan, "List waits: {:.1f}/s, {:.2f} ms/s", count / seconds,
+                 total / 1000.0 / seconds);
+        for (size_t i = 0; i < (std::min<size_t>)(sorted.size(), 8); ++i) {
+            const auto& [key, value] = sorted[i];
+            LOG_INFO(Render_Vulkan,
+                     "  writer {:016x}: {:.1f}/s, {:.2f} ms/s, max {} us, {:.1f} submissions "
+                     "behind, {} unsubmitted",
+                     key, value.count / seconds, value.us / 1000.0 / seconds, value.max_us,
+                     static_cast<double>(value.behind) / value.count, value.unsubmitted);
+        }
+        entries.clear();
+    }
+
+private:
+    struct Entry {
+        u64 count{};
+        u64 us{};
+        u64 max_us{};
+        u64 behind{};
+        u64 unsubmitted{};
+    };
+    std::unordered_map<u64, Entry> entries;
+    std::chrono::steady_clock::time_point last = std::chrono::steady_clock::now();
+};
+} // Anonymous namespace
+
+void BufferCacheRuntime::WaitSubmittedTick(u64 tick, u64 writer) {
+    auto& master = scheduler.GetMasterSemaphore();
+    if (master.IsFree(tick)) {
+        return;
+    }
+    // The split's front waits for the GPU: the back runs meanwhile what the front sent, also the
+    // entries since the front's last publish, which it does not see yet (fewer than 256 words;
+    // zortos293/Lichii#805 34656e8225).
+    if (auto& split = VideoCommon::GpuSplit::Get();
+        split.Active() && !VideoCommon::GpuSplit::OnBackThread()) {
+        split.Publish();
+    }
+    if (ListWaitTrace* const trace = ListWaitTrace::Get()) [[unlikely]] {
+        master.Refresh();
+        const u64 known = master.KnownGpuTick();
+        const bool unsubmitted = !scheduler.IsSubmitted(tick);
+        const auto start = std::chrono::steady_clock::now();
+        WaitSubmittedTickImpl(tick);
+        trace->Note(writer, tick > known ? tick - known : 0, unsubmitted,
+                    std::chrono::steady_clock::now() - start);
+        return;
+    }
+    WaitSubmittedTickImpl(tick);
+}
+
+void BufferCacheRuntime::WaitSubmittedTickImpl(u64 tick) {
     auto& master = scheduler.GetMasterSemaphore();
     if (master.IsFree(tick)) {
         return;
@@ -564,8 +655,12 @@ void BufferCacheRuntime::CopyBuffer(VkBuffer dst_buffer, VkBuffer src_buffer,
         }
         cmdbuf.CopyBuffer(src_buffer, dst_buffer, vk_copies);
         if (barrier) {
+            // Later transfers too: a reordered upload of the same bytes in a later submission
+            // (RecordWithUploadBuffer, ahead of that submission's work) has no barrier of its
+            // own before it, and in-order copies don't count as uses for CanReorderUpload.
             cmdbuf.PipelineBarrier(VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                   vk::PIPELINE_STAGE_GRAPHICS_COMPUTE, 0, WRITE_BARRIER);
+                                   vk::PIPELINE_STAGE_GRAPHICS_COMPUTE_TRANSFER, 0,
+                                   WRITE_BARRIER);
         }
     });
 }
@@ -593,8 +688,11 @@ void BufferCacheRuntime::PostCopyBarrier() {
     };
     scheduler.RequestOutsideRenderPassOperationContext();
     scheduler.Record([](vk::CommandBuffer cmdbuf) {
-        cmdbuf.PipelineBarrier(VK_PIPELINE_STAGE_TRANSFER_BIT, vk::PIPELINE_STAGE_GRAPHICS_COMPUTE,
-                               0, WRITE_BARRIER);
+        // Later transfers too, as after CopyBuffer's own barrier: the downloads, gathers and
+        // compute uploads this closes are in-order copies a later reordered upload of the same
+        // bytes would not wait for.
+        cmdbuf.PipelineBarrier(VK_PIPELINE_STAGE_TRANSFER_BIT,
+                               vk::PIPELINE_STAGE_GRAPHICS_COMPUTE_TRANSFER, 0, WRITE_BARRIER);
     });
 }
 
@@ -683,7 +781,7 @@ void BufferCacheRuntime::BindIndexBuffer(PrimitiveTopology topology, IndexFormat
         vk_buffer = *null_buffer;
     }
     // The same index buffer is still bound in this command buffer (PR #161): skip the rebind.
-    if (!VideoCommon::Nx2Perf::Verify()) {
+    if (VideoCommon::Nx2Perf::On(VideoCommon::Nx2Perf::Opt::IndexRebind) && !VideoCommon::Nx2Perf::Verify()) {
         const u64 epoch = scheduler.RecordingEpoch();
         if (bound_index_valid && vk_buffer == bound_index_buffer &&
             vk_offset == bound_index_offset && vk_index_type == bound_index_type &&

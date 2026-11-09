@@ -20,8 +20,6 @@
 
 namespace Shader::Backend::SPIRV {
 
-static std::bitset<8> clip_distance_written;
-
 using Sirit::Id;
 
 class VectorTypes {
@@ -169,6 +167,7 @@ struct CooperativeHmmaTypes {
     Id matrix_a{};
     Id matrix_b{};
     Id matrix_c{};
+    u32 rows{16}; ///< Rows of A and the accumulator
 };
 
 class EmitContext final : public Sirit::Module {
@@ -323,9 +322,13 @@ public:
     u32 rescaling_downfactor_member_index{};
     u32 texture_rescaling_index{};
     u32 image_rescaling_index{};
+    u32 descriptor_set{}; ///< Set of every resource of the stage (Bindings::descriptor_set)
 
     Id render_area_push_constant{};
     u32 render_are_member_index{};
+
+    Id mesh_draw_base_push_constant{};
+    u32 mesh_draw_base_member_index{};
 
     Id local_memory{};
 
@@ -466,6 +469,9 @@ private:
     void DefineRescalingInputPushConstant();
     void DefineRescalingInputUniformConstant();
     void DefineRenderArea(const Info& info);
+    void DefineMeshDrawBase();
+    [[nodiscard]] bool UsesMeshDrawBase() const;
+    [[nodiscard]] u32 MeshDrawBaseOffset() const;
 
     void DefineInputs(const IR::Program& program);
     void DefineOutputs(const IR::Program& program);

@@ -259,6 +259,13 @@ std::unique_ptr<TranslationMap> InitializeTranslations(QObject* parent) {
            tr("Controls the DMA read mode.\nUnsafe is faster, while Safe is more stable and can fix issues in some games.\nDefault follows the GPU Accuracy setting."));
     INSERT(Settings, gpu_fence_behavior, tr("GPU Fence Behavior:"),
            tr("Controls the GPU fence synchronization behavior.\nImmediate is the fastest option, but can introduce some issues.\nBalanced offers better compatibility and may fix issues in some games.\nAccurate further improves compatibility at the cost of some performance.\nDefault follows the GPU Mode setting."));
+    INSERT(Settings, native_compute_write_mark, tr("Native compute write mark:"),
+           tr("How much of a Switch 2 compute shader's storage buffer is treated as written by "
+              "the GPU after each dispatch.\nAuto marks what the shader's stores can reach and "
+              "falls back to Full when that cannot be proven.\nFull marks the whole binding (up to "
+              "8 MiB), the original behaviour: it can delay the game's own writes to nearby memory "
+              "(flickering effects) and copy far more data back from the GPU.\n64 KiB cap marks at "
+              "most 64 KiB, which can miss data a large dispatch really wrote."));
     INSERT(Settings, use_asynchronous_shaders, tr("Enable asynchronous shader compilation"),
            tr("May reduce shader stutter."));
     INSERT(Settings, gpu_clock, tr("GPU Clocks"),
@@ -302,6 +309,17 @@ std::unique_ptr<TranslationMap> InitializeTranslations(QObject* parent) {
            tr("Used by the Bounded mode: the most time per frame that Switch 2 draws may wait in "
               "total for pipelines that are still building. Once spent, the remaining unbuilt "
               "draws of that frame are skipped."));
+    INSERT(Settings, use_graphics_pipeline_library,
+           tr("Shader libraries (faster first-time shader builds)"),
+           tr("Builds each shader stage once and links them into pipelines, so new shaders "
+              "cause shorter stutters.\nUsed on NVIDIA and AMD GPUs. The graphics half of the "
+              "shader warm-up (Prepare shaders in the game list) needs it.\nTakes effect after "
+              "restarting the game."));
+    INSERT(Settings, shader_warm_threads, tr("Shader warm-up threads:"),
+           tr("CPU threads the shader warm-up uses (low priority). More threads finish the "
+              "warm-up sooner. It builds only while the game is paused, or from Emulation, "
+              "Prepare Shaders Now, when it shares the CPU with the game.\nTakes effect at the "
+              "next game start."));
     INSERT(Settings, enable_compute_pipelines, tr("Enable Compute Pipelines (Intel Vulkan Only)"),
            tr("Required by some games.\nThis setting only exists for Intel "
               "proprietary drivers and may crash if enabled.\nCompute pipelines are always enabled "
@@ -313,6 +331,9 @@ std::unique_ptr<TranslationMap> InitializeTranslations(QObject* parent) {
     INSERT(Settings, use_video_framerate, tr("Sync to framerate of video playback"),
            tr("Run the game at normal speed during video playback, even when the framerate is "
               "unlocked."));
+    INSERT(Settings, oot_30fps, tr("Ocarina of Time: 30 FPS mode (lower-end PCs)"),
+           tr("Caps Ocarina of Time at 30 FPS. The game keeps its normal speed. Takes effect at "
+              "once; the 60 FPS / 30 FPS button in the status bar switches it too."));
     INSERT(Settings, mkw_30fps, tr("Mario Kart World: 30 FPS mode"),
            tr("Forces the game to use its native 30 FPS mode at normal game speed. "
               "Takes effect after restarting the game."));
@@ -481,6 +502,12 @@ std::unique_ptr<ComboboxTranslationMap> ComboboxEnumeration(QObject* parent) {
                               PAIR(DmaAccuracy, Default, tr("Default")),
                               PAIR(DmaAccuracy, Unsafe, tr("Unsafe (fast)")),
                               PAIR(DmaAccuracy, Safe, tr("Safe (stable)")),
+                          }});
+    translations->insert({Settings::EnumMetadata<Settings::NativeComputeWriteMark>::Index(),
+                          {
+                              PAIR(NativeComputeWriteMark, Auto, tr("Auto (shader extent)")),
+                              PAIR(NativeComputeWriteMark, Full, tr("Full binding")),
+                              PAIR(NativeComputeWriteMark, Cap64K, tr("64 KiB cap")),
                           }});
     translations->insert({Settings::EnumMetadata<Settings::GpuFenceBehavior>::Index(),
                           {

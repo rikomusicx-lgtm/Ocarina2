@@ -6,6 +6,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
+#include <atomic>
+#include <bit>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
@@ -18,8 +20,10 @@
 #include "common/error.h"
 #include "common/event_wait.h"
 #include "common/logging.h"
+#include "common/nx2_sample_profile.h"
 #include "common/assert.h"
 #include "common/thread.h"
+#include "common/thread_pinning.h"
 #ifdef __APPLE__
 #include <mach/mach.h>
 #elif defined(__HAIKU__)
@@ -491,6 +495,11 @@ const WindowsCpuSets& CpuSets() {
                  GetCurrentProcess(), 0)) {
             return result;
         }
+        struct Entry {
+            ULONG id;
+            u8 efficiency_class;
+        };
+        std::vector<Entry> entries;
         u8 best = 0;
         for (ULONG offset = 0; offset + sizeof(SYSTEM_CPU_SET_INFORMATION) <= length;) {
             const auto* info =
@@ -503,13 +512,14 @@ const WindowsCpuSets& CpuSets() {
                     (static_cast<u32>(info->CpuSet.Group) << 8) | info->CpuSet.CoreIndex;
                 result.processors.push_back({static_cast<u32>(info->CpuSet.Id), core,
                                              static_cast<u8>(info->CpuSet.EfficiencyClass)});
+                entries.push_back({info->CpuSet.Id, info->CpuSet.EfficiencyClass});
                 best = (std::max)(best, static_cast<u8>(info->CpuSet.EfficiencyClass));
             }
             offset += info->Size;
         }
-        for (const Common::LogicalProcessor& processor : result.processors) {
-            (processor.efficiency_class == best ? result.performance : result.efficiency)
-                .push_back(processor.id);
+        for (const Entry& entry : entries) {
+            (entry.efficiency_class == best ? result.performance : result.efficiency)
+                .push_back(entry.id);
         }
         result.hybrid = !result.efficiency.empty() && result.performance.size() >= 2;
         if (result.hybrid) {
@@ -534,6 +544,74 @@ void SelectCurrentThreadCpuSets(const std::vector<ULONG>& ids) {
              static_cast<ULONG>(ids.size()))) {
         LOG_WARNING(Common, "SetThreadSelectedCpuSets failed: {}", Common::GetLastErrorMsg());
     }
+}
+
+/// Masks of processor group 0's logical processors that share a `relation` (a physical core, or
+/// with RelationCache an L3 cache).
+std::vector<KAFFINITY> GroupZeroMasks(LOGICAL_PROCESSOR_RELATIONSHIP relation) {
+    std::vector<KAFFINITY> result;
+    DWORD length = 0;
+    GetLogicalProcessorInformationEx(relation, nullptr, &length);
+    std::vector<u8> buffer(length);
+    auto* info = reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*>(buffer.data());
+    if (length == 0 || !GetLogicalProcessorInformationEx(relation, info, &length)) {
+        return result;
+    }
+    for (DWORD offset = 0; offset < length;) {
+        auto* entry =
+            reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*>(buffer.data() + offset);
+        if (entry->Relationship == RelationProcessorCore && entry->Processor.GroupCount > 0 &&
+            entry->Processor.GroupMask[0].Group == 0) {
+            result.push_back(entry->Processor.GroupMask[0].Mask);
+        } else if (entry->Relationship == RelationCache && entry->Cache.Level == 3 &&
+                   entry->Cache.GroupMask.Group == 0) {
+            result.push_back(entry->Cache.GroupMask.Mask);
+        }
+        offset += entry->Size;
+    }
+    return result;
+}
+
+/// Logical processors PinCurrentThread gave the GPU front and back threads.
+std::atomic<u64> pinned_gpu_mask{};
+
+Common::ThreadPinning::Topology ReadPinningTopology() {
+    Common::ThreadPinning::Topology topology;
+    DWORD length = 0;
+    GetLogicalProcessorInformationEx(RelationAll, nullptr, &length);
+    std::vector<u8> buffer(length);
+    if (length == 0 ||
+        !GetLogicalProcessorInformationEx(
+            RelationAll, reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*>(buffer.data()),
+            &length)) {
+        return topology;
+    }
+    for (DWORD offset = 0; offset < length;) {
+        const auto* entry = reinterpret_cast<const SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*>(
+            buffer.data() + offset);
+        if (entry->Size == 0) {
+            break;
+        }
+        if (entry->Relationship == RelationProcessorCore) {
+            const PROCESSOR_RELATIONSHIP& core = entry->Processor;
+            for (WORD i = 0; i < core.GroupCount; ++i) {
+                topology.logical_processors +=
+                    static_cast<u32>(std::popcount(static_cast<u64>(core.GroupMask[i].Mask)));
+            }
+            if (core.GroupCount > 0 && core.GroupMask[0].Group == 0) {
+                topology.cores.push_back(
+                    {static_cast<u64>(core.GroupMask[0].Mask), core.EfficiencyClass});
+            }
+        } else if (entry->Relationship == RelationCache) {
+            const CACHE_RELATIONSHIP& cache = entry->Cache;
+            if (cache.Level == 3 && cache.Type != CacheInstruction &&
+                cache.GroupMask.Group == 0) {
+                topology.l3.push_back({static_cast<u64>(cache.GroupMask.Mask), cache.CacheSize});
+            }
+        }
+        offset += entry->Size;
+    }
+    return topology;
 }
 } // Anonymous namespace
 #endif
@@ -647,6 +725,7 @@ void SetCurrentThreadPriority(ThreadPriority new_priority) {
 }
 
 void SetCurrentThreadName(const char* name) {
+    Nx2SampleProfile::OnThreadNamed(name);
 #ifdef _WIN32
     // Sets the debugger-visible name of the current thread (Windows 10+). Looked up at run time,
     // which also covers MinGW, whose headers may not declare it.
@@ -750,6 +829,120 @@ void PinCurrentThread(PinnedRole role) {
         LOG_INFO(Common, "GPU thread pinning is only supported on Windows and Linux");
         return true;
     }();
+#endif
+}
+
+void PinCurrentThread(PinnedRole role, int guest_core) {
+#ifdef _WIN32
+    // Off with EDEN_NX2_PIN_THREADS=0, forced with 1, otherwise on with enough performance cores
+    // (ThreadPinning::MakePlan): the split's back did about 8% more draws a second at Lake Hylia
+    // (Ryzen 7 7800X3D), its worst window 29 -> 54 fps, once no SMT sibling shared its core.
+    static const ThreadPinning::Plan plan = [] {
+        const auto mode = ThreadPinning::ParseMode(std::getenv("EDEN_NX2_PIN_THREADS"));
+        const ThreadPinning::Topology topology = ReadPinningTopology();
+        const ThreadPinning::Plan result = ThreadPinning::MakePlan(topology, mode);
+        LOG_INFO(Common, "Thread pinning: {}", ThreadPinning::Describe(result, topology, mode));
+        return result;
+    }();
+    u64 mask{};
+    switch (role) {
+    case PinnedRole::GpuFront:
+        mask = plan.front;
+        break;
+    case PinnedRole::GpuBack:
+        mask = plan.back;
+        break;
+    case PinnedRole::GuestCore: {
+        mask = plan.guest;
+        // EDEN_NX2_GUEST_PIN_EACH=1: one physical core each (the guest cores' JIT code was 73-80%
+        // of their busy time at Castle Town; two on one core's SMT siblings share its units).
+        static const std::vector<u64> guest_cores = [] {
+            std::vector<u64> masks;
+            const char* value = std::getenv("EDEN_NX2_GUEST_PIN_EACH");
+            if (plan.guest == 0 || value == nullptr || value[0] != '1') {
+                return masks;
+            }
+            for (const ThreadPinning::Core& core : ReadPinningTopology().cores) {
+                if (core.mask != 0 && (core.mask & ~plan.guest) == 0) {
+                    masks.push_back(core.mask);
+                }
+            }
+            LOG_INFO(Common, "Thread pinning: each guest core on its own physical core ({} cores)",
+                     masks.size());
+            return masks;
+        }();
+        if (guest_core >= 0 && !guest_cores.empty()) {
+            mask = guest_cores[static_cast<size_t>(guest_core) % guest_cores.size()];
+        }
+        break;
+    }
+    }
+    if (mask != 0) {
+        GROUP_AFFINITY affinity{};
+        affinity.Mask = static_cast<KAFFINITY>(mask);
+        affinity.Group = 0;
+        if (!SetThreadGroupAffinity(GetCurrentThread(), &affinity, nullptr)) {
+            LOG_WARNING(Common, "Could not pin thread: {}", GetLastErrorMsg());
+        } else if (role != PinnedRole::GuestCore) {
+            pinned_gpu_mask.fetch_or(mask, std::memory_order_relaxed);
+        }
+    }
+#else
+    (void)role;
+#endif
+}
+
+u64 BackgroundWorkCpuMask() {
+#ifdef _WIN32
+    const u64 pinned = pinned_gpu_mask.load(std::memory_order_relaxed);
+    if (pinned == 0) {
+        return 0;
+    }
+    DWORD_PTR process{};
+    DWORD_PTR system{};
+    if (!GetProcessAffinityMask(GetCurrentProcess(), &process, &system)) {
+        return 0;
+    }
+    const u64 rest = static_cast<u64>(process) & ~pinned;
+    if (rest == 0) {
+        return 0;
+    }
+    // Several L3 caches (Ryzen 9 with two CCDs): the other CCD's cores, so the work does not
+    // evict what the GPU threads keep in theirs, when that leaves enough of them.
+    static const std::vector<KAFFINITY> l3_caches = GroupZeroMasks(RelationCache);
+    u64 other_caches = rest;
+    for (const KAFFINITY cache : l3_caches) {
+        if ((static_cast<u64>(cache) & pinned) != 0) {
+            other_caches &= ~static_cast<u64>(cache);
+        }
+    }
+    return std::popcount(other_caches) >= 4 ? other_caches : rest;
+#else
+    return 0;
+#endif
+}
+
+void SetCurrentThreadCpuMask(u64 mask) {
+#ifdef _WIN32
+    if (mask == 0) {
+        DWORD_PTR process{};
+        DWORD_PTR system{};
+        if (!GetProcessAffinityMask(GetCurrentProcess(), &process, &system) || process == 0) {
+            return;
+        }
+        mask = process;
+    }
+    SetThreadAffinityMask(GetCurrentThread(), static_cast<DWORD_PTR>(mask));
+#else
+    static_cast<void>(mask);
+#endif
+}
+
+void SetCurrentThreadIdlePriority() {
+#ifdef _WIN32
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_IDLE);
+#else
+    SetCurrentThreadPriority(ThreadPriority::Low);
 #endif
 }
 

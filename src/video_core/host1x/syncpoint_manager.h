@@ -55,6 +55,15 @@ public:
 
     void IncrementGuest(u32 syncpoint_id);
 
+    /// Called after every guest increment, on the incrementing thread (nx2:gsv uses it to answer
+    /// the driver's armed syncpoint waits at once instead of at its next 500 us poll). The hook
+    /// must be cheap and thread-safe; nullptr removes it.
+    using GuestIncrementHook = void (*)(void* context);
+    void SetGuestIncrementHook(GuestIncrementHook hook, void* context) {
+        guest_increment_context.store(context, std::memory_order_relaxed);
+        guest_increment_hook.store(hook, std::memory_order_release);
+    }
+
     void IncrementHost(u32 syncpoint_id);
 
     void WaitGuest(u32 syncpoint_id, u32 expected_value);
@@ -70,8 +79,10 @@ public:
     }
 
 private:
+    /// `timeline_name`: the Nx2Timeline marker of the increment (a literal), with the id.
     void Increment(std::atomic<u32>& syncpoint, std::condition_variable& wait_cv,
-                   std::list<RegisteredAction>& action_storage);
+                   std::list<RegisteredAction>& action_storage, const char* timeline_name,
+                   u32 syncpoint_id);
 
     ActionHandle RegisterAction(std::atomic<u32>& syncpoint,
                                 std::list<RegisteredAction>& action_storage, u32 expected_value,
@@ -92,6 +103,8 @@ private:
     /// Waiters across both predicate waits and registered actions. Increments take the lock
     /// (or notify) only when nonzero, so syncpoint bumps with no one waiting cost one RMW.
     std::atomic<u64> pending_waiters{};
+    std::atomic<GuestIncrementHook> guest_increment_hook{};
+    std::atomic<void*> guest_increment_context{};
     std::condition_variable wait_guest_cv;
     std::condition_variable wait_host_cv;
 };

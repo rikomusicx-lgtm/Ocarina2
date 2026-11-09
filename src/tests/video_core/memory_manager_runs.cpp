@@ -13,6 +13,7 @@
 #include "core/device_memory.h"
 #include "tests/core/system_test_context.h"
 #include "video_core/memory_manager.h"
+#include "video_core/nx2_perf.h"
 #include "video_core/rasterizer_interface.h"
 
 namespace {
@@ -99,6 +100,7 @@ TEST_CASE("A 40-bit address space maps Switch 2 VA past 128 GiB", "[memory_manag
 }
 
 TEST_CASE("MaxContinuousRange from the mapping runs matches the page walk", "[memory_manager]") {
+    REQUIRE(VideoCommon::Nx2Perf::Enabled());
     const u64 big_page_bits = GENERATE(16ULL, 17ULL);
     CAPTURE(big_page_bits);
     ScopedSystemTestContext context;

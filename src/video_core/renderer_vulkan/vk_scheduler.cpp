@@ -23,8 +23,10 @@
 #include "common/logging.h"
 #include "common/settings.h"
 #include "common/dkb_cpu_trace.h"
+#include "common/nx2_timeline.h"
 #include "common/thread.h"
 #include "video_core/gpu_logging/gpu_logging.h"
+#include "video_core/nx2_perf.h"
 #include "video_core/nx2_profile.h"
 #include "video_core/renderer_vulkan/vk_command_pool.h"
 #include "video_core/renderer_vulkan/vk_graphics_pipeline.h"
@@ -193,7 +195,7 @@ bool Scheduler::DeferFlush() {
         // 0 by default (EvilOOT's flash fix): Ocarina of Time flashed white with the 500 us batch
         // (sword boulder with preflush: 31 whole-screen flashes in 30 s, 0 without), and ran
         // faster without it (Lake Hylia 52.3 -> 55.4 fps). EDEN_NX2_FENCE_FLUSH_US=500 restores it.
-        return s64{0};
+        return VideoCommon::Nx2Perf::On(VideoCommon::Nx2Perf::Opt::FenceFlush) ? s64{5000} : s64{0};
     }();
     if (interval_us <= 0 || !VideoCommon::GpuSplit::OnBackThread() ||
         std::chrono::steady_clock::now() - last_flush >= std::chrono::microseconds{interval_us}) {
@@ -207,6 +209,14 @@ void Scheduler::FlushDeferred() {
     if (flush_pending) {
         Flush();
     }
+}
+
+bool Scheduler::DeferFlushUntilWanted() {
+    if (!VideoCommon::GpuSplit::OnBackThread()) {
+        return false;
+    }
+    flush_pending = true;
+    return true;
 }
 
 bool Scheduler::WaitSubmitted(u64 tick) {
@@ -225,9 +235,17 @@ bool Scheduler::WaitSubmitted(u64 tick) {
         }
         if (const auto now = std::chrono::steady_clock::now(); now >= next_log) {
             next_log = now + std::chrono::seconds{2};
-            LOG_WARNING(Render_Vulkan, "Waited {} s for the GPU thread to submit tick {}",
+            // The back serves the request between entries: one that never does is blocked in
+            // an entry. Name the wait when it is a tracked one (BackWaitScope).
+            const char* const back_site = VideoCommon::back_wait_site.load(std::memory_order_relaxed);
+            LOG_WARNING(Render_Vulkan,
+                        "Waited {} s for the GPU thread to submit tick {} (submitted up to {}); "
+                        "GPU back thread blocked in: {}",
                         std::chrono::duration_cast<std::chrono::seconds>(now - start).count(),
-                        tick);
+                        tick, master_semaphore->CurrentTick() - 1,
+                        back_site != nullptr ? back_site
+                                             : "no tracked wait (an untracked lock or wait, or "
+                                               "a long entry)");
             split.RequestIdleHook();
         }
         if (spins < 64) {
@@ -266,6 +284,9 @@ void Scheduler::Finish(VkSemaphore signal_semaphore, VkSemaphore wait_semaphore,
 void Scheduler::WaitWorker() {
     DispatchWork();
 
+    // Waits for the Vulkan worker (tools/nx2/critical_path.py's table): the queue, then the
+    // chunk it is running.
+    Common::Nx2Timeline::Span timeline_span{"wait for Vulkan worker"};
     // Ensure the queue is drained.
     {
         std::unique_lock ql{queue_mutex};
@@ -310,6 +331,7 @@ void Scheduler::BeginRenderPassImpl(const Framebuffer* framebuffer, VkRenderPass
     const VkFramebuffer framebuffer_handle = framebuffer->Handle();
     const VkExtent2D render_area = framebuffer->RenderArea();
     state.renderpass = renderpass;
+    state.clear_variant = false;
     state.framebuffer = framebuffer_handle;
     state.render_area = render_area;
 
@@ -387,6 +409,9 @@ void Scheduler::RealizeDeferredClear() {
         dc.color_clear_mask, dc.depth_stencil, color_discard_mask, depth_stencil_discard);
     EndRenderPass();
     BeginRenderPassImpl(dc.framebuffer, renderpass, clear_values.data(), count);
+    // Without discards, the variant only clears instead of loading: its store ops, layouts and
+    // attachments are the framebuffer's own.
+    state.clear_variant = color_discard_mask == 0 && !depth_stencil_discard;
 }
 
 bool Scheduler::DeferColorClear(const Framebuffer* framebuffer, u32 rt_slot,
@@ -434,8 +459,12 @@ void Scheduler::RequestRenderpass(const Framebuffer* framebuffer, std::source_lo
     const VkRenderPass renderpass = framebuffer->RenderPass();
     const VkFramebuffer framebuffer_handle = framebuffer->Handle();
     const VkExtent2D render_area = framebuffer->RenderArea();
-    if (renderpass == state.renderpass && framebuffer_handle == state.framebuffer &&
-        render_area.width == state.render_area.width &&
+    // A deferred clear's pass serves the draws after its first one too: ending it there and
+    // beginning the framebuffer's own pass stored the attachments only to load them back (about
+    // 9 render passes a frame in Ocarina of Time, at GraphicsPipeline::ConfigureDraw).
+    if (state.renderpass != VK_NULL_HANDLE &&
+        (renderpass == state.renderpass || state.clear_variant) &&
+        framebuffer_handle == state.framebuffer && render_area.width == state.render_area.width &&
         render_area.height == state.render_area.height) {
         return;
     }
@@ -524,10 +553,13 @@ void Scheduler::WorkerThread(std::stop_token stop_token) {
             std::unique_lock lk{queue_mutex};
 
             // Wait for work.
-            event_cv.wait(lk, stop_token, [&] {
-                worker_waiting = !TryPopQueue(work);
-                return !worker_waiting;
-            });
+            {
+                Common::Nx2Timeline::Span wait_span{"worker: wait for work"};
+                event_cv.wait(lk, stop_token, [&] {
+                    worker_waiting = !TryPopQueue(work);
+                    return !worker_waiting;
+                });
+            }
             worker_waiting = false;
 
             // If we've been asked to stop, we're done.
@@ -543,6 +575,8 @@ void Scheduler::WorkerThread(std::stop_token stop_token) {
             // Perform the work, tracking whether the chunk was a submission
             // before executing.
             const bool has_submit = work->HasSubmit();
+            Common::Nx2Timeline::Span timeline_span{has_submit ? "record commands + submit"
+                                                               : "record commands"};
             work->ExecuteAll(current_cmdbuf, current_upload_cmdbuf);
 
             // If the chunk was a submission, reallocate the command buffer.
@@ -786,6 +820,10 @@ u64 Scheduler::SubmitExecution(VkSemaphore signal_semaphore, VkSemaphore wait_se
     InvalidateState();
 
     const u64 signal_value = master_semaphore->NextTick();
+    // The recording thread's hand-off of this tick to the worker (and the GPU).
+    if (Common::Nx2Timeline::Active()) {
+        Common::Nx2Timeline::Instant("submit", {"tick", signal_value});
+    }
     RecordWithUploadBuffer([signal_semaphore, wait_semaphore, signal_value,
                             this](vk::CommandBuffer cmdbuf, vk::CommandBuffer upload_cmdbuf) {
         static constexpr VkMemoryBarrier WRITE_BARRIER{
@@ -817,6 +855,10 @@ u64 Scheduler::SubmitExecution(VkSemaphore signal_semaphore, VkSemaphore wait_se
         }
 
         std::scoped_lock lock{submit_mutex};
+        // Lines up with DkbFrameTrace's begin stamp and the driver's queue packets.
+        if (Common::Nx2Timeline::Active()) {
+            Common::Nx2Timeline::Instant("vkQueueSubmit", {"tick", signal_value});
+        }
         switch (const VkResult result = master_semaphore->SubmitQueue(
                     cmdbuf, upload_cmdbuf, signal_semaphore, wait_semaphore, signal_value)) {
         case VK_SUCCESS:
@@ -950,6 +992,7 @@ void Scheduler::EndRenderPass()
         });
 
         state.renderpass = VkRenderPass{};
+        state.clear_variant = false;
         num_renderpass_images = 0;
     }
 

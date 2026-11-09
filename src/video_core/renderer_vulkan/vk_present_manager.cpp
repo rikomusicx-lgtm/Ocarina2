@@ -12,6 +12,9 @@
 #include "common/settings.h"
 #include "common/thread.h"
 #include "core/frontend/emu_window.h"
+#ifdef HAS_LSFG
+#include "video_core/renderer_vulkan/present/lsfg_common.h"
+#endif
 #include "video_core/nx2_perf.h"
 #include "video_core/renderer_vulkan/vk_present_manager.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
@@ -177,6 +180,8 @@ PresentManager::~PresentManager() {
 
 Frame* PresentManager::GetRenderFrame() {
 
+    // The renderer waits for the present thread (tools/nx2/critical_path.py's table).
+    Common::Nx2Timeline::Span timeline_span{"present: wait for free frame"};
     // Wait for free presentation frames
     std::unique_lock lock{free_mutex};
     free_cv.wait(lock, [this] { return !free_queue.empty(); });
@@ -196,6 +201,10 @@ void PresentManager::Present(Frame* frame) {
     if (use_present_thread) {
         scheduler.Record([this, frame](vk::CommandBuffer) {
             frame->queued_at = std::chrono::steady_clock::now();
+            // What ends the present thread's "present: wait for frame" (on the Vulkan worker).
+            if (Common::Nx2Timeline::Active()) {
+                Common::Nx2Timeline::Instant("present: frame queued", {"frame", frame->index});
+            }
             std::unique_lock lock{queue_mutex};
             present_queue.push_back(frame);
             frame_cv.notify_one();
@@ -300,7 +309,10 @@ void PresentManager::PresentThread(std::stop_token token) {
     while (!token.stop_requested()) {
         std::unique_lock lock{queue_mutex};
         // Wait for presentation frames
-        frame_cv.wait(lock, token, [this] { return !present_queue.empty(); });
+        {
+            Common::Nx2Timeline::Span timeline_span{"present: wait for frame"};
+            frame_cv.wait(lock, token, [this] { return !present_queue.empty(); });
+        }
         if (!token.stop_requested()) {
             bool held = false;
             if (present_wait_enabled) {
@@ -322,6 +334,18 @@ void PresentManager::PresentThread(std::stop_token token) {
             void(std::exchange(lock, std::unique_lock{swapchain_mutex}));
             last_present_id = 0;
             CopyToSwapchain(frame);
+            if (Common::Nx2Timeline::Active()) {
+                Common::Nx2Timeline::Instant("vkQueuePresentKHR", {"id", last_present_id});
+            }
+            {
+                static std::chrono::steady_clock::time_point previous{};
+                const auto now = std::chrono::steady_clock::now();
+                if (previous != std::chrono::steady_clock::time_point{}) {
+                    VideoCommon::Nx2Perf::NoteFrameTime(
+                        std::chrono::duration_cast<std::chrono::nanoseconds>(now - previous).count());
+                }
+                previous = now;
+            }
             if (present_wait_enabled) {
                 const auto submitted = std::chrono::steady_clock::now();
                 pacer.NoteSubmitted(last_present_id, submitted, held);
@@ -349,18 +373,29 @@ bool PresentManager::PaceFrame(Frame* frame, std::stop_token token) {
     const bool allowed =
         (mode == VK_PRESENT_MODE_FIFO_KHR || mode == VK_PRESENT_MODE_MAILBOX_KHR ||
          mode == VK_PRESENT_MODE_FIFO_RELAXED_KHR) &&
-        Settings::values.use_speed_limit.GetValue() &&
+        !Settings::values.frame_gen.GetValue() && Settings::values.use_speed_limit.GetValue() &&
         Settings::values.current_speed_mode.GetValue() != Settings::SpeedMode::Turbo;
-    pacer.Refresh(Clock::now(), allowed);
+    // The refresh rate of the display the window is on (the HWND on Windows).
+    const auto& window_info = render_window.GetWindowInfo();
+    pacer.Refresh(Clock::now(), allowed,
+                  window_info.type == Core::Frontend::WindowSystemType::Windows
+                      ? window_info.render_surface
+                      : nullptr);
     if (const u64 want = pacer.Outstanding(); pacer.Pacing() && want != 0) {
         // The next target counts from the refresh the previous frame was shown at.
         Common::Nx2Timeline::Span span{"present: wait until shown"};
+        // At most a refresh and a half: a driver whose present wait never signals would hold
+        // every frame for the whole wait (the pacer turns itself off after a few of these).
+        const auto limit = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            pacer.RefreshPeriod() * 3 / 2 + std::chrono::milliseconds{2});
         std::unique_lock sl{shown_mutex};
-        shown_cv.wait_for(sl, std::chrono::milliseconds{50}, [&] {
+        const bool shown = shown_cv.wait_for(sl, limit, [&] {
             return token.stop_requested() ||
                    std::any_of(shown_reports.begin(), shown_reports.end(),
                                [want](const ShownReport& r) { return r.id >= want; });
         });
+        sl.unlock();
+        pacer.NoteShownWait(shown);
     }
     DrainShown();
     if (!pacer.Pacing()) {
@@ -424,6 +459,7 @@ void PresentManager::PresentWaitThread(std::stop_token token) {
     while (!token.stop_requested()) {
         {
             std::unique_lock ql{wait_queue_mutex};
+            Common::Nx2Timeline::Span timeline_span{"present-wait: wait for work"};
             wait_queue_cv.wait(ql, token, [this] { return !wait_queue.empty(); });
             if (token.stop_requested()) {
                 return;
@@ -440,8 +476,11 @@ void PresentManager::PresentWaitThread(std::stop_token token) {
             }
             item = wait_queue.front();
         }
-        const VkResult result =
-            device.GetLogical().WaitForPresentKHR(item.swapchain, item.id, 4'000'000);
+        const VkResult result = [&] {
+            Common::Nx2Timeline::ArgSpan timeline_span{"present-wait: vkWaitForPresentKHR",
+                                                       {"id", item.id}};
+            return device.GetLogical().WaitForPresentKHR(item.swapchain, item.id, 4'000'000);
+        }();
         const auto now = std::chrono::steady_clock::now();
         wl.unlock();
         if (result == VK_TIMEOUT && now - item.submitted < std::chrono::milliseconds{500}) {

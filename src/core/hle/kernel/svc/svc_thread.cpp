@@ -4,9 +4,12 @@
 // SPDX-FileCopyrightText: Copyright 2023 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <bit>
 #include <chrono>
+#include <cstdlib>
 #include <thread>
 
+#include "common/nx2_timeline.h"
 #include "common/scope_exit.h"
 #include "core/core.h"
 #include "core/core_timing.h"
@@ -16,6 +19,7 @@
 #include "core/hle/kernel/k_scoped_resource_reservation.h"
 #include "core/hle/kernel/k_thread.h"
 #include "core/hle/kernel/svc.h"
+#include "core/hle/kernel/svc/svc_nx2_oot_present.h"
 #include "core/hle/kernel/thread_startup_policy.h"
 
 namespace Kernel::Svc {
@@ -35,6 +39,23 @@ constexpr int32_t FoldExtraCoreId(int32_t core_id) {
 constexpr u64 FoldExtraCoreMask(u64 mask) {
     constexpr u64 low = (1ULL << Core::Hardware::NUM_CPU_CORES) - 1;
     return (mask & low) | ((mask >> Core::Hardware::NUM_CPU_CORES) & low);
+}
+
+// EDEN_NX2_OOT_WIDE_AFFINITY=1 (boot switch, off by default; from zortos293/Lichii#641).
+// Ocarina of Time's two main threads (priorities 55 and 47) may only run on two of cores 3-5,
+// where the per-core job workers (priority 44) keep preempting them while cores 0-2 sit idle
+// about 30% of the time. With the switch on, any affinity mask of more than one core that
+// Ocarina sets is widened to all of the process's cores, so an idle core can take a preempted
+// main thread. Pinned (single-core) threads and every other title are unchanged. Read once, on
+// the first SetThreadCoreMask (after main() applied nx2_switches.txt).
+bool WidenAffinity(const KProcess& process, u64 affinity_mask) {
+    constexpr u64 OcarinaOfTimeProgramId = 0x0400486024DEC000ULL;
+    static const bool enabled = [] {
+        const char* value = std::getenv("EDEN_NX2_OOT_WIDE_AFFINITY");
+        return value != nullptr && value[0] != '\0' && value[0] != '0';
+    }();
+    return enabled && std::popcount(affinity_mask) > 1 &&
+           process.GetProgramId() == OcarinaOfTimeProgramId;
 }
 
 } // Anonymous namespace
@@ -169,6 +190,25 @@ void SleepThread(Core::System& system, s64 ns) {
 
     // When the input tick is positive, sleep.
     if (ns > 0) {
+        // The timeline marks Ocarina of Time's present poll sleeps: a timer wait for the GPU's
+        // event, not guest work (tools/nx2/critical_path.py). Recorded on the host thread the
+        // guest thread resumes on. The span carries the poll's event object (its words are
+        // marked with the guest layer, for the GPU write that sets it).
+        u64 poll_object = 0;
+        const bool poll_span = Common::Nx2Timeline::Active() &&
+                               IsNx2OotPresentPollSleep(system, ns, &poll_object);
+        const u64 poll_begin = poll_span ? Common::Nx2Timeline::Now() : 0;
+        SCOPE_EXIT {
+            if (poll_span) {
+                Common::Nx2Timeline::Record("OoT: present poll sleep", poll_begin,
+                                            Common::Nx2Timeline::Now(), {"object", poll_object});
+            }
+        };
+        // Ocarina of Time's present poll waits for the GPU's write instead (EXP24, off by default).
+        if (SleepNx2OotPresentPoll(system, ns)) {
+            return;
+        }
+
         // Convert the timeout from nanoseconds to ticks.
         // NOTE: Nintendo does not use this conversion logic in WaitSynchronization...
         s64 timeout;
@@ -320,6 +360,9 @@ Result SetThreadCoreMask(Core::System& system, Handle thread_handle, s32 core_id
         // Validated against the real mask above; fold to the emulated cores from here on.
         affinity_mask = FoldExtraCoreMask(affinity_mask);
         core_id = FoldExtraCoreId(core_id);
+        if (WidenAffinity(GetCurrentProcess(system.Kernel()), affinity_mask)) {
+            affinity_mask = FoldExtraCoreMask(process_core_mask);
+        }
 
         // Validate the core id.
         if (IsValidVirtualCoreId(core_id)) {

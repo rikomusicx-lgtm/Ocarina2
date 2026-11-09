@@ -113,6 +113,8 @@ public:
     bool MustFlushRegion(DAddr addr, u64 size,
                          VideoCommon::CacheType which = VideoCommon::CacheType::All) override;
     VideoCore::RasterizerDownloadArea GetFlushArea(DAddr addr, u64 size) override;
+    /// GetFlushArea's answer under both caches' mutexes.
+    VideoCore::RasterizerDownloadArea GetFlushAreaLocked(DAddr addr, u64 size);
     bool HasPendingQueries(DAddr addr, u64 size) override;
     bool HasCachedReports(DAddr addr, u64 size) override;
     void InvalidateRegion(DAddr addr, u64 size,
@@ -131,6 +133,8 @@ public:
     void SignalSyncPoint(u32 value) override;
     void SignalReference() override;
     void ReleaseFences(bool force = true) override;
+    bool FencesQuiet(bool strict, u64& epoch) override;
+    u64 FenceWorkEpoch() const override;
     void FlushQueryResults(DAddr addr, u64 size) override;
     void FlushAndInvalidateRegion(
         DAddr addr, u64 size, VideoCommon::CacheType which = VideoCommon::CacheType::All) override;
@@ -162,6 +166,8 @@ public:
     Tegra::Engines::AccelerateDMAInterface& AccessAccelerateDMA() override;
     void AccelerateInlineToMemory(GPUVAddr address, size_t copy_size,
                                   std::span<const u8> memory) override;
+    void AccelerateInlineToMemoryImpl(GPUVAddr address, size_t copy_size,
+                                      std::span<const u8> memory);
     void LoadDiskResources(u64 title_id, std::stop_token stop_loading,
                            const VideoCore::DiskResourceLoadCallback& callback) override;
 
@@ -175,6 +181,9 @@ public:
                                                             u32 pixel_stride);
 
 private:
+    /// False when no page of the range was ever written by the GPU through the buffer cache.
+    bool MayBeGpuModified(DAddr addr, u64 size);
+
     static constexpr const u64 NEEDS_D24[] = {
         0x01006A800016E000ULL, // SSBU
         0x0100E95004038000ULL, // XC2
@@ -192,6 +201,9 @@ private:
     void CaptureIndirectTrace();
     void CollectIndirectTrace();
     void TraceDrawFailure(std::string_view reason);
+    bool IsNx2IndirectReset(bool is_indexed, u32 instance_count);
+    /// A compute dispatch was recorded since the last barrier for GPU-counted draws.
+    bool compute_since_count_barrier{};
     /// Remembers render target 0 of a draw with one of Ocarina of Time's tonemap shaders.
     void TrackOotTonemappedImage(const GraphicsPipeline& pipeline);
     bool TryNx2IndirectReset(bool is_indexed, u32 instance_count);
@@ -202,11 +214,11 @@ private:
 
     /// Records the copies of the command list pages the work just recorded wrote and submits, so
     /// the GPU makes them now (BufferCache::Nx2CopyListPages).
-    void SubmitNx2ListCopies();
+    void SubmitNx2ListCopies(u64 writer);
 
-    /// Records the dynamic state of the draw being prepared with `pipeline` (null for
+    /// Records the dynamic state of the draw being prepared with `draw_pipeline` (null for
     /// DrawTexture's blit).
-    void UpdateDynamicStates(const GraphicsPipeline* pipeline);
+    void UpdateDynamicStates(GraphicsPipeline* draw_pipeline = nullptr);
 
     void HandleTransformFeedback();
 
@@ -233,6 +245,7 @@ private:
     void UpdateLogicOpEnable(Tegra::Engines::Maxwell3D::Regs& regs);
     void UpdateDepthClampEnable(Tegra::Engines::Maxwell3D::Regs& regs);
     void UpdateAlphaToCoverageEnable(Tegra::Engines::Maxwell3D::Regs& regs);
+    bool alpha_to_coverage_enable{}; ///< Last value recorded with SetAlphaToCoverageEnableEXT
     void UpdateAlphaToOneEnable(Tegra::Engines::Maxwell3D::Regs& regs);
     void UpdateFrontFace(Tegra::Engines::Maxwell3D::Regs& regs);
     void UpdateStencilOp(Tegra::Engines::Maxwell3D::Regs& regs);
@@ -244,6 +257,15 @@ private:
     void UpdateVertexInput(Tegra::Engines::Maxwell3D::Regs& regs);
 
     void FrameDumpPass(const Framebuffer* framebuffer);
+#ifdef EGLANTINE_STREAMLINE
+    bool OcarinaDlssEnabled() const;
+    void TrackOcarinaCamera();
+    void TrackOcarinaActor(u64 shader_hash, bool is_indexed, bool is_indirect);
+    bool TryOcarinaDlss(const ComputePipeline& pipeline, bool replace);
+    void ReadOcarinaActor(struct OcarinaActorMesh& mesh);
+#endif
+    /// Records the uniform and storage buffers of the current draw or dispatch for the frame dump.
+    bool FrameDumpBuffers(bool compute, std::span<const u64> shader_hashes);
     /// EDEN_NX2_PENDING_WRITE_TRACE: logs bound buffer ranges with collected, unapplied CPU writes.
     void TracePendingCpuWrites(bool compute, std::span<const u64> shader_hashes);
 #ifdef EGLANTINE_STREAMLINE
@@ -281,8 +303,8 @@ private:
     PipelineCache pipeline_cache;
     AccelerateDMA accelerate_dma;
     FenceManager fence_manager;
-    FlashWatch flash_watch;
     FrameDump frame_dump;
+    FlashWatch flash_watch;
 
     boost::container::static_vector<u32, MAX_IMAGE_VIEWS> image_view_indices;
     std::array<VideoCommon::ImageViewId, MAX_IMAGE_VIEWS> image_view_ids;

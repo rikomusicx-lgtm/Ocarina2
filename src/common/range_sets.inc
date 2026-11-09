@@ -118,10 +118,6 @@ struct RangeSet<AddressType>::RangeSetImpl {
 
     template <typename Func>
     void ForEachInRange(AddressType base_addr, size_t size, Func&& func) const {
-        // An empty query is cheap and keeps the early-out uniform with wrap-around sizes.
-        if (m_ranges.empty() || size == 0) {
-            return;
-        }
         const AddressType start_address = base_addr;
         const AddressType end_address = start_address + static_cast<AddressType>(size);
         if (end_address <= start_address) {

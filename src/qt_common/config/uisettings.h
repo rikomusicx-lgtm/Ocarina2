@@ -112,6 +112,9 @@ struct Values {
                                                            true};
 
     Setting<bool> first_start{linkage, true, "firstStart", Category::Ui};
+    // The shader warm-up told the player once to raise the NVIDIA shader cache size.
+    Setting<bool> shader_warm_cache_tip_shown{linkage, false, "shaderWarmCacheTipShown",
+                                              Category::Ui};
     Setting<bool> pause_when_in_background{linkage,
                                            false,
                                            "pauseWhenInBackground",
@@ -144,6 +147,9 @@ struct Values {
     // Release tag the user chose to skip, and the epoch second before which updates stay quiet.
     Setting<std::string> skipped_update_tag{linkage, {}, "skipped_update_tag", Category::Ui};
     Setting<unsigned long long> update_remind_at{linkage, 0, "update_remind_at", Category::Ui};
+    // The Fritchii version whose "What's new" window was shown (yuzu/fritchii/whats_new.cpp).
+    Setting<std::string> fritchii_whats_new_seen{linkage, {}, "fritchii_whats_new_seen",
+                                                 Category::Ui};
 
     // Linux/MinGW may support (requires libdl support)
     SwitchableSetting<bool> enable_gamemode{linkage,

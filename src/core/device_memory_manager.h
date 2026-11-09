@@ -124,6 +124,12 @@ public:
     u8* GetSpan(const DAddr src_addr, const std::size_t size);
     const u8* GetSpan(const DAddr src_addr, const std::size_t size) const;
 
+    /// Changes whenever Map or Unmap changes which host memory a device page reads: host
+    /// pointers kept from before are stale.
+    [[nodiscard]] u64 TranslationGeneration() const {
+        return translation_generation.load(std::memory_order_acquire);
+    }
+
     void ReadBlock(DAddr address, void* dest_pointer, size_t size,
                    std::source_location caller = std::source_location::current());
     void ReadBlockUnsafe(DAddr address, void* dest_pointer, size_t size,

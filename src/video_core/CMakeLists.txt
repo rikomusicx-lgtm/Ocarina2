@@ -14,11 +14,13 @@ if(LIBVA_FOUND)
 endif()
 
 add_library(video_core STATIC
+    async_translate.h
     buffer_cache/buffer_base.h
     buffer_cache/buffer_cache_base.h
     buffer_cache/buffer_cache.cpp
     buffer_cache/buffer_cache.h
     buffer_cache/memory_tracker_base.h
+    buffer_cache/nx2_bytes_equal.h
     buffer_cache/usage_tracker.h
     buffer_cache/virtual_range_cache.h
     buffer_cache/word_manager.h
@@ -26,6 +28,7 @@ add_library(video_core STATIC
     capture.h
     cdma_pusher.cpp
     cdma_pusher.h
+    churn_counters.h
     compatible_formats.cpp
     compatible_formats.h
     control/channel_state.cpp
@@ -119,8 +122,16 @@ add_library(video_core STATIC
     nx2.h
     nx2_cmdpage_diag.h
     nx2_debug_control.cpp
+    nx2_precompile.cpp
+    nx2_precompile.h
+    nx2_recipe.cpp
+    nx2_recipe.h
     nx2_debug_control.h
+    nx2_frame_fence.h
+    nx2_list_verify.h
     nx2_profile.h
+    nx2_qmd_prediction.cpp
+    nx2_qmd_prediction.h
     nx2_perf.h
     nx2_download_trace.h
     pending_maps.h
@@ -213,12 +224,18 @@ add_library(video_core STATIC
     renderer_vulkan/vk_frame_dump.h
     renderer_vulkan/vk_graphics_pipeline.cpp
     renderer_vulkan/vk_graphics_pipeline.h
+    renderer_vulkan/vk_pipeline_library.cpp
+    renderer_vulkan/vk_pipeline_library.h
     renderer_vulkan/vk_multi_range_buffer.cpp
     renderer_vulkan/vk_multi_range_buffer.h
     renderer_vulkan/vk_master_semaphore.cpp
     renderer_vulkan/vk_master_semaphore.h
     renderer_vulkan/vk_pipeline_cache.cpp
     renderer_vulkan/vk_pipeline_cache.h
+    renderer_vulkan/vk_pipeline_translate_queue.cpp
+    renderer_vulkan/vk_pipeline_translate_queue.h
+    renderer_vulkan/vk_precompiled_kept.cpp
+    renderer_vulkan/vk_precompiled_kept.h
     renderer_vulkan/vk_present_manager.cpp
     renderer_vulkan/vk_present_manager.h
     renderer_vulkan/vk_host_pacer.cpp
@@ -260,6 +277,7 @@ add_library(video_core STATIC
     vulkan_common/vulkan_library.cpp
     vulkan_common/vulkan_library.h
     vulkan_common/vulkan_overlay_filter.h
+    vulkan_common/unbacked_fallback.h
     vulkan_common/vulkan_memory_allocator.cpp
     vulkan_common/vulkan_memory_allocator.h
     vulkan_common/vulkan_surface.cpp
@@ -279,6 +297,13 @@ add_library(video_core STATIC
     shader_handle_program.h
     shader_notify.cpp
     shader_notify.h
+    shader_warm/shader_archives.cpp
+    shader_warm/shader_archives.h
+    shader_warm/shader_warm_builder.cpp
+    shader_warm/shader_warm_builder.h
+    shader_warm/warm_defaults.cpp
+    shader_warm/warm_records.cpp
+    shader_warm/warm_records.h
     smaa_area_tex.h
     smaa_search_tex.h
     surface.cpp
@@ -433,6 +458,9 @@ target_link_libraries(video_core PUBLIC common core)
 if(WIN32)
     target_link_libraries(video_core PRIVATE advapi32)
 endif()
+
+# Shader warm-up builder: game archives use zstd (also with dictionaries) and zlib.
+target_link_libraries(video_core PRIVATE zstd::zstd ZLIB::ZLIB)
 target_link_libraries(video_core PUBLIC shader_recompiler stb bc_decoder gpu_logging)
 if (ENABLE_OPENGL)
     target_link_libraries(video_core PUBLIC glad)

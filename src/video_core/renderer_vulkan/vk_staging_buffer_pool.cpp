@@ -15,6 +15,9 @@
 #include "common/bit_util.h"
 #include "common/common_types.h"
 #include "common/literals.h"
+#include "video_core/churn_counters.h"
+#include "video_core/nx2_debug_control.h"
+#include "common/logging.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_staging_buffer_pool.h"
 #include "video_core/vulkan_common/vulkan_device.h"
@@ -243,7 +246,29 @@ StagingBufferRef StagingBufferPool::CreateStagingBuffer(size_t size, MemoryUsage
     if (device.IsBufferDeviceAddressSupported()) {
         buffer_ci.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     }
-    vk::Buffer buffer = memory_allocator.CreateBuffer(buffer_ci, usage);
+    vk::Buffer buffer;
+    try {
+        buffer = memory_allocator.CreateBuffer(buffer_ci, usage);
+    } catch (const vk::Exception& e) {
+        // Out of memory: free every idle staging buffer and try once more.
+        size_t freed = 0;
+        for (StagingBuffersCache* cache : {&device_local_cache, &upload_cache, &download_cache}) {
+            for (StagingBuffers& level : *cache) {
+                const size_t before = level.entries.size();
+                std::erase_if(level.entries, [this](const StagingBuffer& entry) {
+                    return !entry.deferred && scheduler.IsFree(entry.tick);
+                });
+                freed += before - level.entries.size();
+                level.iterate_index = 0;
+                level.delete_index = 0;
+            }
+        }
+        LOG_WARNING(Render_Vulkan, "Staging buffer of {} MiB could not be made ({}); freed {} idle "
+                    "staging buffers and retrying", buffer_ci.size >> 20, e.what(), freed);
+        buffer = memory_allocator.CreateBuffer(buffer_ci, usage);
+    }
+    VideoCommon::Churn::Add(VideoCommon::Churn::StagingBuffers);
+    VideoCommon::Churn::Add(VideoCommon::Churn::StagingBytes, buffer_ci.size);
     if (device.HasDebuggingToolAttached()) {
         ++buffer_index;
         buffer.SetObjectNameEXT(fmt::format("Staging Buffer {}", buffer_index).c_str());
@@ -289,6 +314,25 @@ void StagingBufferPool::ReleaseLevel(StagingBuffersCache& cache, size_t log2) {
     auto& staging = cache[log2];
     auto& entries = staging.entries;
     const size_t old_size = entries.size();
+
+    // EDEN_NX2_EXP8 bit 1: keep two idle upload buffers per level up to 32 MiB (under 128 MiB in
+    // all). Each level is swept every 64 frames, so after a pause each upload over 8 MiB (past
+    // the stream buffer's regions) got a new dedicated allocation, written to for the first time
+    // (16 MiB on an RTX 4080, idle system: 0.4 ms to create, 1.2 ms more for the first write).
+    constexpr size_t KeepMaxLog2 = 25;
+    constexpr size_t KeepPerLevel = 2;
+    if (&cache == &upload_cache && log2 <= KeepMaxLog2 &&
+        (VideoCore::Nx2Debug::Experiment(8) & 1) != 0) {
+        size_t idle = 0;
+        std::erase_if(entries, [this, &idle](const StagingBuffer& entry) {
+            return scheduler.IsFree(entry.tick) && ++idle > KeepPerLevel;
+        });
+        staging.delete_index = 0;
+        if (staging.iterate_index > entries.size()) {
+            staging.iterate_index = 0;
+        }
+        return;
+    }
 
     const auto is_deletable = [this](const StagingBuffer& entry) {
         return scheduler.IsFree(entry.tick);

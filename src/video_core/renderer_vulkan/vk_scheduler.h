@@ -23,8 +23,10 @@
 #include "common/dkb_frame_trace.h"
 #include "common/logging.h"
 #include "common/polyfill_thread.h"
+#include "common/nx2_timeline.h"
 #include "common/settings.h"
 #include "video_core/gpu_split.h"
+#include "video_core/gpu_wait_site.h"
 #include "video_core/renderer_vulkan/fragment_barrier_state.h"
 #include "video_core/renderer_vulkan/vk_master_semaphore.h"
 #include "video_core/vulkan_common/vulkan_wrapper.h"
@@ -66,6 +68,10 @@ public:
     bool DeferFlush();
     /// Submits deferred work (the split's back, from its idle hook).
     void FlushDeferred();
+    /// The split's back (EDEN_NX2_EXP27 & 8, zortos293/Lichii#717 DISPATCH_BATCH): the work so
+    /// far goes with the next submission, when the back goes idle or when another thread waits
+    /// for it (WaitSubmitted), with no time window. False on other threads (the caller submits).
+    bool DeferFlushUntilWanted();
     /// Threads other than the split's back: waits until tick is submitted, asking the back to
     /// submit deferred work (logged every 2 s while it waits). False only when the back thread
     /// is not running, so nothing will submit it: the caller then submits it itself.
@@ -246,6 +252,8 @@ public:
             if (tick >= master_semaphore->CurrentTick()) {
                 Flush();
             }
+            VideoCommon::BackWaitScope wait_scope{"Scheduler::Wait (host GPU execution)"};
+            Common::Nx2Timeline::ArgSpan timeline_span{"wait for host GPU", {"tick", tick}};
             master_semaphore->Wait(tick);
         }
         const auto trace_waited = trace ? std::chrono::steady_clock::now()
@@ -406,6 +414,9 @@ private:
         VkRenderPass renderpass{};
         VkFramebuffer framebuffer{};
         VkExtent2D render_area = {0, 0};
+        /// The pass is a deferred clear's variant of the framebuffer's render pass that differs
+        /// from it only in load ops, so later draws on that framebuffer can stay in it.
+        bool clear_variant = false;
         GraphicsPipeline* graphics_pipeline = nullptr;
         bool is_rescaling = false;
         bool rescaling_defined = false;

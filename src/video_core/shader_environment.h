@@ -13,6 +13,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <string>
 #include <type_traits>
 #include "common/container/unordered_map.h"
 #include <vector>
@@ -111,7 +112,23 @@ public:
     }
     bool HasNativeInstructions() const override;
 
+    /// Whether a guarded guest memory read gave up (a page table writer kept its lock): the
+    /// translation saw zeros there, so its result must not be used.
+    [[nodiscard]] bool GuardedReadFailed() const noexcept {
+        return guarded_read_failed;
+    }
+
+    /// The first of the recorded reads (constant buffer values, texture types and formats,
+    /// storage pointer classes, replacements, the viewport transform state) whose answer differs
+    /// from `other`'s, described; empty when they all match.
+    [[nodiscard]] std::string FirstReadDifference(const GenericEnvironment& other) const;
+
 protected:
+    /// ReadBlockGuarded of the memory manager; zeros and GuardedReadFailed when it gave up.
+    void ReadGuestGuarded(GPUVAddr address, void* data, size_t size);
+    /// IsFullyMappedRangeGuarded; false and GuardedReadFailed when it gave up.
+    bool IsMappedGuarded(GPUVAddr address, size_t size);
+
     std::optional<u64> TryFindSize();
     virtual std::optional<u32> ReadTrapGuardConstant(u32, u32) { return std::nullopt; }
 
@@ -123,8 +140,10 @@ protected:
     size_t native_source_size{};
     std::shared_ptr<const LoweredNativeCode> lowered_native;
 
+    /// `live`: read with ReadBlock even when the reads are guarded (the checks against the live
+    /// state, on the GPU thread).
     Tegra::Texture::TICEntry ReadTextureInfo(GPUVAddr tic_addr, u32 tic_limit,
-                                             bool via_header_index, u32 raw);
+                                             bool via_header_index, u32 raw, bool live = false);
 
     Tegra::MemoryManager* gpu_memory{};
     GPUVAddr program_base{};
@@ -152,6 +171,10 @@ protected:
 
     bool has_unbound_instructions = false;
     bool has_hle_engine_state = false;
+    /// Guest memory is read through the guarded reads (a snapshot environment, which may be
+    /// translated off the GPU thread).
+    bool guarded_reads = false;
+    bool guarded_read_failed = false;
 };
 
 class GraphicsEnvironment final : public GenericEnvironment {
@@ -177,9 +200,64 @@ public:
 
     std::optional<Shader::ReplaceConstant> GetReplaceConstBuffer(u32 bank, u32 offset) override;
 
+    /// EDEN_NX2_ASYNC_TRANSLATE: copies what the translation reads from the engine and from
+    /// constant buffers (the stage's constant buffer table and the bytes of each enabled buffer,
+    /// the texture pool registers, the viewport transform state, the HLE replace entries), so the
+    /// program can be translated later, on another thread, with the answers it would get now.
+    /// From then on the environment never reads the engine, and reads guest memory only for
+    /// texture descriptors, storage pointer checks and unbound instructions, through the guarded
+    /// reads. GPU thread, right after construction. Returns the bytes copied.
+    size_t TakeSnapshot();
+
+    /// Frees the copied constant buffer bytes once translated (the recorded reads and the
+    /// texture pool registers stay).
+    void ReleaseSnapshotBytes();
+
+    [[nodiscard]] bool HasSnapshot() const noexcept {
+        return snapshot != nullptr;
+    }
+
+    struct LiveCheck {
+        size_t reads{};     ///< Recorded reads answered again
+        size_t differing{}; ///< Of them, answered differently now
+        std::string first;  ///< The first that differs, described
+    };
+    /// GPU thread, right after translating from the snapshot: every recorded read answered again
+    /// from the engine and guest memory as they are now (EDEN_NX2_ASYNC_TRANSLATE=3).
+    [[nodiscard]] LiveCheck CheckAgainstLive();
+
+    /// GPU thread, before a pipeline translated from the snapshot is used: the texture
+    /// descriptors it read (types and formats), read again from the snapshot's pool with
+    /// ReadBlock, still give what it recorded. False means the pool changed meanwhile (or a
+    /// descriptor needed the cache flush the worker can't do).
+    [[nodiscard]] bool TextureReadsStillMatch();
+
 private:
+    /// What TakeSnapshot copies.
+    struct Snapshot {
+        std::array<Tegra::Engines::ConstBufferInfo,
+                   Tegra::Engines::Maxwell3D::Regs::MaxConstBuffers>
+            const_buffers{};
+        /// Bytes of each enabled buffer as Read<u32> sees them, one word past its size.
+        std::array<std::vector<u32>, Tegra::Engines::Maxwell3D::Regs::MaxConstBuffers> words;
+        ::Common::unordered_map<u64, Shader::ReplaceConstant> replace_entries;
+        GPUVAddr tic_address{};
+        u32 tic_limit{};
+        bool via_header_index{};
+        u32 viewport_transform_state{};
+    };
+
+    /// The engine's answers as they are now, without recording them.
+    [[nodiscard]] u32 LiveCbufValue(u32 cbuf_index, u32 cbuf_offset) const;
+    [[nodiscard]] bool LiveStoragePointer(u64 key) const;
+    [[nodiscard]] std::optional<Shader::ReplaceConstant> LiveReplaceConstBuffer(u32 bank,
+                                                                                u32 offset) const;
+    [[nodiscard]] Tegra::Texture::TICEntry LiveTextureInfo(u32 handle);
+
     Tegra::Engines::Maxwell3D* maxwell3d{};
     size_t stage_index{};
+    /// Shared: the environments are copied (they declare a destructor, so they have no moves).
+    std::shared_ptr<Snapshot> snapshot;
 };
 
 class ComputeEnvironment final : public GenericEnvironment {
@@ -215,9 +293,27 @@ private:
 std::optional<u32> ReadNativeGuardConstant(Tegra::Engines::KeplerCompute& compute,
                                          Tegra::MemoryManager& memory, u32 bank, u32 offset);
 
+/// Answers for reads a FileEnvironment has no record of (EDEN_NX2_COMPUTE_WARM: programs from the
+/// game files, never run, converted only to fill the driver's cache). Without it a missing read
+/// is an error.
+struct GuessMissing {
+    u32 cbuf_bank0{0x10000000};  ///< Constant buffer 0 (driver constants, descriptor handles)
+    u32 cbuf_other{0};           ///< Other constant buffers (game constants)
+    Shader::TextureType texture_type{Shader::TextureType::ColorArray2D};
+    Shader::TexturePixelFormat pixel_format{static_cast<Shader::TexturePixelFormat>(16)};
+    bool storage_pointer_bank0{true};  ///< Bank 0 always held storage pointers in the test title's records
+    bool storage_pointer_other{false}; ///< Banks 1-4 never did (95% identical SPIR-V offline)
+};
+
 class FileEnvironment final : public Shader::Environment {
 public:
     FileEnvironment() = default;
+
+    /// Missing reads get these answers instead of an error; the guess must outlive the
+    /// environment.
+    void SetGuessMissing(const GuessMissing* guess_) noexcept {
+        guess = guess_;
+    }
     ~FileEnvironment() override = default;
 
     FileEnvironment& operator=(FileEnvironment&&) noexcept = default;
@@ -226,7 +322,13 @@ public:
     FileEnvironment& operator=(const FileEnvironment&) = delete;
     FileEnvironment(const FileEnvironment&) = delete;
 
-    void Deserialize(std::ifstream& file);
+    void Deserialize(std::istream& file);
+
+    /// Whether the record at the file's read position (what Deserialize reads) can fit in the
+    /// `bytes_left` bytes before the end of the file: its code size and table counts are peeked
+    /// and the read position is left where it was. A corrupt record's counts would otherwise
+    /// make Deserialize allocate gigabytes.
+    [[nodiscard]] static bool RecordFits(std::istream& file, u64 bytes_left);
 
     [[nodiscard]] size_t MemorySize() const;
 
@@ -273,6 +375,27 @@ public:
 
     void Dump(u64 pipeline_hash, u64 shader_hash) override;
 
+    /// Whether translating this recorded environment gives what translating `live`, the same
+    /// program as the game draws it now, would (zortos293/Lichii#896; the same code is assumed:
+    /// the pipeline keys match). Translation is decided by the answers to its questions, so each
+    /// recorded question is asked of `live`: a constant buffer value must be the same, unless it
+    /// was only used as a texture handle (then the texture it names now must have the same type
+    /// and the same pixel format traits as the recorded one) or as a storage buffer pointer word
+    /// (then its classification must be the same); texture questions, storage pointer
+    /// classifications and the other recorded answers must be the same. Asking them also leaves
+    /// `live` holding every answer a translation of it would have recorded (what the disk cache
+    /// stores). Sets `why` to the first answer that differs. `format_traits` limits the pixel
+    /// format traits compared to those the program's translation used (see the FormatTrait bits).
+    [[nodiscard]] bool AnswersHoldFor(Shader::Environment& live, const char** why = nullptr,
+                                      u32 format_traits = ~0U);
+
+    /// Pixel format traits translation uses: integer formats (sampled textures).
+    static constexpr u32 FormatTraitInteger = 1;
+    /// R16_FLOAT and the byte-addressed 32-bit color formats (byte-addressed image stores).
+    static constexpr u32 FormatTraitByteAddressed = 2 | 4;
+    /// Snorm formats (buffer texel fetches on hosts without snorm render buffers).
+    static constexpr u32 FormatTraitSnorm = 8;
+
 private:
     std::vector<u64> code;
     ::Common::unordered_map<u32, Shader::TextureType> texture_types;
@@ -288,6 +411,7 @@ private:
     u32 read_highest{};
     u32 initial_offset{};
     u32 viewport_transform_state = 1;
+    const GuessMissing* guess{};
 };
 
 void SerializePipeline(std::span<const char> key, std::span<const GenericEnvironment* const> envs,

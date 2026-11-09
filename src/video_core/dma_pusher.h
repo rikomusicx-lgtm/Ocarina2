@@ -7,6 +7,7 @@
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <atomic>
 #include <condition_variable>
 #include <optional>
@@ -216,8 +217,9 @@ public:
     void RecordParsedEntry(const CommandListHeader& header, std::span<const CommandHeader> commands);
     /// Whether the entry lies on device pages the GPU has written (NX2).
     bool IsGpuWrittenCommands(GPUVAddr address, size_t size);
-    /// Copies the list's words from memory again, as of suspension count `now`.
-    void RefreshSnapshot(CommandList& list, u64 now);
+    /// Copies the list's words from memory again, as of suspension count `now`, from entry
+    /// `first_entry` on (the entries before it ran already).
+    void RefreshSnapshot(CommandList& list, u64 now, size_t first_entry = 0);
     /// Copies the list's deferred entries (CommandList::deferred_entries) from memory.
     void RefreshDeferredEntries(CommandList& list);
 
@@ -234,6 +236,9 @@ public:
     /// since. False when not all are current (or the list isn't GPU-written): the caller drains,
     /// flushes and reads guest memory.
     bool ReadGpuWrittenCommands(GPUVAddr address, u32 count);
+    /// EDEN_NX2_LIST_VERIFY: reads the list ReadGpuWrittenCommands just read again as before
+    /// EXP40 (Nx2ListVerify) and leaves the words read last in command_headers.
+    void VerifyGpuWrittenCommands(GPUVAddr address, u32 count);
     /// Brings command list words the GPU wrote (still only in host buffers) to guest memory.
     bool FlushGpuWrittenCommands(GPUVAddr address, size_t size);
 
@@ -295,10 +300,12 @@ public:
 
     VideoCore::RasterizerInterface* rasterizer = nullptr;
 
-    const bool ib_enable : 1 = true; ///< IB mode enabled
-    bool dma_increment_once : 1 = false;
-    bool signal_sync : 1 = false;
-    bool synced : 1 = false;
+    // Not bitfields: the fence thread sets synced, and a bitfield write would rewrite the byte it
+    // shares with dma_increment_once and signal_sync (#479).
+    const bool ib_enable = true; ///< IB mode enabled
+    bool dma_increment_once = false;
+    bool signal_sync = false;
+    std::atomic<bool> synced{false};
 };
 
 } // namespace Tegra
