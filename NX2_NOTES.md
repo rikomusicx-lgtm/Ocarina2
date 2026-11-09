@@ -537,3 +537,48 @@ locks the new values in. Note: memory_layout_mode=Memory_4Gb and CPU Unsafe are 
 because the owner asked for exactly what he has enabled; they are the riskiest knobs on other
 hardware if anyone reports trouble - raise to Memory_8Gb / CPU Auto first.
 Not built or tagged as of this writing; verify a boot accepts the dialog and the water holds.
+
+## 2026-11-09 (later) - split: the DMA snapshot now tracks graphics draws; water-flicker fast mode
+
+The remaining water-flicker class in Fast mode runs WITH the split on: `FrontDmaRead` (the
+front-thread macro DMA read, ~35k reads/s, mostly occlusion reports) took the `EDEN_NX2_DMA_SNAPSHOT`
+fast path - no drain at all - whenever no compute/copy/unranged writer had been queued since the
+page's last snapshot flush. Graphics (mesh/task/task-cull) storage writes are NOT covered by
+`NoteWriter` (compute/copy only) or `NoteUnrangedWriter` (copies); any 3D draw that wrote storage
+buffers (indirect-draw arguments, cull outputs) was committed without telling the split. The front
+could read the indirect-draw buffer from guest memory before the back even executed the draw, see
+stale/zero counts (zero-indirect-draw frames), and the scene-color pass went black in bursts.
+
+Fix: the front now notes every 3D engine draw-end entry (`GraphicsWrites` position in
+`GpuSplit::NoteGraphicsWriter`), and the snapshot fast path requires it to be no newer than the
+page'\''s snapshot position (`LastGraphicsWritePosition() <= snapshot`). Any graphics draw committed
+since the snapshot blocks the fast path and forces the drained, flushed read - the same guarantee
+as SPLIT=0 for this path. Compute/copy writers were already tracked and are unaffected. The miss
+reasons now count graphics draws (`miss_reasons[4]`, "graphics draw" in the log). Default stays
+`EDEN_NX2_DMA_SNAPSHOT=9`; EDEN_NX2_DMA_SNAPSHOT=10 verifies every skipped read against the drained path.
+
+The drained path was always correct; this change makes the fast path equally correct, at the cost of
+the fast path rarely hitting mid-draw-loop (any draw invalidates). A range-aware tracker (bind-time
+storage-write ranges reported to the front) is the way out of that, if the perf is wanted back.
+
+Still open: the half-resolution scene-color pass flashes should be reverified live with the split on
+(EDEN_NX2_FLASH_WATCH); not measurable in this environment. The OOT preset still disables the split
+as belt-and-braces. The user's tuned config launches with the split ON (the preset dialog keeps
+"your saved settings are not changed", and declining it never applied oot_split_disabled).
+
+## 2026-11-09 (later) - DLSS: the newly added mode gauge is gone; DLSS path documented for 6 GB cards
+
+Removed the `nvidia_dlss_mode` setting (the "DLSS Mode:" combo, build-121) entirely: settings, enum,
+UI row (Graphics tab), translations, `vk_streamline_dlss` mode override (Auto-only from the
+render-to-output ratio is now unconditional), `configure_graphics.cpp` wiring and `apply_funcs`
+visibility. The DLSS checkbox is unchanged; Streamline/310.9.16-on-the-NVIDIA-app and the
+10 s retry on NGX failure are unchanged. Reading it as "the newly added DLSS": if what was meant
+was "remove NVIDIA DLSS altogether", this is one `git revert` away.
+
+"Optimizing for a 3050" concretely: nothing in the code can make NGX fit at 3840x2160 on 6 GB
+(stage 4 / result 15 / 0xbad0000d = FAIL_OutOfGPUMemory - the retry stays). The handheld console
+mode in the new OOT preset is what makes DLSS viable on this card: 810p -> 1080p (or the game'\''s
+other sub-4K outputs) fits NGX and lets the replacement engage. The nvidia_dlss tooltip now says
+on 6 GB cards DLSS only fits at 1080p-or-below output. `EDEN_NX2_GRAPHICS_SCALE=20` (1440p output)
+is documented in dist/nx2_switches.txt as the lever to shrink the output. Preset K stays forced for
+every mode (M/L draws thin lines in Fire Emblem at 2x scale).
