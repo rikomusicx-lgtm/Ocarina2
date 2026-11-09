@@ -10,9 +10,13 @@
 #
 # Restart the emulator after editing.
 
-# --- Performance tuning defaults for Switch 2 ---
-# Offload GPU method/macro execution to the back thread (SPLIT=2 delivers up to +54% FPS alone).
-EDEN_NX2_SPLIT=2
+# GPU thread split: NOT forced on by default. On low-end docked hardware the mesh/task indirect
+# draws read before the GPU writers commit the page map and the scene goes black in bursts
+# (measured with EDEN_NX2_FLASH_WATCH); the OOT docked preset disables the split for that reason.
+# If your card is not VRAM-bound and you want +54% in the menus/between scenes, set
+# EDEN_NX2_SPLIT=2 in your own nx2_switches.txt (%APPDATA%\eden\nx2_switches.txt) - your copy
+# wins over this one, and over the preset.
+#EDEN_NX2_SPLIT=2
 
 # Batch GPU fence syncpoints to reduce host driver overhead and smooth frametimes.
 EDEN_NX2_FENCE_BATCH=1
@@ -44,6 +48,19 @@ EDEN_NX2_FENCE_BATCH=1
 # Useful for test harnesses and automated benchmarking; has no effect on other games.
 #EDEN_NX2_OOT_PRESET=1
 #
+# Internal resolution override for the OOT preset. The OOT preset renders at 0.75x so low-end
+# cards can drive the scene. Set to 1X to render natively: 1X keeps every guest image at its
+# true size (including depth), which is what the NVIDIA DLSS replacement in this fork needs to
+# run. Use with EDEN_NX2_GRAPHICS_SCALE=20 to shrink the game's output to its 1440p mode, which
+# fits NGX on 6 GB of VRAM and lets DLSS actually engage.
+#EDEN_NX2_OOT_RESOLUTION=1X
+#
+# Graphics scale reported to Switch 2 titles via the nx2 graphics-scale service. 10 = the
+# game's default, 20 = a lower render/output mode, 30 = the lowest. For The Legend of Zelda:
+# Ocarina of Time, 20 presents 2560x1440 instead of 3840x2160 (verified) and 30 is lower. This
+# is the switch to pair with the DLSS gauge on low-end cards.
+#EDEN_NX2_GRAPHICS_SCALE=20
+#
 # Terrain/indirect drawing fix for Donkey Kong Bananza: enabled by default. Set to 0 only to leave to GPU.
 #EDEN_NX2_RESETFIX=0
 
@@ -51,7 +68,6 @@ EDEN_NX2_FENCE_BATCH=1
 #EDEN_NX2_NO_REACTIVE=1
 
 #EDEN_NX2_MME_JIT=0
-#EDEN_NX2_PBFLUSH=0
 #EDEN_NX2_SKIP_SAME=0
 #EDEN_NX2_INLINE_DEFER=0
 #EDEN_NX2_SPLIT_SKIP=1

@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <mutex>
 #include <thread>
 
 #ifdef _MSC_VER
@@ -94,7 +95,9 @@ void GpuSplit::MaybeStart(Core::System& system_) {
     // GPU writer commits it (the page-map race). Verified: scene goes black in bursts with the
     // split on; stable with it off. EDEN_NX2_SPLIT=1 or =2 overrides this (env wins).
     if (Settings::values.oot_split_disabled && std::getenv("EDEN_NX2_SPLIT") == nullptr) {
-        LOG_INFO(HW_GPU, "GPU thread split: disabled by the OOT low-end stability preset");
+        static std::once_flag split_disabled_logged;
+        std::call_once(split_disabled_logged,
+                       [] { LOG_INFO(HW_GPU, "GPU thread split: disabled by the OOT low-end stability preset"); });
         return;
     }
     static const char mode = [] {
