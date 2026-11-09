@@ -3752,7 +3752,7 @@ void RasterizerVulkan::UpdateDynamicStates(GraphicsPipeline* draw_pipeline) {
     }
 
     if (device.IsExtExtendedDynamicState3BlendingSupported()) {
-        UpdateBlending(regs, pipeline);
+        UpdateBlending(regs, draw_pipeline);
     } else if (device.IsExtColorWriteEnableSupported()) {
         UpdateColorWriteEnable(regs);
     }

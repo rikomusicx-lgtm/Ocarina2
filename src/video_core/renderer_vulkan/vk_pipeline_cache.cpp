@@ -1824,6 +1824,29 @@ PipelineCache::~PipelineCache() {
     DestroyPipelinesWithProgress(retired_translations);
 }
 
+void PipelineCache::NoteDiskRecordFailure(std::string_view kind, u64 hash, const char* reason) {
+    constexpr size_t Shown = 4;
+    if (disk_record_failures.fetch_add(1, std::memory_order_relaxed) < Shown) {
+        LOG_INFO(Render_Vulkan,
+                 "{} pipeline {:016x}: a cached record this build cannot translate ({}), built "
+                 "when first needed instead",
+                 kind, hash, reason);
+    } else {
+        LOG_DEBUG(Render_Vulkan, "{} pipeline {:016x}: cached record not translated: {}", kind,
+                  hash, reason);
+    }
+}
+
+void PipelineCache::ReportDiskRecordFailures() {
+    const size_t failures = disk_record_failures.exchange(0, std::memory_order_relaxed);
+    if (failures != 0) {
+        LOG_INFO(Render_Vulkan,
+                 "{} cached pipeline records could not be translated by this build (stored by "
+                 "another or an older build); their pipelines are built when first needed",
+                 failures);
+    }
+}
+
 void PipelineCache::SaveUsedPipelines() {
     used_pipelines_saved = std::chrono::steady_clock::now();
     // A session too short to say what the game uses (a boot to the menu) keeps the old list.

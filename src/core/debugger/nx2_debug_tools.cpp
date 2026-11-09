@@ -807,61 +807,6 @@ json InputSequence(ToolState& state, const json& params, const ClientGone& clien
             throw std::runtime_error{fmt::format("step {}: {}", index, error.what())};
         }
     }
-    });
-    SCOPE_EXIT {
-        controller->SetInputInjector({});
-    };
-    const auto begin = std::chrono::steady_clock::now();
-    const auto deadline = begin + std::chrono::seconds{timeout};
-    for (;;) {
-        const u64 now = frame_now();
-        if (now >= start + total) {
-            break;
-        }
-        if (state.stopping.load(std::memory_order_relaxed)) {
-            throw std::runtime_error{"the game is shutting down; input released"};
-        }
-        if (client_gone()) {
-            LOG_INFO(Debug, "Debug server client left during input; input released");
-            throw std::runtime_error{"the client disconnected; input released"};
-        }
-        if (std::chrono::steady_clock::now() >= deadline) {
-            throw std::runtime_error{fmt::format(
-                "{} of {} frames were presented within {} s (paused or loading?); input released",
-                now >= start ? now - start : 0, total, timeout)};
-        }
-        std::this_thread::sleep_for(2ms);
-    }
-    return {
-        {"controller", name},
-        {"steps", steps.size()},
-        {"frames", total},
-        {"first_present", start},
-        {"frame_rate", frame_rate},
-        {"elapsed_s",
-         std::chrono::duration<double>(std::chrono::steady_clock::now() - begin).count()},
-    };
-}
-
-json Input(ToolState& state, const json& params, const ClientGone& client_gone) {
-    json step = params;
-    step.erase("timeout_s");
-    return RunInput(state, {ParseInputStep(step)}, params, client_gone);
-}
-
-json InputSequence(ToolState& state, const json& params, const ClientGone& client_gone) {
-    const json& list = params.at("steps");
-    if (!list.is_array() || list.empty() || list.size() > MAX_INPUT_STEPS) {
-        throw std::runtime_error{fmt::format("steps must be an array of 1 to {}", MAX_INPUT_STEPS)};
-    }
-    std::vector<InputStep> steps;
-    for (size_t index = 0; index < list.size(); ++index) {
-        try {
-            steps.push_back(ParseInputStep(list[index]));
-        } catch (const std::exception& error) {
-            throw std::runtime_error{fmt::format("step {}: {}", index, error.what())};
-        }
-    }
     return RunInput(state, steps, params, client_gone);
 }
 
