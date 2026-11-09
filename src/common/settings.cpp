@@ -50,6 +50,7 @@ SWITCHABLE(OotAntiAliasing, false);
 SWITCHABLE(AspectRatio, true);
 SWITCHABLE(AstcDecodeMode, true);
 SWITCHABLE(AstcRecompression, true);
+SWITCHABLE(DlssMode, false);
 SWITCHABLE(AudioMode, true);
 SWITCHABLE(CpuBackend, true);
 SWITCHABLE(CpuAccuracy, true);

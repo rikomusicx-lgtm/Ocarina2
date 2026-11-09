@@ -11,6 +11,7 @@
 #include <chrono>
 
 #include "common/common_types.h"
+#include "common/settings_enums.h"
 #include "video_core/vulkan_common/vulkan_wrapper.h"
 
 namespace Vulkan {
@@ -88,6 +89,7 @@ private:
     VkExtent2D render_extent{};
     VkExtent2D upscale_extent{};
     bool hdr_input = true;
+    Settings::DlssMode current_mode{Settings::DlssMode::Auto};
     u32 frame_index{};
     vk::Image output_image;
     vk::ImageView output_view;

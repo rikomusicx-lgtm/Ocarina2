@@ -419,7 +419,8 @@ public:
         Common::Event* to_wake = nullptr;
         {
             std::scoped_lock lk{mutex};
-            Latch(device_address, value);
+            // The wake condition is re-checked against the waiters below; the return is unused.
+            (void)Latch(device_address, value);
             if (std::ranges::any_of(waiters,
                                     [device_address](const Waiter& w) {
                                         return w.address == device_address && w.latched;

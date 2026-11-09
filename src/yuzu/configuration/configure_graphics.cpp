@@ -219,6 +219,7 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
 
     std::map<u32, QWidget*> hold_graphics;
     std::vector<QWidget*> hold_api;
+    QCheckBox* dlss_toggle = nullptr;
 
     for (const auto setting : Settings::values.linkage.by_category[Settings::Category::Renderer]) {
 #ifndef HAS_RESHADE
@@ -228,7 +229,8 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
 #endif
 #ifndef EGLANTINE_STREAMLINE
         // Only builds with NVIDIA Streamline (Windows) can use it.
-        if (setting->Id() == Settings::values.nvidia_dlss.Id()) {
+        if (setting->Id() == Settings::values.nvidia_dlss.Id() ||
+            setting->Id() == Settings::values.nvidia_dlss_mode.Id()) {
             continue;
         }
 #endif
@@ -340,8 +342,16 @@ void ConfigureGraphics::Setup(const ConfigurationShared::Builder& builder) {
             NvidiaDlssPanel* panel = new NvidiaDlssPanel(group);
             group_layout->addWidget(panel);
             panel->setVisible(widget->checkbox->isChecked());
+            dlss_toggle = widget->checkbox;
             connect(widget->checkbox, &QCheckBox::toggled, panel, &QWidget::setVisible);
             hold_graphics.emplace(setting->Id(), group);
+        } else if (setting->Id() == Settings::values.nvidia_dlss_mode.Id()) {
+            // Only meaningful while NVIDIA DLSS is on; mirror its visibility.
+            widget->setVisible(dlss_toggle && dlss_toggle->isChecked());
+            if (dlss_toggle) {
+                connect(dlss_toggle, &QCheckBox::toggled, widget, &QWidget::setVisible);
+            }
+            hold_graphics.emplace(setting->Id(), widget);
 #endif
         } else {
             hold_graphics.emplace(setting->Id(), widget);

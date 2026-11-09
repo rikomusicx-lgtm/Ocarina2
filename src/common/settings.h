@@ -65,6 +65,7 @@ SETTING(u16, false);
 SWITCHABLE(AnisotropyMode, true);
 SWITCHABLE(AntiAliasing, false);
 SWITCHABLE(OotAntiAliasing, false);
+SWITCHABLE(DlssMode, false);
 SWITCHABLE(AspectRatio, true);
 SWITCHABLE(AstcDecodeMode, true);
 SWITCHABLE(AstcRecompression, true);
@@ -401,6 +402,14 @@ struct Values {
                                                        true};
     // NVIDIA DLSS (through NVIDIA Streamline) in place of a game's DLSS.
     SwitchableSetting<bool> nvidia_dlss{linkage, false, "nvidia_dlss", Category::Renderer};
+    // Which DLSS quality mode to select. Auto (default) picks from the render-to-output ratio,
+    // matching the DLSS contract for the resolution the game asked for; this override forces one.
+    // Runtime-modifiable: takes effect on the next frame without a restart.
+    SwitchableSetting<DlssMode> nvidia_dlss_mode{linkage, DlssMode::Auto, "nvidia_dlss_mode",
+                                                 Category::Renderer,
+                                                 Specialization::Default,
+                                                 true,
+                                                 true};
     SwitchableSetting<AspectRatio, true> aspect_ratio{linkage,
                                                       AspectRatio::R16_9,
                                                       "aspect_ratio",
