@@ -268,15 +268,6 @@ private:
     bool FrameDumpBuffers(bool compute, std::span<const u64> shader_hashes);
     /// EDEN_NX2_PENDING_WRITE_TRACE: logs bound buffer ranges with collected, unapplied CPU writes.
     void TracePendingCpuWrites(bool compute, std::span<const u64> shader_hashes);
-#ifdef EGLANTINE_STREAMLINE
-    bool OcarinaDlssEnabled() const;
-    void TrackOcarinaCamera();
-    void TrackOcarinaActor(u64 shader_hash, bool is_indexed, bool is_indirect);
-    bool TryOcarinaDlss(const ComputePipeline& pipeline, bool replace);
-    void ReadOcarinaActor(struct OcarinaActorMesh& mesh);
-#endif
-    /// Records the uniform and storage buffers of the current draw or dispatch for the frame dump.
-    bool FrameDumpBuffers(bool compute, std::span<const u64> shader_hashes);
 
     Tegra::GPU& gpu;
     Tegra::MaxwellDeviceMemoryManager& device_memory;

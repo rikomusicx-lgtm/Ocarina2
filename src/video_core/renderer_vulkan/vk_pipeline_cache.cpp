@@ -2273,11 +2273,6 @@ void OrderComputeTranslations(std::vector<Candidate>& candidates, PointerKeys&& 
     candidates = std::move(ordered);
 }
 
-void OrderComputeTranslations(std::vector<FileEnvironment>& candidates) {
-    OrderComputeTranslations(candidates, [](const FileEnvironment& env) {
-        return env.MappedStoragePointerKeys();
-    });
-}
 } // Anonymous namespace
 
 bool PipelineCache::StaleNullPointerSlot(const ComputePipelineCacheEntry& entry) const {

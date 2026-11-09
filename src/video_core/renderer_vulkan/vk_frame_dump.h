@@ -137,6 +137,7 @@ public:
     explicit FrameDump(const Device& device, MemoryAllocator& memory_allocator,
                        Scheduler& scheduler);
     ~FrameDump();
+    void StopWriter();
 
     [[nodiscard]] bool Capturing() const noexcept {
         return schedule.Capturing();

@@ -2,10 +2,12 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <string>
 #include <string_view>
 
 #include <fmt/format.h>
@@ -16,6 +18,7 @@
 #include "common/settings.h"
 #include "common/stb.h"
 #include "common/zstd_compression.h"
+#include "video_core/nx2_debug_control.h"
 #include "video_core/renderer_vulkan/maxwell_to_vk.h"
 #include "video_core/renderer_vulkan/vk_frame_dump.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
@@ -30,6 +33,8 @@ namespace {
 using VideoCore::Surface::PixelFormat;
 
 constexpr size_t SIZE_CAP = size_t{2} << 30;
+/// RecordingSampledTextures: a sampled capture is running.
+std::atomic<bool> recording_sampled{};
 constexpr size_t STAGING_BUDGET = size_t{256} << 20;
 
 template <typename T>
@@ -260,6 +265,10 @@ FrameDump::FrameDump(const Device& device_, MemoryAllocator& memory_allocator_,
 }
 
 FrameDump::~FrameDump() {
+    StopWriter();
+}
+
+void FrameDump::StopWriter() {
     if (!writer.joinable()) {
         return;
     }

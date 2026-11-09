@@ -2362,14 +2362,6 @@ void Maxwell3D::FrontDmaRead(VideoCommon::GpuSplit& split, FrontState& fs, u32 m
             },
             VideoCommon::DrainSite::MacroDmaFlush);
     }
-    flush_if_dirty();
-    std::vector<u32> diag_before;
-    if (Tegra::Nx2CmdPageDiag::g_enabled) {
-        diag_before.resize(words);
-        memory_manager.ReadBlockUnsafe(source, diag_before.data(), read_bytes);
-        split.Drain(VideoCommon::DrainSite::MacroDmaCheck);
-        flush_if_dirty();
-    }
     // Write out the reports held in the query cache, or the read returns stale occlusion counts.
     split.Run(
         [this, source, read_bytes] {
