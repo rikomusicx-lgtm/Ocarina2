@@ -371,7 +371,50 @@ package'). working configure = ocarina2-configure.cmd (LICHII_BUILD_TAG=build-12
 ocarina2-configure-clang.cmd (clang flavor, LICHII_BUILD_PLATFORM=windows-x86_64-clang).
 
 
-## 2026-11-08 (evening) - build-121 candidate (branch fritchii-merge)
+## 2026-11-08 (night) - OOT preset now disables the GPU thread split (water-flicker fix)
+
+The Kokiri water went black in bursts every few seconds through build-120/119/118 and it was
+reproduced on this PC in build-121 with flash watch (EDEN_NX2_FLASH_WATCH=... passes=true):
+all flashes are in one render pass - the half-resolution scene-color pass, B10G11R11_FLOAT at
+0x8114f02000/0x8114302000, 21 draws, shaders d9edd60c82c0d73c plus 13 more - its mean collapses
+from ~0.087 to ~0.0002 in bursts; surrounding passes (bloom, composite) stay clean. It is NOT
+the Fritchii null-texture handle fix (EXP21, A/B'd off: same flicker), NOT the DLSS replacement
+(DLSS never engaged here: inputs fail the checks), NOT rescale-only, NOT missing pipelines
+(rejected: [], no unbuilt draws at flash time). Root cause: the mesh/task indirect-draw buffer
+is read before the GPU writer commits the page-map entry that publishes it (the split-thread
+race; build-119 partially fixed this class for other passes). Disabling the split
+(EDEN_NX2_SPLIT=0) stopped every flash in a 3-minute watch. The OOT docked preset now sets
+oot_split_disabled, and GpuSplit::MaybeStart refuses to run the split in that case
+(EDEN_NX2_SPLIT=1 or =2, or a fresh env relaunch, override it; declining the preset keeps the
+split at its default). Perf: Kokiri ~63-74 ms frames at SPLIT=0 (~14-15 FPS) vs ~62-68 ms at
+SPLIT=2 - a 1-3 FPS cost in this scene, none in menus (vsync-locked at 60 either way).
+
+## 2026-11-08 (night) - menu/attract FPS across builds (from recorded logs)
+
+The user asked why the menu was "just on 60 fps" and to track menu FPS across builds instead of
+asserting. Recorded numbers from this PC (Ryzen 5 3600, RTX 3050 6 GB):
+
+| Build | Scene | FPS | Evidence |
+|---|---|---|---|
+| build-119 (Nov 8 live) | Title/attract | 59-60 (vsync-locked) | NX2_NOTES measured session |
+| build-119 | Main menu / options | ~46-47 | same session |
+| build-120 (Kokiri session) | Title/attract | 59-60 (vsync-locked) | NX2_NOTES measured session |
+| build-120 | Main menu | ~47 | same session |
+| build-120+#911 (7:11 PM, revert build, test-120) | Attract (46-66 s in) | 60 (interval mean 16.99 ms, game frame 16.59 ms ~= 60) | eden_log.txt Host pacing lines |
+| build-121 clang (8:12 PM boot) | Title/attract | 59.4-59.6 (vsync) | debug server status, 1867 presents @ ~60 s |
+| build-121 clang (8:47 PM relaunch) | Intro cutscene video | 30 native (pts-cadenced) | DecodeLoop lines; frame pacer 30 fps |
+| build-121 clang (8:47 PM relaunch) | 3D attract during ASTC rebuild + pipeline builds | ~12-30 (dips) | GPU profile + "ASTC GPU decodes: 7 in 5587 ms" |
+| build-121 clang (8:12-8:19 PM, GPU shared with my scale probes) | Menu/attract | ~22-30 | my mistake - two instances on one card |
+| build-121 clang (8:47 PM relaunch) | Intro cutscene FMV | 30 native | pre-rendered video |
+
+Read-out: the trend across builds is flat at the light title screens (59-60 vsync-locked
+since build-119) - no regression there. The fluctuation the user sees in gameplay-adjacent
+scenes is the HMMA upscale at 4K plus ASTC recompression stalls and pipeline rebuilds at scene
+entries - the same Kokiri-class wall. The intro cutscene is native 30 FPS by design and cannot
+be improved emulator-side. Audio pipeline is healthy (48 kHz cubeb, no underruns in any log).
+
+## 2026-11-08 - build-121 candidate (branch fritchii-merge)
+
 
 Delta on top of build-120 while the release was held, built and booted on this PC.
 

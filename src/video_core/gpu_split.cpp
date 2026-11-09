@@ -89,6 +89,14 @@ void GpuSplit::CheckOwner(const char* where) {
 GpuSplit GpuSplit::instance;
 
 void GpuSplit::MaybeStart(Core::System& system_) {
+    // The docked low-end preset turns the split off: at docked resolution the mesh-shader
+    // workload produces zero-indirect-draw frames when the indirect buffer is read before the
+    // GPU writer commits it (the page-map race). Verified: scene goes black in bursts with the
+    // split on; stable with it off. EDEN_NX2_SPLIT=1 or =2 overrides this (env wins).
+    if (Settings::values.oot_split_disabled && std::getenv("EDEN_NX2_SPLIT") == nullptr) {
+        LOG_INFO(HW_GPU, "GPU thread split: disabled by the OOT low-end stability preset");
+        return;
+    }
     static const char mode = [] {
         const char* value = std::getenv("EDEN_NX2_SPLIT");
         return value != nullptr ? value[0] : '2';

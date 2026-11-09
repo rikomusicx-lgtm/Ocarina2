@@ -951,6 +951,7 @@ struct Values {
     // Ocarina of Time 60 FPS preset. Runtime only: the dialog applies these until Lichii closes.
     bool oot_max_resolution_preset_enabled{};
     bool oot_dynamic_fps_preset_enabled{};
+    bool oot_split_disabled{}; ///< Docked low-end preset: GPU thread split off (water-flicker race)
     bool oot_preflush_preset_enabled{};
 
 };

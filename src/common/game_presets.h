@@ -3,6 +3,7 @@
 #pragma once
 
 #include <cstdlib>
+#include <string_view>
 #include "common/settings.h"
 
 namespace Settings {
@@ -55,7 +56,15 @@ inline void SetOcarinaOfTimePerformanceSettings(Values& settings, bool global,
     // at its native docked resolution. The 1440p internal path the remake asks for exceeds
     // what a 6 GB card can drive at 30 FPS in this scene, and NativeSeqRef at 1080p is the
     // baseline this fork exists for on low-end PCs.
-    session(settings.resolution_setup, ResolutionSetup::Res3_4X);
+    // EDEN_NX2_OOT_RESOLUTION=1X overrides the downscale: at 0.75x the emulator rescales guest
+    // images (for the host) and the depth view stops matching the DLSS input contract, so DLSS
+    // can never engage; 1X renders natively and lets DLSS replace the game's upscaler.
+    const char* const resolution_override = std::getenv("EDEN_NX2_OOT_RESOLUTION");
+    const ResolutionSetup resolution =
+        (resolution_override && std::string_view{resolution_override} == "1X")
+            ? ResolutionSetup::Res1X
+            : ResolutionSetup::Res3_4X;
+    session(settings.resolution_setup, resolution);
     session(settings.gpu_accuracy, GpuAccuracy::Low);
     session(settings.use_asynchronous_shaders, true);
     session(settings.astc_recompression, AstcRecompression::Bc3);
@@ -69,6 +78,11 @@ inline void SetOcarinaOfTimePerformanceSettings(Values& settings, bool global,
     session(settings.post_shader_enabled, false);
     // Max Resolution is on by default: it fixes the render at 1080p, which is what users on a
     // 3050-class card want. Turning it off only lowers internal resolution (about 2-3 fps).
+    // The GPU thread split is turned off for this preset: at docked the mesh-shader workload
+    // produces zero-indirect-draw frames when the indirect buffer is read before the GPU writer
+    // commits it (the page-map race) - empirically, water and the scene go black in bursts with
+    // the split on, and the flashes stop with it off.
+    settings.oot_split_disabled = true;
     settings.oot_max_resolution_preset_enabled = max_resolution;
     settings.oot_dynamic_fps_preset_enabled = true;
     settings.oot_preflush_preset_enabled = true;
@@ -83,6 +97,7 @@ inline bool ApplyOcarinaOfTimePerformancePreset(Values& settings, u64 program_id
         settings.oot_max_resolution_preset_enabled = false;
         settings.oot_dynamic_fps_preset_enabled = false;
         settings.oot_preflush_preset_enabled = false;
+        settings.oot_split_disabled = false;
         return false;
     }
     SetOcarinaOfTimePerformanceSettings(settings, false, max_resolution);
