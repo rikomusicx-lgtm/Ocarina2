@@ -168,13 +168,9 @@ std::unique_ptr<TranslationMap> InitializeTranslations(QObject* parent) {
               "download button below.\nFire Emblem: Fortune's Weave also needs "
               "EDEN_NX2_DLSS_REPLACEMENT=dlss. Without that override, its spatial workaround "
               "remains active.\nIn The Legend of Zelda: Ocarina of Time it replaces the game's "
-              "upscaler at 1x resolution scale.\nTakes effect when a game starts."));
-    INSERT(Settings, nvidia_dlss_mode, tr("DLSS Mode:"),
-           tr("Which DLSS quality mode to use when NVIDIA DLSS is on.\n"
-              "Auto picks the mode that fits the render scale the game asked for.\n"
-              "Quality is sharpest, Balanced and Performance trade detail for speed, and\n"
-              "Ultra Performance is the fastest, softest image.\n"
-              "Takes effect right away."));
+              "upscaler at 1x resolution scale.\nOn 6 GB cards DLSS only fits at 1080p-or-below "
+              "output; at 4K output the DLSS feature cannot be created and the game's own "
+              "upscaler runs instead.\nTakes effect when a game starts."));
     INSERT(Settings, anti_aliasing, tr("Anti-Aliasing Method:"),
            tr("The anti-aliasing method to use.\nSMAA offers the best quality.\nFXAA "
               "can produce a more stable picture in lower resolutions."));
@@ -564,14 +560,6 @@ std::unique_ptr<ComboboxTranslationMap> ComboboxEnumeration(QObject* parent) {
                           {
                               PAIR(OotAntiAliasing, Game, tr("Game")),
                               PAIR(OotAntiAliasing, NoSharpening, tr("No sharpening")),
-                          }});
-    translations->insert({Settings::EnumMetadata<Settings::DlssMode>::Index(),
-                          {
-                              PAIR(DlssMode, Auto, tr("Auto")),
-                              PAIR(DlssMode, Quality, tr("Quality")),
-                              PAIR(DlssMode, Balanced, tr("Balanced")),
-                              PAIR(DlssMode, Performance, tr("Performance")),
-                              PAIR(DlssMode, UltraPerformance, tr("Ultra Performance")),
                           }});
     translations->insert({Settings::EnumMetadata<Settings::AspectRatio>::Index(),
                           {

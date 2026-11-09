@@ -31,23 +31,9 @@ int EnvInt(const char* name, int fallback) {
     return value ? std::atoi(value) : fallback;
 }
 
-// Auto picks the mode the ratio belongs to; an explicit setting forces that mode regardless of
-// the ratio (DLSS still validates it and the failure path falls back to the game's upscaler, so
-// a mismatch can always be backed off with Auto).
+// Auto picks the mode the ratio belongs to.
 sl::DLSSMode ModeFor(VkExtent2D render, VkExtent2D upscale) {
     const f32 ratio = static_cast<f32>(render.width) / static_cast<f32>(upscale.width);
-    switch (Settings::values.nvidia_dlss_mode.GetValue()) {
-    case Settings::DlssMode::Quality:
-        return sl::DLSSMode::eMaxQuality;
-    case Settings::DlssMode::Balanced:
-        return sl::DLSSMode::eBalanced;
-    case Settings::DlssMode::Performance:
-        return sl::DLSSMode::eMaxPerformance;
-    case Settings::DlssMode::UltraPerformance:
-        return sl::DLSSMode::eUltraPerformance;
-    case Settings::DlssMode::Auto:
-        break;
-    }
     if (ratio >= 0.99f) {
         return sl::DLSSMode::eDLAA;
     }
@@ -256,9 +242,7 @@ bool StreamlineDlssUpscaler::Upscale(const Inputs& in) {
                                 in.render_size.height != render_extent.height ||
                                 in.upscale_size.width != upscale_extent.width ||
                                 in.upscale_size.height != upscale_extent.height;
-    const Settings::DlssMode mode_setting = Settings::values.nvidia_dlss_mode.GetValue();
-    const bool options_changed = extent_changed || in.hdr != hdr_input ||
-                                 mode_setting != current_mode;
+    const bool options_changed = extent_changed || in.hdr != hdr_input;
     const bool reset = in.reset || options_changed;
     if (extent_changed) {
         CreateOutput(in.upscale_size);
@@ -266,7 +250,6 @@ bool StreamlineDlssUpscaler::Upscale(const Inputs& in) {
         upscale_extent = in.upscale_size;
     }
     hdr_input = in.hdr;
-    current_mode = mode_setting;
 
     // Keep the existing HDR controls for linear input such as Fortune's Weave. Tonemapped
     // input such as Ocarina's already has its exposure applied.
