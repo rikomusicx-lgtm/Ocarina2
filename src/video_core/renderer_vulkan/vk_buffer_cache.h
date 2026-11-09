@@ -133,7 +133,16 @@ public:
 
     void Finish();
 
-    void FinishForHostRead();
+    /// EDEN_NX2_EXP49: Finish without the wait. Makes the copies so far visible to the host,
+    /// submits, and returns the tick to wait for (WaitForHostRead).
+    u64 SubmitForHostRead();
+
+    /// Waits for a SubmitForHostRead tick, on any thread.
+    void WaitForHostRead(u64 tick);
+
+    /// Whether the host GPU completed `tick`, asking it when the tick is submitted but not known
+    /// to be done.
+    [[nodiscard]] bool IsFreeNow(u64 tick);
 
     u64 GetDeviceLocalMemory() const;
 
