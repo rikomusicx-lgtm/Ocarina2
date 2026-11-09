@@ -411,6 +411,7 @@ inline void LoadExperiments() {
     if (name == "EDEN_NX2_LIST_VERIFY") {
         return &g_list_verify;
     }
+    if (name == "EDEN_NX2_DMA_WAIT_WRITERS") {
         return &g_dma_wait_writers;
     }
     if (name == "EDEN_NX2_SEM_FAST") {
