@@ -48,12 +48,13 @@ std::optional<Common::Net::Release> SelectUpdate(
 struct Ocarina2Version {
     u32 major{};
     u32 minor{};
+    u32 patch{}; ///< 5.6.1 (from v5.6 on: older builds read one decimal digit only)
 
     auto operator<=>(const Ocarina2Version&) const = default;
     std::string ToString() const;
 };
 
-// "4" or "3.5", as in dist/frizti_version.txt.
+// "4", "3.5", "5.10" or "5.6.1", as in dist/ocarina2_version.txt.
 std::optional<Ocarina2Version> ParseOcarina2Version(std::string_view text);
 
 // The build version "Ocarina2 v4" (or the older "Frizti v3.5"); nullopt for other builds.

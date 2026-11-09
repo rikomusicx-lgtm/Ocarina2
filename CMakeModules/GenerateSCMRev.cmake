@@ -30,10 +30,11 @@ if (NOT LICHII_BUILD_TAG)
 endif()
 
 # Ocarina2's own releases are numbered build-NNN. dist/ocarina2_version.txt carries the
-# version for development builds, so the window and the log can name themselves.
+# version for development builds, so the window and the log can name themselves. Versions
+# are N, N.M or N.M.P without leading zeros; two-digit minors are allowed (N.10).
 set(OCARINA2_VERSION_FILE "${CMAKE_SOURCE_DIR}/dist/ocarina2_version.txt")
 if (EXISTS "${OCARINA2_VERSION_FILE}")
-    file(STRINGS "${OCARINA2_VERSION_FILE}" OCARINA2_VERSION LIMIT_COUNT 1 REGEX "^[^\"]+$")
+    file(STRINGS "${OCARINA2_VERSION_FILE}" OCARINA2_VERSION LIMIT_COUNT 1 REGEX "^[0-9]+([.][0-9]+)?([.][0-9]+)?$")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${OCARINA2_VERSION_FILE}")
     # The log names the commit: reconfigure when HEAD moves (commit, checkout, merge, revert).
     if (EXISTS "${CMAKE_SOURCE_DIR}/.git/logs/HEAD")

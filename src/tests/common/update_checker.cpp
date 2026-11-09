@@ -264,10 +264,17 @@ std::string GitHubUrl(std::string_view repo, std::string_view tag, std::string_v
 
 } // namespace
 
-TEST_CASE("Ocarina2 versions compare numerically with one decimal", "[updater]") {
+TEST_CASE("Ocarina2 versions compare numerically, with a patch number", "[updater]") {
     CHECK(UpdateChecker::ParseOcarina2Version("4") == Ocarina2Version{4, 0});
     CHECK(UpdateChecker::ParseOcarina2Version("3.5") == Ocarina2Version{3, 5});
     CHECK(UpdateChecker::ParseOcarina2Version("12") == Ocarina2Version{12, 0});
+    CHECK(UpdateChecker::ParseOcarina2Version("5.10") == Ocarina2Version{5, 10});
+    CHECK(UpdateChecker::ParseOcarina2Version("5.6.1") == Ocarina2Version{5, 6, 1});
+    CHECK(UpdateChecker::ParseOcarina2Version("5.0.1") == Ocarina2Version{5, 0, 1});
+    CHECK(Ocarina2Version{5, 9} < Ocarina2Version{5, 10});
+    CHECK(Ocarina2Version{5, 6} < Ocarina2Version{5, 6, 1});
+    CHECK(Ocarina2Version{5, 6, 1} < Ocarina2Version{5, 7});
+    CHECK(Ocarina2Version{5, 6, 1}.ToString() == "5.6.1");
     CHECK(Ocarina2Version{3, 5} < Ocarina2Version{4, 0});
     CHECK(Ocarina2Version{4, 0} < Ocarina2Version{4, 1});
     CHECK(Ocarina2Version{4, 9} < Ocarina2Version{5, 0});
@@ -275,8 +282,9 @@ TEST_CASE("Ocarina2 versions compare numerically with one decimal", "[updater]")
     CHECK(Ocarina2Version{4, 1}.ToString() == "4.1");
     CHECK(Ocarina2Version{4, 0}.ToString() == "4");
 
-    const std::string invalid = GENERATE("", "0", "04", "4.", "4.0", "4.10", "4.a", "v4", " 4",
-                                         "4 ", "-1", "+4", "4.1.2", ".5", "99999999999");
+    const std::string invalid = GENERATE("", "0", "04", "4.", "4.0", "4.01", "4.a", "v4", " 4",
+                                         "4 ", "-1", "+4", "4.1.", "4.1.0", "4.1.02", "4.1.2.3",
+                                         ".5", "99999999999");
     CHECK_FALSE(UpdateChecker::ParseOcarina2Version(invalid));
 }
 
