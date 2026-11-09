@@ -95,10 +95,10 @@ TEST_CASE("OOT 60 FPS preset does not change unrelated games", "[game_presets]")
         *settings, Settings::MarioKartWorldProgramId, true, true));
 }
 
-TEST_CASE("Display filter defaults use ScaleForce and FXAA", "[game_presets]") {
+TEST_CASE("Display filter defaults use ScaleForce and no extra AA", "[game_presets]") {
     auto settings = std::make_unique<Settings::Values>();
     CHECK(settings->scaling_filter.GetDefault() == Settings::ScalingFilter::ScaleForce);
-    CHECK(settings->anti_aliasing.GetDefault() == Settings::AntiAliasing::Fxaa);
+    CHECK(settings->anti_aliasing.GetDefault() == Settings::AntiAliasing::None);
 }
 
 TEST_CASE("Accepted MKW settings replace visible global preferences", "[game_presets]") {
