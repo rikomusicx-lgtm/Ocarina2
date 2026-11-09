@@ -371,6 +371,42 @@ package'). working configure = ocarina2-configure.cmd (LICHII_BUILD_TAG=build-12
 ocarina2-configure-clang.cmd (clang flavor, LICHII_BUILD_PLATFORM=windows-x86_64-clang).
 
 
+## 2026-11-08 (evening) - build-121 candidate (branch fritchii-merge)
+
+Delta on top of build-120 while the release was held, built and booted on this PC.
+
+- #802 (byte-range native program bank uploads) reverted (a2957aa5cd). With #802 the image went
+  pink; #802 or #909 both reduced/changed uniform bank uploads. The game renders correctly with
+  them gone: commit 27f69afe5a reverted #909, a2957aa5cd reverted #802. #911
+  (fence-delayed semaphore releases latch acquires, 23f4245ee2) stays in - that is the build the
+  owner marked "looked perfectly" with the forest rendering cleanly.
+- OOT preset renders docked 1080p-ish on low-end cards: resolution_setup Res3_4X (0.75x),
+  Max Resolution stays a per-game choice (a0bd02b2a4).
+- NVIDIA DLSS gauge for this fork (45e8a9cc90, DLSSMode): new setting nvidia_dlss_mode
+  (Auto/Quality/Balanced/Performance/Ultra Performance), shown on the Graphics tab under
+  "Use NVIDIA DLSS" and visible only while DLSS is on, takes effect on the next frame
+  (runtime-modifiable; re-calls slDLSSSetOptions when the mode changes). Auto keeps picking the
+  mode from the render-to-output ratio; a forced mode is passed through verbatim; any DLSS
+  failure falls back to the game's upscaler as before. Mode name now logged by name on options
+  changes. The OOT/DLSS 4K wall is unchanged (see build-119/build-120 notes): this card cannot
+  allocate NGX at 3840x2160, and Res3_4X rescales the depth view, which the Ocarina DLSS
+  replacement refuses to touch - the gauge is inert until the game renders an un-rescaled
+  resolution at a DLSS-able output size (in-game 1080p / a card that fits 4K NGX).
+- nx2.h: the intentionally ignored Latch() return in OnWrite is now (void)-cast; clang-cl rejects
+  it as -Werror,-Wunused-result (MSVC warns, C4834).
+- Builds: MSVC (C:\Users\rikom\ocarina2-build, LICHII_BUILD_TAG=build-121) and clang-cl 23.1.5
+  (C:\Users\rikom\ocarina2-build-clang, LICHII_BUILD_TAG=build-121) both link; titles read
+  "Lichii build-121". Test copies: ocarina2-test-120 (MSVC) and ocarina2-test-121 (clang),
+  both booted to gameplay, ~59-60 FPS at title/attract (vsync-locked), Streamline attach OK,
+  MC Renderer.nvidia_dlss_mode: Auto in the settings log. Nothing is tagged or published.
+- Reported on the release thread: "it's just launching forever" (build not identified). Matches
+  the known upstream launch-hang class (zortos293/Lichii #99 ".NUP infinite launch screen",
+  #297 "NUP remains on Launching" - ARM exception 0x0), not something this delta introduces or
+  fixes. Known community workaround: EDEN_NX2_SPLIT=1. Also the first boot after build-120+ is
+  slow: disk-cache version went 54 -> 55, so every pipeline is rebuilt (~hundreds at boot on this
+  PC). Users on slow PCs at the "Launching" screen for minutes with an advancing log are
+  compiling shaders, not hanging. The build-121 notes draft needs the first-boot warning.
+
 ## 2026-11-08 - build-120 (Ocarina of Time 3050, update #4)
 
 Live-session findings on the owner's PC (Ryzen 5 3600, RTX 3050 6 GB, 24 GB RAM, Windows 11,
