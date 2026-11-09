@@ -240,6 +240,13 @@ public:
         last_writer_position = write_position;
         write_tracker.NoteWrite(write_position, 0, PendingWriteTracker::UnknownExtent);
     }
+    /// A 3D-engine draw was just sent. Graphics pipelines may write storage buffers (mesh/task
+    /// culls, feedback) the front's reads track by position; those are not covered by
+    /// NoteWriter (which is compute/copy only), so reads that must not miss them check this
+    /// instead (the DMA snapshot fast path).
+    void NoteGraphicsWriter() {
+        graphics_writes_position = write_position;
+    }
     /// Waits until the back executed the compute and copy work sent so far (not what came after).
     /// Returns whether any of it was still queued.
     bool WaitForWriters();
@@ -265,6 +272,10 @@ public:
     /// the last compute/copy and unranged writer positions.
     [[nodiscard]] u64 LastWriterPosition() const {
         return last_writer_position;
+    }
+    /// the ring position of the newest graphics 3D draw sent (0 = none).
+    [[nodiscard]] u64 LastGraphicsWritePosition() const {
+        return graphics_writes_position;
     }
     [[nodiscard]] u64 LastUnrangedPosition() const {
         return last_unranged_position;
@@ -485,6 +496,7 @@ private:
     // Front side.
     u64 write_position{};
     u64 last_writer_position{};
+    u64 graphics_writes_position{};
 
     u64 last_memory_writer_position{};
     u64 last_unranged_position{};

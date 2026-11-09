@@ -33,6 +33,9 @@ namespace Tegra {
 
 constexpr u32 MacroRegistersStart = 0xE00;
 constexpr u32 ComputeInline = 0x6D;
+// Equivalent of MAXWELL3D_REG_INDEX(draw.end): the method that issues a 3D draw.
+constexpr u32 kMaxwell3DDrawEndMethod =
+    static_cast<u32>(offsetof(Engines::Maxwell3D::Regs, draw.end) / sizeof(u32));
 
 bool DmaPusher::IsMemoryWriter(const Engines::EngineInterface& engine, Engines::EngineTypes type,
                               u32 method) {
@@ -477,11 +480,19 @@ void DmaPusher::CallMethod(u32 argument) {
         const bool memory_writer = split.Active() &&
                                    (engine_type == Engines::EngineTypes::KeplerMemory ||
                                     engine_type == Engines::EngineTypes::Fermi2D);
+        // 3D draws may write storage buffers (mesh/task culls, feedback); the front's position
+        // tracking must know they were sent.
+        const bool graphics_writer = split.Active() &&
+                                     engine_type == Engines::EngineTypes::Maxwell3D &&
+                                     dma_state.method == kMaxwell3DDrawEndMethod;
         SCOPE_EXIT {
             if (writer) {
                 split.NoteWriter();
             } else if (memory_writer) {
                 split.NoteUnrangedWriter();
+            }
+            if (graphics_writer) {
+                split.NoteGraphicsWriter();
             }
         };
         if (split.Active()) {
@@ -541,11 +552,19 @@ void DmaPusher::CallMultiMethod(const u32* base_start, u32 num_methods) {
         const bool memory_writer = split.Active() &&
                                    (engine_type == Engines::EngineTypes::KeplerMemory ||
                                     engine_type == Engines::EngineTypes::Fermi2D);
+        // 3D draws may write storage buffers (mesh/task culls, feedback); the front's position
+        // tracking must know they were sent.
+        const bool graphics_writer = split.Active() &&
+                                     engine_type == Engines::EngineTypes::Maxwell3D &&
+                                     dma_state.method == kMaxwell3DDrawEndMethod;
         SCOPE_EXIT {
             if (writer) {
                 split.NoteWriter();
             } else if (memory_writer) {
                 split.NoteUnrangedWriter();
+            }
+            if (graphics_writer) {
+                split.NoteGraphicsWriter();
             }
         };
         if (split.Active()) {

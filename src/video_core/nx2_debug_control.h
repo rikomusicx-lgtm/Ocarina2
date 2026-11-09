@@ -57,8 +57,10 @@ inline std::atomic<int> g_loop_skip{-1};
 
 /// EDEN_NX2_DMA_SNAPSHOT (from EvilOOT's dma-snapshot fix): macro DMA reads of pages a drained
 /// read flushed whole skip the drain while nothing sent since may write them (Maxwell3D::
-/// FrontDmaRead). 9 = on (default: Lake Hylia 46.5 -> 52.3 fps; verify 0 differences in 235k
-/// reads), 10 = on and verify every skipped read against the drained path, 0 = off.
+/// FrontDmaRead) and no 3D draw was sent since (draws may write storage buffers); the query
+/// cache must also list no report there. 9 = on (default: Lake Hylia 46.5 -> 52.3 fps; verify 0
+/// differences in 235k reads with EDEN_NX2_DMA_SNAPSHOT=10), 10 = on and verify every skipped
+/// read against the drained path, 0 = off.
 inline std::atomic<int> g_dma_snapshot{-1};
 
 /// EDEN_NX2_HOST_PACE: the host frame pacer (vk_host_pacer.h). 1 = on (default), 0 = only

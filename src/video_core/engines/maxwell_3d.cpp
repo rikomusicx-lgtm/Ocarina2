@@ -1453,8 +1453,9 @@ void Maxwell3D::FrontDmaRead(VideoCommon::GpuSplit& split, FrontState& fs, u32 m
     // GPU-written, so each read drained the back: the front and the back took turns. A drained
     // read now flushes its whole device pages and remembers the split position; later reads of
     // those pages skip the drain while nothing sent since may write them
-    // (GpuSplit::MayBeWrittenSince) and the query cache lists no report there. 10 also drains,
-    // reads again and logs differences.
+    // (GpuSplit::MayBeWrittenSince), no graphics draw was sent since (they may write storage
+    // buffers the tracking does not cover), and the query cache lists no report there.
+    // 10 also drains, reads again and logs differences.
     const int snapshot_mode =
         VideoCore::Nx2Debug::SwitchValue(VideoCore::Nx2Debug::g_dma_snapshot, "EDEN_NX2_DMA_SNAPSHOT",
                                          9);
@@ -1474,19 +1475,22 @@ void Maxwell3D::FrontDmaRead(VideoCommon::GpuSplit& split, FrontState& fs, u32 m
             static u64 misses{};
             static u64 differences{};
             static u64 report_reads{};
-            static std::array<u64, 4> miss_reasons{};
+            static std::array<u64, 5> miss_reasons{};
             const u64 first_page = *device >> 12;
             const u64 last_page = (*device + read_bytes - 1) >> 12;
             bool hit = true;
             for (u64 page = first_page; page <= last_page && hit; ++page) {
                 const auto it = fs.dma_snapshots.find(page);
                 hit = it != fs.dma_snapshots.end() &&
-                      !split.MayBeWrittenSince(it->second, *device, read_bytes);
+                      !split.MayBeWrittenSince(it->second, *device, read_bytes) &&
+                      split.LastGraphicsWritePosition() <= it->second;
                 if (!hit) {
-                    // No snapshot, compute/copy sent since, unranged writer sent since, noted write.
-                    const u32 reason = it == fs.dma_snapshots.end()                   ? 0
+                    // No snapshot, compute/copy sent since, unranged writer sent since, noted
+                    // write, or a graphics draw sent since (may write storage buffers).
+                    const u32 reason = it == fs.dma_snapshots.end()                     ? 0
                                        : split.LastWriterPosition() > it->second   ? 1
                                        : split.LastUnrangedPosition() > it->second ? 2
+                                       : split.LastGraphicsWritePosition() > it->second ? 4
                                                                                    : 3;
                     ++miss_reasons[reason];
                 }
@@ -1548,9 +1552,9 @@ void Maxwell3D::FrontDmaRead(VideoCommon::GpuSplit& split, FrontState& fs, u32 m
                     LOG_INFO(HW_GPU,
                              "DMA snapshot: {} reads skipped the drain, {} drained, {} differed, "
                              "{} reads of listed reports (drained path); misses: {} new page, {} "
-                             "compute/copy, {} unranged, {} noted write",
+                             "compute/copy, {} unranged, {} noted write, {} graphics draw",
                              hits, misses, differences, report_reads, miss_reasons[0],
-                             miss_reasons[1], miss_reasons[2], miss_reasons[3]);
+                             miss_reasons[1], miss_reasons[2], miss_reasons[3], miss_reasons[4]);
                 }
                 for (u32 i = 0; i < words; ++i) {
                     fs.parameters.push_back(snap_words[i]);
