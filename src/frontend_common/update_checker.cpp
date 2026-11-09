@@ -295,12 +295,21 @@ std::optional<Common::Net::Asset> SelectOcarina2Asset(const Common::Net::Release
     return std::nullopt;
 }
 
+bool HiddenFromUpdater(const Common::Net::Release& release) {
+    return release.body.find(HiddenReleaseMarker) != std::string::npos;
+}
+
 std::optional<Common::Net::Release> SelectOcarina2Update(
     std::span<const Common::Net::Release> releases, const Ocarina2Version& current,
     const Source& source) {
     const Common::Net::Release* selected = nullptr;
     Ocarina2Version newest = current;
     for (const auto& release : releases) {
+        if (HiddenFromUpdater(release)) {
+            LOG_INFO(Frontend, "Update check skips {}: its notes hide it from the updater",
+                     release.tag);
+            continue;
+        }
         const auto version = ParseOcarina2Tag(release.tag);
         if (version && *version > newest && SelectOcarina2Asset(release, source)) {
             newest = *version;
