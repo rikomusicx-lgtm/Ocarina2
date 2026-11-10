@@ -35,6 +35,7 @@
 #include "video_core/guest_memory.h"
 #include "video_core/host1x/gpu_device_memory_manager.h"
 #include "video_core/nx2_debug_control.h"
+#include "video_core/texture_cache/host_memory_limit.h"
 #include "video_core/texture_cache/image_view_base.h"
 #include "video_core/texture_cache/conversion.h"
 #include "video_core/texture_cache/samples_helper.h"
@@ -446,7 +447,6 @@ void TextureCache<P>::TickFrame() {
             if (native_thresholds_applied && budget_check_frames++ % 30 == 0) {
                 const u64 budget = runtime.GetDeviceMemoryBudget();
                 if (budget > 2_GiB) {
-                    const u64 old_critical = critical_memory;
                     const u64 margin = (std::min)(budget / 8, 1_GiB);
                     if constexpr (requires { runtime.GetDeviceMemorySlack(); }) {
                         // The usage counted here leaves out the unused part of the allocator's
@@ -462,12 +462,18 @@ void TextureCache<P>::TickFrame() {
                     }
                     critical_memory =
                         budget - (std::min)(margin + pressure_margin + slack_margin, budget / 2);
+                    // The device's budget is not all the room there is: see HostCriticalMemory.
+                    // The usage is the driver's, which still counts images waiting to be freed.
+                    const std::optional<u64> commit_room = Common::GetSystemCommitRoom();
+                    const u64 host_critical =
+                        commit_room
+                            ? HostCriticalMemory(runtime.GetDeviceMemoryUsage(), *commit_room)
+                            : (std::numeric_limits<u64>::max)();
+                    critical_memory = (std::min)(critical_memory, host_critical);
                     expected_memory = critical_memory - (std::min)(margin, critical_memory / 2);
                     ApplyThresholdOverrides(false);
                     // Log the first values and real changes (the budget moves by a few MiB all
-                    // the time). Compared after the overrides: the value before them is above
-                    // the 5/8-of-budget cap on large cards, so every check looked like a change
-                    // and logged the same thresholds every 30 frames.
+                    // the time). Compared after the overrides.
                     const u64 change = critical_memory > old_critical
                                            ? critical_memory - old_critical
                                            : old_critical - critical_memory;
@@ -481,6 +487,13 @@ void TextureCache<P>::TickFrame() {
                         LOG_INFO(HW_GPU,
                                  "Memory margins: base {} MiB, out of memory {} MiB, block slack {} MiB",
                                  margin >> 20, pressure_margin >> 20, slack_margin >> 20);
+                        if (commit_room) {
+                            LOG_INFO(HW_GPU, "Host memory: {} MiB of commit left, {}",
+                                     *commit_room >> 20,
+                                     critical_memory == host_critical
+                                         ? "which bounds the thresholds"
+                                         : "the device budget bounds the thresholds");
+                        }
                     }
                 }
             }
