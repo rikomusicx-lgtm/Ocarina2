@@ -1,4 +1,4 @@
-﻿// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
+// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <QApplication>
@@ -129,7 +129,7 @@ int main(int argc, char* argv[]) {
     // is a Control Panel setting newer drivers no longer show ("Shader Cache Size"); the driver
     // also reads these variables, for this process only (nothing system-wide changes). A value
     // already set (the player's, or nx2_switches.txt) wins.
-    if (FritchiiUi::Enabled()) {
+    if (Ocarina2Ui::Enabled()) {
         if (!qEnvironmentVariableIsSet("__GL_SHADER_DISK_CACHE_SKIP_CLEANUP")) {
             qputenv("__GL_SHADER_DISK_CACHE_SKIP_CLEANUP", "1");
         }

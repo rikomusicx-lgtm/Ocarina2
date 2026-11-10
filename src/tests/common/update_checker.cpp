@@ -385,24 +385,24 @@ TEST_CASE("Ocarina2 picks the newest newer release that has a package", "[update
     CHECK_FALSE(UpdateChecker::SelectOcarina2Update({}, {4, 0}, source));
 }
 
-TEST_CASE("Fritchii never offers a release whose notes hide it from the updater", "[updater]") {
+TEST_CASE("Ocarina2 never offers a release whose notes hide it from the updater", "[updater]") {
     const auto make = [](const std::string& tag, const std::string& name, std::string body) {
-        auto release = MakeFritchiiRelease(tag, {GitHubUrl("Lichii", tag, name)});
+        auto release = MakeOcarina2Release(tag, {GitHubUrl("Lichii", tag, name)});
         release.body = std::move(body);
         return release;
     };
     const auto releases = std::array{
-        make("fritchii-v5.6", "Fritchii-v5.6-Windows-x64.zip", "Real notes"),
-        make("fritchii-v9", "Fritchii-v9-Windows-x64.zip",
+        make("ocarina2-v5.6", "Ocarina2-v5.6-Windows-x64.zip", "Real notes"),
+        make("ocarina2-v9", "Ocarina2-v9-Windows-x64.zip",
              "Big news!\n<!-- fritchii:no-update -->\nMore text"),
     };
     const auto source = UpdateChecker::DefaultSource();
     CHECK(UpdateChecker::HiddenFromUpdater(releases[1]));
     CHECK_FALSE(UpdateChecker::HiddenFromUpdater(releases[0]));
-    const auto update = UpdateChecker::SelectFritchiiUpdate(releases, {5, 5}, source);
+    const auto update = UpdateChecker::SelectOcarina2Update(releases, {5, 5}, source);
     REQUIRE(update);
-    CHECK(update->tag == "fritchii-v5.6");
-    CHECK_FALSE(UpdateChecker::SelectFritchiiUpdate(releases, {5, 6}, source));
+    CHECK(update->tag == "ocarina2-v5.6");
+    CHECK_FALSE(UpdateChecker::SelectOcarina2Update(releases, {5, 6}, source));
 }
 
 TEST_CASE("EDEN_UPDATE_URL takes https anywhere and plain http only on loopback", "[updater]") {

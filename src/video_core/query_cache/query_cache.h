@@ -805,6 +805,7 @@ bool QueryCacheBase<Traits>::IsQueryDirty(QueryCacheBase<Traits>::QueryLocation 
 
 template <typename Traits>
 bool QueryCacheBase<Traits>::SemiFlushQueryDirty(QueryCacheBase<Traits>::QueryLocation location) {
+    auto* query_base = impl->ObtainQuery(location);
     if (!query_base) {
         return false;
     }

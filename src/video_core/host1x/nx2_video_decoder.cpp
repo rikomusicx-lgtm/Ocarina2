@@ -167,6 +167,54 @@ struct Nx2VideoDecoder::Impl {
         hardware.reset();
     }
 
+    /// Opens a hardware or multi-threaded CPU FFmpeg decoder context for `codec_type`.
+    bool Open(NvdecCommon::VideoCodec codec_type, bool use_gpu) {
+        open = false;
+        using_hardware = false;
+        context.reset();
+        hardware.reset();
+        decoder = std::make_unique<FFmpeg::Decoder>(codec_type, use_gpu);
+        if (decoder->GetCodec() == nullptr) {
+            return false;
+        }
+        context = std::make_unique<FFmpeg::DecoderContext>(*decoder);
+        if (use_gpu) {
+            hardware = std::make_unique<FFmpeg::HardwareContext>();
+            if (!hardware->InitializeForDecoder(*context, *decoder)) {
+                context.reset();
+                hardware.reset();
+                return false;
+            }
+        } else {
+            AVCodecContext* codec_context = context->GetCodecContext();
+            codec_context->flags &= ~AV_CODEC_FLAG_LOW_DELAY;
+            codec_context->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
+            codec_context->thread_count = 4;
+        }
+        open = context->OpenContext(*decoder);
+        using_hardware = open && use_gpu;
+        if (!open) {
+            context.reset();
+            hardware.reset();
+        }
+        return open;
+    }
+
+    bool Submit(std::span<const u8> bytes, u64 pts, std::vector<Nx2Picture>& pictures) {
+        {
+            FFmpeg::Packet input{bytes};
+            input.GetPacket()->pts = static_cast<s64>(pts);
+            if (!context->SendPacket(input)) {
+                return false;
+            }
+        }
+        // Hidden VP9 frames never come out: keep the set from growing over a long movie.
+        if (pending_pts.size() >= 64) {
+            pending_pts.erase(pending_pts.begin());
+        }
+        pending_pts.insert(pts);
+        Receive(pictures);
+        return !context->HadDecodeError();
     }
 
     void Receive(std::vector<Nx2Picture>& pictures) {
@@ -196,6 +244,20 @@ struct Nx2VideoDecoder::Impl {
         }
     }
 
+    bool FallBackToCpu(std::vector<Nx2Picture>& pictures) {
+        auto packets = std::exchange(startup_packets, {});
+        pending_pts.clear();
+        const auto codec = CodecFromMime(name);
+        if (!codec || !Open(*codec, false)) {
+            return false;
+        }
+        LOG_INFO(HW_GPU, "nx2 video: hardware decoding unavailable for \"{}\", falling back to CPU",
+                 name);
+        for (const auto& [pts, bytes] : packets) {
+            Submit(std::span<const u8>{bytes.data(), bytes.size() - AV_INPUT_BUFFER_PADDING_SIZE},
+                   pts, pictures);
+        }
+        return true;
     }
 };
 

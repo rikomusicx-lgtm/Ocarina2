@@ -71,8 +71,6 @@ struct BuiltinPatch {
     std::string_view module;
     std::string_view build_id;
     std::span<const BuiltinPatchRecord> records;
-    size_t state_offset = 0;
-    size_t state_size = 0;
     /// When set, the patch applies only while this environment variable is "1" (A/B before it
     /// becomes a default).
     const char* enable_env = nullptr;

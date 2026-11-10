@@ -19,7 +19,7 @@
 #include "common/settings.h"
 #include "qt_common/config/uisettings.h"
 #include "video_core/shader_warm/shader_warm_builder.h"
-#include "yuzu/fritchii/fritchii_ui.h"
+#include "yuzu/ocarina2/ocarina2_ui.h"
 #include "yuzu/shader_warm_dialog.h"
 
 namespace ShaderWarm = VideoCommon::ShaderWarm;
@@ -106,7 +106,7 @@ ShaderWarmDialog::ShaderWarmDialog(Core::System& system_, std::filesystem::path 
     buttons->addWidget(button);
 
     auto* layout = new QVBoxLayout(this);
-    if (FritchiiUi::Enabled()) {
+    if (Ocarina2Ui::Enabled()) {
         // Players compared this window's program counts with the ~120,000 pipelines of the
         // Preparing shaders screen and thought shaders were missing (2026-11-09).
         auto* note = new QLabel(tr("<b>Optional quick warm-up.</b><br>The full preparation "
@@ -228,7 +228,7 @@ void ShaderWarmDialog::OnFinished(const ShaderWarm::Result& result, bool stopped
                    "is done once per driver version.");
         // Not in Fritchii: its Preparing shaders screen builds the graphics part, and shader
         // libraries stay off on AMD's Windows driver on purpose (they crash there).
-        if (!ShaderLibrariesOn() && !FritchiiUi::Enabled()) {
+        if (!ShaderLibrariesOn() && !Ocarina2Ui::Enabled()) {
             text += QLatin1Char(' ') +
                     tr("The graphics part also needs Shader libraries, in Configure, Graphics, "
                        "Advanced.");

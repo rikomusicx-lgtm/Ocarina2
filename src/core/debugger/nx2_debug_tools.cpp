@@ -597,16 +597,6 @@ json OotHighRefresh(ToolState& state, const json& params) {
     return result;
 }
 
-// Lifts or restores the speed limit (test scripts boot through the logos and menus unlimited).
-json SpeedLimit(ToolState&, const json& params) {
-    auto& setting = Settings::values.use_speed_limit;
-    const bool previous = setting.GetValue();
-    if (params.contains("on")) {
-        setting.SetValue(params.at("on").get<bool>());
-    }
-    return {{"previous", previous}, {"on", setting.GetValue()}};
-}
-
 json ReadMemory(ToolState& state, const json& params) {
     const u64 address = AddressParam(params, "address");
     const u64 size = ReadSize(params, address);
@@ -1046,7 +1036,6 @@ Handlers MakeHandlers(const std::shared_ptr<ToolState>& state) {
         {"timeline", handler(Timeline)},
         {"pgo_dump", handler(PgoDump)},
         {"switch", handler(SetSwitch)},
-        {"speed_limit", handler(SpeedLimit)},
         {"oot_high_refresh", handler(OotHighRefresh)},
         {"read_memory", handler(ReadMemory)},
         {"search_memory", handler(SearchMemory)},
