@@ -39,8 +39,7 @@ struct HomeHooks {
 
 /// The Ocarina2 main screen, drawn like the Switch 2 home menu: a top bar (player avatar,
 /// Home/Games switch, network glyphs and the clock), the highlighted game with a bookmark,
-/// a row of square game tiles (the focus ring is the console's aqua), a row of round
-/// system buttons at the bottom and a thin strip with the theme and the button hints.
+/// and a row of round system buttons at the bottom on a flat, very dark purple backdrop.
 /// The classic game list stays one press away ("Games"); the main window keeps managing
 /// it as before.
 class Home : public QObject {
@@ -61,19 +60,17 @@ private:
     void ShowHome();
     void ShowList();
     void Refresh();
-    /// Cheap selection update (bookmark row + what Play boots); rebuilding the tiles is
-    /// not needed and would yank focus off them.
+    /// Cheap selection update (bookmark row + what the hero image boots).
     void SelectGame(const QString& path, u64 program_id, const QString& title);
-    /// The per-game context menu (right click / X on a tile / X on the Play button).
+    /// The per-game context menu (right click / X on the hero image).
     void ShowGameMenu(const QString& path, u64 program_id, const QPoint& global_pos);
 
     QWidget* MakeRail();
     QWidget* MakePage();
     void RebuildNavOrder();
+    /// Centers the floating Back button at the bottom of the window.
+    void PositionBackButton();
     bool HandleNavKey(QKeyEvent* event);
-    /// Blurred hero-art backdrop, Switch 2 style: the cover stretched and darkened behind
-    /// everything. Falls back to the plain gradient when there is nothing to draw.
-    void RebuildBackdrop();
 
     QMainWindow* window;
     QWidget* game_list;
@@ -83,27 +80,22 @@ private:
     QWidget* rail = nullptr;
     QWidget* page = nullptr;
     QWidget* topbar = nullptr;
-    QLabel* backdrop = nullptr;
-    QPixmap hero_pixmap;
     QToolButton* avatar_button = nullptr;
-    QToolButton* pill_home = nullptr;
-    QToolButton* pill_games = nullptr;
     QWidget* game_row = nullptr;
     QLabel* game_row_title = nullptr;
     QLabel* clock_label = nullptr;
     QTimer* clock_timer = nullptr;
+    QToolButton* restore_game_button = nullptr;
+    QPushButton* back_button = nullptr;  ///< floating "Back to Home" on the games screen
     QToolButton* home_button = nullptr;
     QToolButton* library_button = nullptr;
     QToolButton* folder_button = nullptr;
     QToolButton* update_button = nullptr;
     QToolButton* settings_button = nullptr;
     QToolButton* menu_button = nullptr;
-    QPushButton* play = nullptr;
-    QToolButton* theme_button = nullptr;
-    QList<QWidget*> nav_order_;  ///< Focus order: dock, play, then the game tiles.
+    QToolButton* play = nullptr;  ///< the hero image, click to launch
+    QList<QWidget*> nav_order_;  ///< Focus order: dock and hero.
     int nav_index_ = 0;
-    QHBoxLayout* row = nullptr;
-    QWidget* row_box = nullptr;
     QTimer* refresh_timer = nullptr;
 
     bool list_mode = false;

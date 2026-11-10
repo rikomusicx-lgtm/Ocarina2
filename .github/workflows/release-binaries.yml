@@ -9,7 +9,7 @@ on:
         default: true
   push:
     branches:
-      - nx2-experimental
+      - nx2
     # A binary only changes when build inputs change; docs-only pushes skip the build.
     paths:
       - "src/**"
@@ -388,11 +388,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -x build/release/bin/lichii
+          test -x build/release/bin/Ocarina2
           test -x build/release/bin/eden-cli
-          strip build/release/bin/ocarina2 build/release/bin/eden-cli
+          strip build/release/bin/Ocarina2 build/release/bin/eden-cli
           tar -czf "ocarina2-${GITHUB_SHA}-${{ matrix.platform }}.tar.gz" \
-            -C build/release/bin ocarina2 eden-cli nx2_switches.txt
+            -C build/release/bin Ocarina2 eden-cli nx2_switches.txt
           ls -la "ocarina2-${GITHUB_SHA}-${{ matrix.platform }}.tar.gz"
 
       # A self-contained AppImage: linuxdeploy bundles every library the two programs need except
@@ -403,7 +403,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -x build/release/bin/lichii
+          test -x build/release/bin/Ocarina2
           test -x build/release/bin/eden-cli
           tools="$RUNNER_TEMP/linuxdeploy"
           mkdir -p "$tools"
@@ -413,8 +413,8 @@ jobs:
           curl -fsSL -o "$tools/linuxdeploy-plugin-qt-$arch.AppImage" \
           https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-$arch.AppImage
           chmod +x "$tools"/*.AppImage
-          # The desktop file names its icon io.github.zortos293.lichii.
-          icon="$RUNNER_TEMP/io.github.zortos293.ocarina2.png"
+          # The desktop file names its icon io.github.rikomusicx-lgtm.ocarina2.png.
+          icon="$RUNNER_TEMP/io.github.rikomusicx-lgtm.ocarina2.png"
           cp dist/ocarina2.png "$icon"
           export APPIMAGE_EXTRACT_AND_RUN=1
           export QMAKE="$QT_ROOT_DIR/bin/qmake"
@@ -429,9 +429,9 @@ jobs:
           mkdir -p AppDir/usr/bin
           cp build/release/bin/nx2_switches.txt AppDir/usr/bin/
           "$tools/linuxdeploy-$arch.AppImage" --appdir AppDir \
-            --executable build/release/bin/ocarina2 \
+            --executable build/release/bin/Ocarina2 \
             --executable build/release/bin/eden-cli \
-            --desktop-file dist/io.github.zortos293.lichii.desktop \
+            --desktop-file dist/io.github.rikomusicx-lgtm.ocarina2.desktop \
             --icon-file "$icon" \
             --plugin qt \
             --output appimage
@@ -457,8 +457,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          app=build/release/bin/ocarina2.app
-          test -x "$app/Contents/MacOS/lichii"
+          app=build/release/bin/Ocarina2.app
+          test -x "$app/Contents/MacOS/Ocarina2"
           test -x build/release/bin/eden-cli
           cp build/release/bin/eden-cli "$app/Contents/MacOS/eden-cli"
           "$(brew --prefix qt@6)/bin/macdeployqt" "$app" \
@@ -475,7 +475,7 @@ jobs:
               done
           done
           # Libraries that load their dependencies through @rpath find them in the bundle.
-          for program in ocarina2 eden-cli; do
+          for program in Ocarina2 eden-cli; do
             install_name_tool -add_rpath @executable_path/../Frameworks \
               "$app/Contents/MacOS/$program" 2> /dev/null
           done
@@ -500,9 +500,9 @@ jobs:
           codesign --verify --deep --strict "$app"
           ditto -c -k --keepParent "$app" "ocarina2-${GITHUB_SHA}-${{ matrix.platform }}.zip"
           ls -la "ocarina2-${GITHUB_SHA}-${{ matrix.platform }}.zip"
-          # Also ship a .dmg (drag ocarina2.app onto Applications).
+          # Also ship a .dmg (drag Ocarina2.app onto Applications).
           dmgdir=$(mktemp -d)
-          ditto "$app" "$dmgdir/ocarina2.app"
+          ditto "$app" "$dmgdir/Ocarina2.app"
           ln -s /Applications "$dmgdir/Applications"
           hdiutil create -volname "Ocarina2" -srcfolder "$dmgdir" -ov -format UDZO \
             "ocarina2-${GITHUB_SHA}-${{ matrix.platform }}.dmg"
@@ -546,7 +546,7 @@ jobs:
           retention-days: 7
 
   # Publishes every binary as a GitHub pre-release once every platform built: on pushes to
-  # nx2-experimental, and on manual runs unless "Publish the binaries as a GitHub release" is
+  # nx2, and on manual runs unless "Publish the binaries as a GitHub release" is
   # unticked.
   release:
     name: Publish release
@@ -651,7 +651,7 @@ jobs:
 
           ## macOS
 
-          $(row "arm64 (Apple Silicon)" "$(link zip ocarina2-macos-arm64.zip)" "" "macOS 15 or newer. Not notarized: right-click and choose Open the first time, or run \`xattr -dr com.apple.quarantine ocarina2.app\`. \`eden-cli\` is inside the app, in \`Contents/MacOS\`" | table)
+          $(row "arm64 (Apple Silicon)" "$(link zip ocarina2-macos-arm64.zip)" "" "macOS 15 or newer. Not notarized: right-click and choose Open the first time, or run \`xattr -dr com.apple.quarantine Ocarina2.app\`. \`eden-cli\` is inside the app, in \`Contents/MacOS\`" | table)
 
           ${pgo_note}
           EOF

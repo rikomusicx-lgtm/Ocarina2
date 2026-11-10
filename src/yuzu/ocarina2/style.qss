@@ -1,4 +1,4 @@
-/* Ocarina2: near-black OLED background, one Switch-style violet accent (#9a7cf5),
+﻿/* Ocarina2: near-black OLED background, one Switch-style violet accent (#9a7cf5),
    soft rounded controls (12-14px), generous spacing and a Spotify-ish title weight. */
 
 QToolTip {
@@ -178,62 +178,49 @@ QToolButton#Ocarina2StripButton { background: transparent; border: none; border-
 QToolButton#Ocarina2StripButton:hover { background: #322a52; }
 QToolButton#Ocarina2StripButton:pressed { background: #453a70; }
 
-/* Home screen (ocarina2/home.cpp): the Switch 2 top bar, game tiles, dock and bottom strip */
-QWidget#Ocarina2Dock { background: transparent; }
-QToolButton#Ocarina2DockButton {
-    background: #17161f;
-    border: 1px solid #23212c;
-    color: #cfccd9;
-    border-radius: 26px;
-    padding: 10px 10px;
-    min-width: 86px;
+/* Home screen (ocarina2/home.cpp): the Switch 2 top bar, hero image, dock and bottom strip */
+QWidget#Ocarina2Dock {
+    background: rgba(10, 10, 16, 190);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 30px;
 }
-QToolButton#Ocarina2DockButton:hover { background: #201f29; color: #ffffff; }
+QWidget#Ocarina2DockCell { background: transparent; }
+QToolButton#Ocarina2DockButton {
+    background: #1b1a26;
+    border: 1px solid #2b2940;
+    border-radius: 42px;
+    color: #cfccd9;
+    padding: 0;
+}
+QLabel#Ocarina2DockLabel {
+    color: #9896ab;
+    background: transparent;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 0;
+}
+QToolButton#Ocarina2DockButton:hover { background: #242333; color: #ffffff; }
 QToolButton#Ocarina2DockButton:pressed { background: #2a2836; }
 QWidget#Ocarina2Home {
-    background: qradialgradient(cx: 0.5, cy: 0.55, radius: 0.85,
-        fx: 0.5, fy: 0.5,
-        stop: 0 #141126,
-        stop: 0.45 #100e20,
-        stop: 1 #06060c);
+    background: #1d1a29;
 }
 QWidget#Ocarina2TopBar {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-        stop: 0 rgba(255, 255, 255, 6), stop: 1 rgba(255, 255, 255, 0));
-    border-bottom: 1px solid #1d1b28;
+        stop: 0 rgba(255, 255, 255, 5), stop: 1 rgba(255, 255, 255, 0));
 }
 QToolButton#Ocarina2Avatar {
-    background: #0a0a10;
-    border: 2px solid rgba(245, 196, 69, 0.55);
-    border-radius: 16px;
-    min-width: 32px;
-    min-height: 32px;
-    max-width: 32px;
-    max-height: 32px;
+    background: #12101c;
+    border: 2px solid rgba(167, 139, 250, 0.60);
+    border-radius: 14px;
+    min-width: 28px;
+    min-height: 28px;
+    max-width: 28px;
+    max-height: 28px;
 }
-QToolButton#Ocarina2Avatar:hover { border-color: #ffd75e; background: #100f0c; }
+QToolButton#Ocarina2Avatar:hover { border-color: #c4b5fd; background: #1a1725; }
 QLabel#Ocarina2Wordmark {
     color: #c9c7da;
     background: transparent;
-}
-QWidget#Ocarina2Pills {
-    background: #14131d;
-    border: 1px solid #242230;
-    border-radius: 999px;
-}
-QToolButton#Ocarina2Pill {
-    background: transparent;
-    border: 1px solid transparent;
-    color: #9896ab;
-    border-radius: 999px;
-    padding: 6px 30px;
-    font-size: 13px;
-    font-weight: 600;
-}
-QToolButton#Ocarina2Pill:hover { color: #e8e6f2; }
-QToolButton#Ocarina2Pill:checked {
-    background: #39374a;
-    color: #ffffff;
 }
 QLabel#Ocarina2Clock {
     color: #e6e4ee;
@@ -244,67 +231,45 @@ QLabel#Ocarina2Clock {
 QLabel#Ocarina2TopIcon { color: #9896ab; background: transparent; }
 QWidget#Ocarina2CurrentGameRow { background: transparent; }
 QLabel#Ocarina2CurrentGame {
-    color: #d4d2df;
-    font-size: 14px;
-    font-weight: 600;
+    color: #ffffff;
+    font-family: Georgia, "Palatino Linotype", serif;
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
     background: transparent;
 }
 QLabel#Ocarina2Section { font-size: 15px; color: #b7b2cd; }
-QPushButton#Ocarina2Play {
-    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
-        stop: 0 #8b5cf6, stop: 0.5 #a78bfa, stop: 1 #c4b5fd);
-    color: #ffffff;
-    border: none;
-    border-radius: 999px;
-    min-height: 58px;
-    max-height: 58px;
-    min-width: 225px;
-    padding: 0 40px;
-    font-size: 20px;
-    font-weight: 800;
-}
-QPushButton#Ocarina2Play:hover { background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
-        stop: 0 #9b6df8, stop: 0.5 #b59efb, stop: 1 #cfc2fd); }
-QPushButton#Ocarina2Play:pressed { background: #7c3aed; }
-QToolButton#Ocarina2Tile {
+QToolButton#Ocarina2Hero {
     background: transparent;
     border: 3px solid transparent;
     border-radius: 20px;
-    padding: 8px;
-    color: #c9c6d8;
+    padding: 0;
+    color: #ffffff;
+}
+QPushButton#Ocarina2BackButton {
+    background: rgba(11, 11, 18, 0.78);
+    border: 1px solid #2b2940;
+    border-radius: 19px;
+    color: #e4e2ee;
+    padding: 0 10px;
+    font-weight: 700;
     font-size: 13px;
 }
-QToolButton#Ocarina2Tile:hover { background: #16161f; color: #ececf1; }
-QWidget#Ocarina2BottomBar {
-    border-top: 1px solid #201e2a;
-    background: transparent;
+QPushButton#Ocarina2BackButton:hover { background: rgba(22, 21, 34, 0.92); }
+QPushButton#Ocarina2BackButton:focus {
+    border: 2px solid #3fd8ff;
+    background: rgba(16, 18, 28, 0.85);
+    color: #ffffff;
 }
-QToolButton#Ocarina2ThemeButton {
-    background: transparent;
-    border: none;
-    color: #8b8b9e;
-    padding: 2px 8px;
-    font-size: 12px;
-}
-QToolButton#Ocarina2ThemeButton:hover { color: #ffffff; }
-QLabel#Ocarina2Hints { color: #6f6d80; background: transparent; }
-
 /* Gamepad/keyboard focus rings (Switch 2 aqua) */
 QToolButton#Ocarina2DockButton:focus {
     border: 2px solid #3fd8ff;
-    background: #1d2026;
+    background: #1d2029;
     color: #ffffff;
 }
-QToolButton#Ocarina2Tile:focus {
-    background: rgba(63, 216, 255, 0.10);
+QToolButton#Ocarina2Hero:focus {
     border: 3px solid #3fd8ff;
-    color: #ffffff;
-}
-QPushButton#Ocarina2Play:focus {
-    border: 3px solid #3fd8ff;
-}
-QToolButton#Ocarina2Pill:focus {
-    border: 1px solid #3fd8ff;
+    background: rgba(63, 216, 255, 0.08);
 }
 QToolButton#Ocarina2Avatar:focus {
     border: 2px solid #3fd8ff;

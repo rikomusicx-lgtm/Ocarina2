@@ -599,6 +599,7 @@ private:
     bool emulation_running = false;
     std::optional<CompatibilityReporting::Session> report_session;
     bool boot_in_progress = false;
+    bool quick_menu_open = false;  ///< the L3+R3 pause menu drives the controller directly
     bool close_pending = false;
     // The path to the game currently running
     QString current_game_path;

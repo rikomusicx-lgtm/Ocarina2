@@ -66,6 +66,8 @@ signals:
 
 private:
     void changeEvent(QEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
+    static void InstallRecursive(QWidget* root, QObject* filter);
     void RetranslateUI();
 
     void HandleApplyButtonClicked();

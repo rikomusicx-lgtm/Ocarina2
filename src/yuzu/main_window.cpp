@@ -119,6 +119,8 @@ bool HostOotMaxResolutionDefault() {
 #include "util/clickable_label.h"
 #include "util/controller_navigation.h"
 #include "util/export_log.h"
+#include <QCheckBox>
+#include <QRadioButton>
 #include "ocarina2/home.h"
 #include "ocarina2/ocarina2_ui.h"
 #include "ocarina2/perf_overlay.h"
@@ -324,6 +326,30 @@ struct TitlebarFilter final : QObject {
     }
 };
 
+// Ocarina2: the console's A button is Enter everywhere in this app, and QCheckBox/QRadioButton
+// do nothing with Enter — so A can't tick settings anywhere. Translate it to Space for those
+// two widget types, only, everywhere.
+class CheckboxEnterFilter : public QObject {
+public:
+    explicit CheckboxEnterFilter(QObject* parent) : QObject(parent) {}
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (event->type() == QEvent::KeyPress) {
+            auto* key = static_cast<QKeyEvent*>(event);
+            if (key->key() != Qt::Key_Return && key->key() != Qt::Key_Enter) {
+                return QObject::eventFilter(watched, event);
+            }
+            QWidget* focused = QApplication::focusWidget();
+            if (focused && (qobject_cast<QCheckBox*>(focused) ||
+                            qobject_cast<QRadioButton*>(focused))) {
+                auto* space = new QKeyEvent(QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier);
+                QCoreApplication::postEvent(focused, space);
+                return true;  // swallow the Enter so nothing else double-handles it
+            }
+        }
+        return QObject::eventFilter(watched, event);
+    }
+};
+
 static TitlebarFilter* g_filter = nullptr;
 static QMetaObject::Connection g_focusConn;
 
@@ -508,6 +534,9 @@ MainWindow::MainWindow(bool has_broken_vulkan)
     ConnectWidgetEvents();
     SetUpOcarina2Ui();
 
+    auto* checkbox_enter_filter = new CheckboxEnterFilter(this);
+    QApplication::instance()->installEventFilter(checkbox_enter_filter);
+
     QtCommon::SetupHID();
     controller_dialog->refreshConfiguration();
 
@@ -515,10 +544,21 @@ MainWindow::MainWindow(bool has_broken_vulkan)
     // can be used without a keyboard or mouse, like the Switch 2's home screen.
     controller_nav = new ControllerNavigation(QtCommon::system->HIDCore(), this);
     connect(controller_nav, &ControllerNavigation::TriggerKeyboardEvent, this,
-            [](Qt::Key key) {
-                if (QWidget* focused = QApplication::focusWidget()) {
+            [this](Qt::Key key) {
+                // While the quick menu is open it drives the controller itself; nothing
+                // else should receive the key. Other modals (settings) handle their own
+                // keys via their filters, so route there too.
+                if (this->quick_menu_open) {
+                    return;
+                }
+                if (QWidget* target = QApplication::activeModalWidget()) {
                     auto* event = new QKeyEvent(QEvent::KeyPress, key, Qt::NoModifier);
-                    QCoreApplication::postEvent(focused, event);
+                    QCoreApplication::postEvent(target, event);
+                    return;
+                }
+                if (QWidget* target = QApplication::focusWidget()) {
+                    auto* event = new QKeyEvent(QEvent::KeyPress, key, Qt::NoModifier);
+                    QCoreApplication::postEvent(target, event);
                 }
             });
 
@@ -2351,40 +2391,11 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
     }
     if (title_id == Settings::OcarinaOfTimeProgramId && !asked_oot_performance_settings) {
         asked_oot_performance_settings = true;
-        if (Settings::EnvOotPresetEnabled()) {
-            // EDEN_NX2_OOT_PRESET=1: apply the 60 FPS dialog as accepted without showing it
-            // (unattended/headless launches and test harnesses). Max Resolution uses the same
-            // host-VRAM default as the dialog; EDEN_NX2_OOT_MAX_RESOLUTION=1 forces it on.
-            use_oot_performance_settings = true;
-            use_oot_max_resolution = HostOotMaxResolutionDefault();
-            LOG_INFO(Config, "OOT 60 FPS settings forced by EDEN_NX2_OOT_PRESET=1 (Max Resolution: {})",
-                     use_oot_max_resolution);
-        } else {
-        // On cards with ~6 GB of VRAM the Max Resolution patch (full render scale) blows
-        // the budget: DLSS declines every frame and the game's own upscaler runs at the
-        // full output size instead. Default the checkbox off there and let the game's
-        // dynamic resolution scale, like the console does; DLSS then has room to run.
-        const bool max_resolution_default = HostOotMaxResolutionDefault();
-        QMessageBox oot_settings_dialog(
-            QMessageBox::Question, tr("Ocarina of Time 60 FPS settings"),
-            tr("Use the 60 FPS settings for Ocarina of Time?\n\n"
-               "Vulkan, 1x resolution, GPU Fast, handheld mode, 4 GB memory layout, immediate "
-               "VSync and GPU fences, unsafe DMA reads, aggressive VRAM usage, Force Max Clock, "
-               "asynchronous shaders and presentation, Area scaling, no AA or post-processing, "
-               "reactive flushing off, DLSS off, and the built-in Dynamic FPS patch.\n\n"
-               "These settings apply until Ocarina2 is closed. Your saved settings are not "
-               "changed. Patches you disabled in Add-Ons stay disabled."),
-            QMessageBox::Yes | QMessageBox::No, this);
-        auto* max_resolution_checkbox =
-            new QCheckBox(tr("Force Max Resolution (full render scale)"), &oot_settings_dialog);
-        max_resolution_checkbox->setChecked(max_resolution_default);
-        oot_settings_dialog.setCheckBox(max_resolution_checkbox);
-        use_oot_performance_settings = oot_settings_dialog.exec() == QMessageBox::Yes;
-        use_oot_max_resolution =
-            use_oot_performance_settings && max_resolution_checkbox->isChecked();
-        LOG_INFO(Config, "OOT 60 FPS settings accepted: {}, Max Resolution: {}",
-                 use_oot_performance_settings, use_oot_max_resolution);
-        }
+        // Build-122+: no prompt. The 60 FPS preset always applies; the 30 FPS status-bar
+        // button still wins at runtime. Max Resolution uses the host-VRAM default.
+        use_oot_performance_settings = true;
+        use_oot_max_resolution = HostOotMaxResolutionDefault();
+        LOG_INFO(Config, "OOT 60 FPS settings applied (Max Resolution: {})", use_oot_max_resolution);
     }
     if (Settings::ApplyOcarinaOfTimePerformancePreset(Settings::values, title_id,
                                                       use_oot_performance_settings,
@@ -3970,6 +3981,7 @@ void MainWindow::ToggleWindowMode() {
         // Render in the main window...
         render_window->BackupGeometry();
         ui->horizontalLayout->addWidget(render_window);
+        render_window->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
         render_window->setFocusPolicy(Qt::StrongFocus);
         if (emulation_running) {
             render_window->setVisible(true);
@@ -3982,6 +3994,7 @@ void MainWindow::ToggleWindowMode() {
         ui->horizontalLayout->removeWidget(render_window);
         render_window->setParent(nullptr);
         render_window->setFocusPolicy(Qt::NoFocus);
+        render_window->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
         if (emulation_running) {
             render_window->setVisible(true);
             render_window->RestoreGeometry();
@@ -5586,20 +5599,122 @@ void MainWindow::OnToggleOotFrameRate() {
 }
 
 void MainWindow::OpenQuickMenu() {
+    // L3+R3 (or F12) toggles it: if it is already open, close it.
+    if (auto* open = qobject_cast<Ocarina2Ui::QuickMenu*>(QApplication::activeModalWidget())) {
+        open->close();
+        return;
+    }
     const bool was_running =
         emulation_running && QtCommon::emu_thread && QtCommon::emu_thread->IsRunning();
     if (was_running) {
         OnPauseGame();
     }
+    const auto* player1 = QtCommon::system->HIDCore().GetEmulatedController(Core::HID::NpadIdType::Player1);
+
+    // A cycle over a std::map<Enum, QString> (the same maps the status bar menu and the
+    // Configure window use): find the current enum, step by `direction`, wrap around.
+    const auto cycle_in_map = [](auto current, const int direction, const auto& texts) {
+        using Enum = decltype(current);
+        std::vector<Enum> keys;
+        keys.reserve(texts.size());
+        for (const auto& pair : texts) {
+            keys.push_back(pair.first);
+        }
+        if (keys.empty()) {
+            return current;
+        }
+        const auto it = std::find(keys.begin(), keys.end(), current);
+        int i = it == keys.end() ? 0 : static_cast<int>(std::distance(keys.begin(), it));
+        i = (i + direction + static_cast<int>(keys.size())) % static_cast<int>(keys.size());
+        return keys[i];
+    };
+    // The Configure window re-pushes the settings to the core and saves to disk on Apply;
+    // mirrored here so quick toggles behave the same.
+    const auto apply_live = [this] {
+        UpdateStatusButtons();
+        QtCommon::system->ApplySettings();
+        config->SaveAllValues();
+    };
+    const auto map_text = [](const auto& texts, const auto& value) {
+        const auto it = texts.find(value);
+        return it == texts.end() ? QStringLiteral("?") : it->second.toUpper();
+    };
+
     auto* menu = new Ocarina2Ui::QuickMenu(
         this, Ocarina2Ui::QuickMenuHooks{
                   .in_game = emulation_running,
+                  // Read straight off the emulated controller: it is fed by the SDL driver on
+                  // the GUI thread, so it stays live while the game is paused in-game. This is
+                  // the same mask the L3+R3 hotkey is driven by.
+                  .npad_buttons = [player1]() -> u64 { return player1 ? static_cast<u64>(player1->GetNpadButtons().raw) : 0; },
                   .toggle_frame_rate = [this] { OnToggleOotFrameRate(); },
                   .toggle_fullscreen = [this] { ui->action_Fullscreen->trigger(); },
                   .screenshot = [this] { ui->action_Capture_Screenshot->trigger(); },
-                  .open_settings = [this] { OnConfigure(); },
                   .restart = [this] { ui->action_Restart->trigger(); },
                   .stop = [this] { ui->action_Stop->trigger(); },
+                  // Settings page: the exact same Settings::values store the Configure window
+                  // edits; live-applied so the game sees the change immediately.
+                  .console_mode_text = [map_text] {
+                      return map_text(ConfigurationShared::use_docked_mode_texts_map,
+                                      Settings::values.use_docked_mode.GetValue());
+                  },
+                  .toggle_docked_mode = [this] {
+                      OnToggleDockedMode(); // applies + updates the dock button itself
+                      config->SaveAllValues();
+                  },
+                  .renderer_text = [map_text] {
+                      return map_text(ConfigurationShared::renderer_backend_texts_map,
+                                      Settings::values.renderer_backend.GetValue());
+                  },
+                  .renderer_locked = [this] { return emulation_running; },
+                  .cycle_renderer = [this, cycle_in_map, apply_live](int direction) {
+                      std::map<Settings::RendererBackend, QString> renderers;
+                      for (const auto& [backend, text] :
+                           ConfigurationShared::renderer_backend_texts_map) {
+                          if (backend != Settings::RendererBackend::Null) {
+                              renderers.emplace(backend, text);
+                          }
+                      }
+                      // Renderer switches take effect on the next boot; applied like the real
+                      // dialog (SetValue + save), which is why it is locked while in-game.
+                      if (emulation_running) {
+                          return;
+                      }
+                      const auto next = cycle_in_map(Settings::values.renderer_backend.GetValue(),
+                                                     direction, renderers);
+                      Settings::values.renderer_backend.SetValue(next);
+                      apply_live();
+                  },
+                  .gpu_accuracy_text = [map_text] {
+                      return map_text(ConfigurationShared::gpu_accuracy_texts_map,
+                                      Settings::values.gpu_accuracy.GetValue());
+                  },
+                  .cycle_gpu_accuracy = [cycle_in_map, apply_live](int direction) {
+                      const auto next = cycle_in_map(Settings::values.gpu_accuracy.GetValue(),
+                                                     direction, ConfigurationShared::gpu_accuracy_texts_map);
+                      Settings::values.gpu_accuracy.SetValue(next);
+                      apply_live();
+                  },
+                  .scaling_filter_text = [map_text] {
+                      return map_text(ConfigurationShared::scaling_filter_texts_map,
+                                      Settings::values.scaling_filter.GetValue());
+                  },
+                  .cycle_scaling_filter = [cycle_in_map, apply_live](int direction) {
+                      const auto next = cycle_in_map(Settings::values.scaling_filter.GetValue(),
+                                                     direction, ConfigurationShared::scaling_filter_texts_map);
+                      Settings::values.scaling_filter.SetValue(next);
+                      apply_live();
+                  },
+                  .anti_aliasing_text = [map_text] {
+                      return map_text(ConfigurationShared::anti_aliasing_texts_map,
+                                      Settings::values.anti_aliasing.GetValue());
+                  },
+                  .cycle_anti_aliasing = [cycle_in_map, apply_live](int direction) {
+                      const auto next = cycle_in_map(Settings::values.anti_aliasing.GetValue(),
+                                                     direction, ConfigurationShared::anti_aliasing_texts_map);
+                      Settings::values.anti_aliasing.SetValue(next);
+                      apply_live();
+                  },
               });
     connect(menu, &QDialog::finished, this,
             [this, was_running](int) {
@@ -5613,7 +5728,24 @@ void MainWindow::OpenQuickMenu() {
     // Modal on purpose: a windowless shortcut (e.g. the app's own Esc mapping) would
     // otherwise swallow the keys before they ever reach the menu.
     menu->setAttribute(Qt::WA_DeleteOnClose);
+    // Drive the menu straight off the controller so it fully works in-game even if the
+    // game window grabs keyboard focus before the modal gets it.
+    quick_menu_open = true;
+    connect(controller_nav, &ControllerNavigation::TriggerKeyboardEvent, menu,
+            [menu](Qt::Key key) { menu->HandleKey(key); });
+    // The frameless modal does not grab OS activation by itself (the key messages keep
+    // flowing to the game window). Re-assert activation once the exec loop is up so the
+    // keyboard works for the menu too, not just the controller bridge.
+    QTimer::singleShot(0, menu, [menu] {
+        menu->raise();
+        menu->activateWindow();
+        QApplication::setActiveWindow(menu);
+        if (QWidget* focus = menu->focusWidget()) {
+            focus->setFocus(Qt::OtherFocusReason);
+        }
+    });
     menu->exec();
+    quick_menu_open = false;
 }
 
 void MainWindow::UpdateDockedButton() {

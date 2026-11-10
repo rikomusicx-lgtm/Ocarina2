@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <memory>
+#include <algorithm>
 #include "common/logging.h"
 #include "common/settings.h"
 #include "common/settings_enums.h"
@@ -12,6 +13,15 @@
 #include "qt_common/config/uisettings.h"
 #include "qt_common/util/vk.h"
 #include "ui_configure.h"
+#include <QAbstractButton>
+#include <QAbstractItemView>
+#include <QAbstractScrollArea>
+#include <QAbstractSlider>
+#include <QComboBox>
+#include <QDoubleSpinBox>
+#include <QKeyEvent>
+#include <QLineEdit>
+#include <QSpinBox>
 #include "yuzu/configuration/configure_applets.h"
 #include "yuzu/configuration/configure_audio.h"
 #include "yuzu/configuration/configure_cpu.h"
@@ -66,6 +76,7 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
     Settings::SetConfiguringGlobal(true);
 
     ui->setupUi(this);
+    InstallRecursive(this, this);
 
     ui->tabWidget->addTab(applets_tab.get(), tr("Applets"));
     ui->tabWidget->addTab(audio_tab.get(), tr("Audio"));
@@ -130,6 +141,79 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
 }
 
 ConfigureDialog::~ConfigureDialog() = default;
+
+void ConfigureDialog::InstallRecursive(QWidget* root, QObject* filter) {
+    root->installEventFilter(filter);
+    const auto children = root->children();
+    for (QObject* child : children) {
+        if (auto* widget = qobject_cast<QWidget*>(child)) {
+            InstallRecursive(widget, filter);
+        }
+    }
+}
+
+bool ConfigureDialog::eventFilter(QObject* watched, QEvent* event) {
+    if (event->type() != QEvent::KeyPress) {
+        return QDialog::eventFilter(watched, event);
+    }
+    auto* key = static_cast<QKeyEvent*>(event);
+    QWidget* const focus = focusWidget();
+
+    // The selector list keeps its native arrow-key navigation (it rebuilds the tab widget
+    // from the selection). Scroll areas, combo boxes, sliders and spin boxes also keep
+    // their native arrow-key behavior; Enter on a combo box opens its popup instead.
+    const bool native = qobject_cast<QAbstractScrollArea*>(focus) != nullptr ||
+                        qobject_cast<QComboBox*>(focus) != nullptr ||
+                        qobject_cast<QAbstractSlider*>(focus) != nullptr ||
+                        qobject_cast<QSpinBox*>(focus) != nullptr ||
+                        qobject_cast<QDoubleSpinBox*>(focus) != nullptr ||
+                        qobject_cast<QLineEdit*>(focus) != nullptr;
+    if (key->key() == Qt::Key_PageUp || key->key() == Qt::Key_PageDown) {
+        const int count = ui->selectorList->count();
+        if (count == 0) {
+            return true;
+        }
+        const int delta = key->key() == Qt::Key_PageUp ? -1 : 1;
+        // Cycle the left-hand selector; it rebuilds the tab widget to match.
+        const int target = (ui->selectorList->currentRow() + delta + count) % count;
+        ui->selectorList->setCurrentRow(target);
+        return true;
+    }
+    if (native) {
+        if ((key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter ||
+             key->key() == Qt::Key_Space) &&
+            qobject_cast<QComboBox*>(focus) != nullptr) {
+            auto* combo = qobject_cast<QComboBox*>(focus);
+            combo->showPopup();
+            return true;
+        }
+        return false;
+    }
+    switch (key->key()) {
+        case Qt::Key_Up:
+        case Qt::Key_Left:
+            focusNextPrevChild(false);
+            return true;
+        case Qt::Key_Down:
+        case Qt::Key_Right:
+            focusNextPrevChild(true);
+            return true;
+        case Qt::Key_Return:
+        case Qt::Key_Enter:
+        case Qt::Key_Space:
+            if (auto* button = qobject_cast<QAbstractButton*>(focus)) {
+                button->click();
+                return true;
+            }
+            return true;  // swallow any stray activate in this dialog
+        case Qt::Key_Escape:
+            reject();
+            return true;
+        default:
+            break;
+    }
+    return QDialog::eventFilter(watched, event);
+}
 
 void ConfigureDialog::SetConfiguration() {}
 

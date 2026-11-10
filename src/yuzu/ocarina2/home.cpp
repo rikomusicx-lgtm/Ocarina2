@@ -3,12 +3,15 @@
 #include "yuzu/ocarina2/home.h"
 
 #include <algorithm>
+#include <iomanip>
+#include <limits>
 #include <set>
+#include <sstream>
 #include <vector>
 
 #include <QApplication>
 #include <QBoxLayout>
-#include <QButtonGroup>
+
 #include <QDateTime>
 #include <QDir>
 #include <QEvent>
@@ -19,14 +22,19 @@
 #include <QMainWindow>
 #include <QMenu>
 #include <QMenuBar>
+#include <QLinearGradient>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPushButton>
+#include <QSizePolicy>
 #include <QStandardItemModel>
 #include <QTimer>
 #include <QToolButton>
 #include <QVariant>
 
+#include "common/fs/fs.h"
+#include "common/fs/path_util.h"
+#include "common/logging.h"
 #include "qt_common/game_list/game_list_p.h"
 #include "yuzu/ocarina2/ocarina2_ui.h"
 #include "yuzu/ocarina2/whats_new.h"
@@ -35,7 +43,6 @@ namespace Ocarina2Ui {
 namespace {
 
 constexpr u64 OcarinaOfTime = 0x0400486024DEC000ULL;
-constexpr int TileIcon = 128;
 
 struct Game {
     QString title;
@@ -44,23 +51,27 @@ struct Game {
     QPixmap icon;
 };
 
-QPixmap Rounded(const QPixmap& source, int size, int radius) {
+QPixmap RoundedCard(const QPixmap& source, const QSize& size, int radius) {
     const qreal ratio = qApp->devicePixelRatio();
-    QPixmap out(QSize(size, size) * ratio);
+    QPixmap out(size * ratio);
     out.setDevicePixelRatio(ratio);
     out.fill(Qt::transparent);
+    if (source.isNull()) {
+        QPainter painter(&out);
+        painter.fillRect(QRect(0, 0, size.width(), size.height()), QColor(0x24, 0x23, 0x2c));
+        return out;
+    }
+    const QPixmap big = source.scaled(size, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+    const QSize grown = big.size();
     {
         QPainter painter(&out);
         painter.setRenderHint(QPainter::Antialiasing);
         painter.setRenderHint(QPainter::SmoothPixmapTransform);
         QPainterPath clip;
-        clip.addRoundedRect(QRectF(0, 0, size, size), radius, radius);
+        clip.addRoundedRect(QRectF(0, 0, size.width(), size.height()), radius, radius);
         painter.setClipPath(clip);
-        if (source.isNull()) {
-            painter.fillRect(QRect(0, 0, size, size), QColor(0x24, 0x23, 0x2c));
-        } else {
-            painter.drawPixmap(QRect(0, 0, size, size), source);
-        }
+        painter.drawPixmap((size.width() - grown.width()) / 2,
+                           (size.height() - grown.height()) / 2, big);
     }
     return out;
 }
@@ -164,13 +175,26 @@ Home::Home(QMainWindow* window_, QBoxLayout* central, QWidget* game_list_, QWidg
     // shortcut working and stays out of the way when fullscreen shows the bar again.
     window->menuBar()->setFixedHeight(0);
 
-    rail = MakeRail();
     page = MakePage();
     central->addWidget(page, 1);
-    central->addWidget(rail, 0, Qt::AlignHCenter);
 
     game_list->installEventFilter(this);
     placeholder->installEventFilter(this);
+
+    window->installEventFilter(this);  // keep the floating Back button centered at the bottom
+
+    back_button = new QPushButton(window);
+    back_button->setObjectName(QStringLiteral("Ocarina2BackButton"));
+    back_button->setText(tr("Back"));
+    back_button->setIcon(Glyph(QStringLiteral("arrow-left"), 0xcfc9e3, 18));
+    back_button->setIconSize(QSize(18, 18));
+    back_button->setCursor(Qt::PointingHandCursor);
+    back_button->setFocusPolicy(Qt::StrongFocus);
+    back_button->setFixedHeight(38);
+    back_button->setFixedWidth(120);
+    back_button->hide();
+    back_button->installEventFilter(this);
+    connect(back_button, &QPushButton::clicked, this, &Home::ShowHome);
 
     refresh_timer = new QTimer(this);
     refresh_timer->setSingleShot(true);
@@ -192,21 +216,37 @@ QWidget* Home::MakeRail() {
     rail = new QWidget;
     rail->setObjectName(QStringLiteral("Ocarina2Dock"));
     rail->setAttribute(Qt::WA_StyledBackground);
+    rail->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
     auto* layout = new QHBoxLayout(rail);
-    layout->setContentsMargins(0, 0, 0, 2);
-    layout->setSpacing(22);
+    layout->setContentsMargins(26, 14, 26, 14);
+    layout->setSpacing(18);
     layout->setAlignment(Qt::AlignHCenter);
 
     const auto make = [this](const QString& icon, const QString& caption, const QString& tip) {
-        auto* button = new QToolButton(rail);
+        auto* cell = new QWidget(rail);
+        cell->setObjectName(QStringLiteral("Ocarina2DockCell"));
+        auto* cell_layout = new QVBoxLayout(cell);
+        cell_layout->setContentsMargins(0, 6, 0, 0);
+        cell_layout->setSpacing(4);
+        cell_layout->setAlignment(Qt::AlignHCenter);
+
+        auto* button = new QToolButton(cell);
         button->setObjectName(QStringLiteral("Ocarina2DockButton"));
-        button->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-        button->setIcon(Icon(icon, 22));
-        button->setIconSize(QSize(22, 22));
-        button->setText(caption);
+        button->setProperty("band", 3);
+        button->setFixedSize(84, 84);
+        button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+        button->setIcon(Icon(icon, 32));
+        button->setIconSize(QSize(32, 32));
         button->setToolTip(tip);
         button->setCursor(Qt::PointingHandCursor);
         button->setFocusPolicy(Qt::StrongFocus);
+        cell_layout->addWidget(button, 0, Qt::AlignHCenter);
+
+        auto* label = new QLabel(cell);
+        label->setObjectName(QStringLiteral("Ocarina2DockLabel"));
+        label->setText(caption);
+        label->setAlignment(Qt::AlignHCenter);
+        cell_layout->addWidget(label, 0, Qt::AlignHCenter);
         return button;
     };
 
@@ -239,7 +279,7 @@ QWidget* Home::MakeRail() {
 
     for (QWidget* button :
          {home_button, library_button, folder_button, settings_button, update_button, menu_button}) {
-        layout->addWidget(button);
+        layout->addWidget(button->parentWidget());
         button->installEventFilter(this);
     }
     return rail;
@@ -254,15 +294,8 @@ QWidget* Home::MakePage() {
         ShowGameMenu(hero_path, hero_id, page->mapToGlobal(pos));
     });
 
-    backdrop = new QLabel(page);
-    backdrop->setObjectName(QStringLiteral("Ocarina2Backdrop"));
-    backdrop->setAttribute(Qt::WA_TransparentForMouseEvents);
-    backdrop->setScaledContents(true);
-    backdrop->hide();
-    page->installEventFilter(this);
-
     auto* layout = new QVBoxLayout(page);
-    layout->setContentsMargins(0, 0, 0, 6);
+    layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
     // The Switch 2 top bar: player avatar, Home/Games switch, network glyphs and the clock.
@@ -274,8 +307,9 @@ QWidget* Home::MakePage() {
 
     avatar_button = new QToolButton(topbar);
     avatar_button->setObjectName(QStringLiteral("Ocarina2Avatar"));
-    avatar_button->setIcon(Glyph(QStringLiteral("triforce"), 0xf5c445, 17));
-    avatar_button->setIconSize(QSize(17, 17));
+    avatar_button->setProperty("band", 0);
+    avatar_button->setIcon(Glyph(QStringLiteral("triforce"), 0x3fd8ff, 12));
+    avatar_button->setIconSize(QSize(12, 12));
     avatar_button->setToolTip(tr("Player 1 - toggle fullscreen"));
     avatar_button->setCursor(Qt::PointingHandCursor);
     avatar_button->setFocusPolicy(Qt::StrongFocus);
@@ -291,33 +325,6 @@ QWidget* Home::MakePage() {
     wordfont.setBold(true);
     word->setFont(wordfont);
     topb->addWidget(word, 0, Qt::AlignVCenter);
-    topb->addStretch(1);
-
-    // The Switch 2 segmented control in the middle of the top bar: which view we are in.
-    auto* pills = new QWidget(topbar);
-    pills->setObjectName(QStringLiteral("Ocarina2Pills"));
-    auto* pill_layout = new QHBoxLayout(pills);
-    pill_layout->setContentsMargins(2, 2, 2, 2);
-    pill_layout->setSpacing(2);
-    auto* group = new QButtonGroup(pills);
-    group->setExclusive(true);
-    const auto makePill = [pills, pill_layout, group](const QString& text) {
-        auto* button = new QToolButton(pills);
-        button->setObjectName(QStringLiteral("Ocarina2Pill"));
-        button->setCheckable(true);
-        button->setToolButtonStyle(Qt::ToolButtonTextOnly);
-        button->setText(text);
-        button->setCursor(Qt::PointingHandCursor);
-        button->setFocusPolicy(Qt::StrongFocus);
-        group->addButton(button);
-        pill_layout->addWidget(button);
-        return button;
-    };
-    pill_home = makePill(tr("Home"));
-    pill_games = makePill(tr("Games"));
-    connect(pill_home, &QToolButton::clicked, this, &Home::ShowHome);
-    connect(pill_games, &QToolButton::clicked, this, &Home::ShowList);
-    topb->addWidget(pills, 0, Qt::AlignVCenter);
     topb->addStretch(1);
 
     const auto makeTopIcon = [&](const QString& icon, const QString& tip) {
@@ -349,37 +356,25 @@ QWidget* Home::MakePage() {
     });
     clock_timer->start();
 
-    // The Switch 2 "current game" row: a bookmark and the highlighted title, above the tiles.
-    game_row = new QWidget(page);
-    game_row->setObjectName(QStringLiteral("Ocarina2CurrentGameRow"));
-    auto* rowl = new QHBoxLayout(game_row);
-    rowl->setContentsMargins(44, 8, 44, 0);
-    rowl->setSpacing(8);
-    auto* bookmark = new QLabel(game_row);
-    bookmark->setObjectName(QStringLiteral("Ocarina2CurrentGameIcon"));
-    bookmark->setPixmap(Glyph(QStringLiteral("bookmark"), 0x3fd8ff, 15).pixmap(15, 15));
-    rowl->addWidget(bookmark, 0, Qt::AlignVCenter);
-    game_row_title = new QLabel(game_row);
-    game_row_title->setObjectName(QStringLiteral("Ocarina2CurrentGame"));
-    rowl->addWidget(game_row_title, 0, Qt::AlignVCenter);
-    rowl->addStretch(1);
-    layout->addWidget(game_row);
-
+    // The "current game" row sits inside the middle column, directly below the hero image,
+    // centered.
     auto* middle = new QWidget(page);
     auto* mid = new QVBoxLayout(middle);
     mid->setSpacing(0);
     mid->setAlignment(Qt::AlignHCenter);
     layout->addWidget(middle, 1);
-    mid->addStretch(1);
+    mid->addStretch(3);
 
-    play = new QPushButton(middle);
-    play->setObjectName(QStringLiteral("Ocarina2Play"));
-    play->setText(tr("Play"));
+    play = new QToolButton(middle);
+    play->setObjectName(QStringLiteral("Ocarina2Hero"));
+    play->setProperty("band", 1);
     play->setCursor(Qt::PointingHandCursor);
-    play->setIconSize(QSize(20, 20));
+    play->setToolButtonStyle(Qt::ToolButtonIconOnly);
     play->setFocusPolicy(Qt::StrongFocus);
+    play->setIconSize(QSize(240, 240));
+    play->setFixedSize(252, 252);
     play->installEventFilter(this);
-    connect(play, &QPushButton::clicked, this, [this] {
+    connect(play, &QToolButton::clicked, this, [this] {
         if (hero_path.isEmpty()) {
             hooks.add_folder();
         } else {
@@ -388,88 +383,39 @@ QWidget* Home::MakePage() {
     });
     auto* play_effect = new QGraphicsDropShadowEffect;
     play_effect->setBlurRadius(44);
-    play_effect->setOffset(0, 6);
+    play_effect->setOffset(0, 8);
     play_effect->setColor(QColor(63, 216, 255, 120));
     play->setGraphicsEffect(play_effect);
     mid->addWidget(play, 0, Qt::AlignHCenter);
-    mid->addSpacing(36);
+    mid->addSpacing(16);
 
-    row_box = new QWidget(middle);
-    row = new QHBoxLayout(row_box);
-    row->setContentsMargins(0, 0, 0, 0);
-    row->setSpacing(22);
-    row->setAlignment(Qt::AlignHCenter);
-    mid->addWidget(row_box);
-    mid->addStretch(2);
+    // The highlighted game's name sits directly below the hero image, centered with its bookmark.
+    game_row = new QWidget(middle);
+    game_row->setObjectName(QStringLiteral("Ocarina2CurrentGameRow"));
+    auto* rowl = new QHBoxLayout(game_row);
+    rowl->setContentsMargins(0, 0, 0, 0);
+    rowl->setSpacing(8);
+    rowl->setAlignment(Qt::AlignHCenter);
+    auto* bookmark = new QLabel(game_row);
+    bookmark->setObjectName(QStringLiteral("Ocarina2CurrentGameIcon"));
+    bookmark->setPixmap(Glyph(QStringLiteral("bookmark"), 0x3fd8ff, 15).pixmap(15, 15));
+    rowl->addWidget(bookmark, 0, Qt::AlignVCenter);
+    game_row_title = new QLabel(game_row);
+    game_row_title->setObjectName(QStringLiteral("Ocarina2CurrentGame"));
+    auto* name_glow = new QGraphicsDropShadowEffect(game_row_title);
+    name_glow->setBlurRadius(18);
+    name_glow->setOffset(0, 0);
+    name_glow->setColor(QColor(167, 139, 250, 235));  // violet glow behind the text
+    game_row_title->setGraphicsEffect(name_glow);
+    rowl->addWidget(game_row_title, 0, Qt::AlignVCenter);
+    mid->addWidget(game_row, 0, Qt::AlignHCenter);
+    mid->addStretch(1);
 
-    // The thin strip at the bottom edge of the screen: theme on the left, button hints on the right.
-    auto* strip = new QWidget(page);
-    strip->setObjectName(QStringLiteral("Ocarina2BottomBar"));
-    auto* stripl = new QHBoxLayout(strip);
-    stripl->setContentsMargins(40, 0, 40, 0);
-    stripl->setSpacing(12);
-    theme_button = new QToolButton(strip);
-    theme_button->setObjectName(QStringLiteral("Ocarina2ThemeButton"));
-    theme_button->setIcon(Icon(QStringLiteral("droplet"), 15));
-    theme_button->setIconSize(QSize(15, 15));
-    theme_button->setText(tr("Ocarina Dark"));
-    theme_button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    theme_button->setToolTip(tr("Appearance - open the configuration dialog"));
-    theme_button->setCursor(Qt::PointingHandCursor);
-    connect(theme_button, &QToolButton::clicked, this, [this] { hooks.open_settings(); });
-    stripl->addWidget(theme_button, 0, Qt::AlignVCenter);
-    stripl->addStretch(1);
-    auto* hints = new QLabel(strip);
-    hints->setObjectName(QStringLiteral("Ocarina2Hints"));
-    hints->setText(
-        tr("<span style='color:#3fd8ff;font-weight:800'>A</span> Select&nbsp;&nbsp;&nbsp;"
-           "<span style='color:#3fd8ff;font-weight:800'>B</span> Back&nbsp;&nbsp;&nbsp;"
-           "<span style='color:#3fd8ff;font-weight:800'>X</span> Options&nbsp;&nbsp;&nbsp;"
-           "<span style='color:#3fd8ff;font-weight:800'>L/R</span> Switch game"));
-    stripl->addWidget(hints, 0, Qt::AlignVCenter);
-    layout->addWidget(strip);
-
+    // The dock rides inside the page; a floating rounded plate carries the buttons, like the
+    // Switch 2 home screen.
+    layout->addWidget(MakeRail(), 0, Qt::AlignHCenter);
+    layout->setContentsMargins(0, 0, 0, 18);
     return page;
-}
-
-void Home::RebuildBackdrop() {
-    if (backdrop == nullptr) {
-        return;
-    }
-    if (hero_pixmap.isNull() || !page) {
-        backdrop->hide();
-        return;
-    }
-    const QSize cover = page->size();
-    if (cover.width() < 16 || cover.height() < 16) {
-        return;
-    }
-    const double scale =
-        std::max(cover.width() / double(hero_pixmap.width()),
-                 cover.height() / double(hero_pixmap.height()));
-    const QSize grown = QSize(qCeil(hero_pixmap.width() * scale), qCeil(hero_pixmap.height() * scale));
-    QPixmap big = hero_pixmap.scaled(grown, Qt::KeepAspectRatioByExpanding,
-                                     Qt::SmoothTransformation);
-    QPixmap out(cover);
-    out.fill(Qt::transparent);
-    {
-        QPainter painter(&out);
-        painter.setRenderHint(QPainter::SmoothPixmapTransform);
-        painter.drawPixmap((cover.width() - big.width()) / 2,
-                           (cover.height() - big.height()) / 2, big);
-    }
-    // Frosted: shrink then stretch back — a cheap blur good enough behind text.
-    QPixmap blurred =
-        out.scaled(QSize(std::max(1, cover.width() / 6), std::max(1, cover.height() / 6)),
-                   Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
-            .scaled(cover, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-    {
-        QPainter painter(&blurred);
-        painter.fillRect(blurred.rect(), QColor(8, 8, 14, 152));
-    }
-    backdrop->setPixmap(blurred);
-    backdrop->setGeometry(page->rect());
-    backdrop->show();
 }
 
 void Home::SelectGame(const QString& path, u64 program_id, const QString& title_text) {
@@ -526,57 +472,27 @@ void Home::Refresh() {
     }
 
     if (hero) {
-        hero_pixmap = hero->icon;
+        play->setIcon(QIcon(RoundedCard(hero->icon, QSize(240, 240), 18)));
         SelectGame(hero->path, hero->program_id, hero->title);
-        play->setText(tr("Play"));
-        play->setIcon(Glyph(QStringLiteral("play"), 0xffffff, 20));
     } else {
-        hero_pixmap = QPixmap();
         SelectGame(QString(), 0, tr("Ocarina2"));
-        play->setText(tr("Add games"));
-        play->setIcon(Glyph(QStringLiteral("plus"), 0xffffff, 20));
+        play->setIcon(Glyph(QStringLiteral("plus"), 0xffffff, 72));
     }
-    RebuildBackdrop();
 
-    // The Switch 2 row of game tiles: every game. Activating a tile boots the game;
-    // right click (or the controller's X) opens the game menu.
-    // deleteLater: a tile's own click can land here.
-    while (QLayoutItem* item = row->takeAt(0)) {
-        if (QWidget* widget = item->widget()) {
-            widget->hide();
-            widget->deleteLater();
-        }
-        delete item;
-    }
-    for (const Game& game : games) {
-        QToolButton* button = new QToolButton(row_box);
-        button->setObjectName(QStringLiteral("Ocarina2Tile"));
-        button->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-        button->setIcon(QIcon(Rounded(game.icon, TileIcon, 20)));
-        button->setIconSize(QSize(TileIcon, TileIcon));
-        button->setFixedWidth(TileIcon + 42);
-        button->setCursor(Qt::PointingHandCursor);
-        button->setFocusPolicy(Qt::StrongFocus);
-        button->setContextMenuPolicy(Qt::CustomContextMenu);
-        button->installEventFilter(this);
-        button->setProperty("path", game.path);
-        button->setProperty("id", QVariant::fromValue(game.program_id));
-        button->setToolButtonStyle(Qt::ToolButtonIconOnly);
-        button->setToolTip(game.title);
-        button->setFixedWidth(TileIcon + 16);
-        button->setFixedHeight(TileIcon + 16);
-        row->addWidget(button);
-        connect(button, &QToolButton::clicked, this,
-                [this, path = game.path, id = game.program_id, title = game.title] {
-                    SelectGame(path, id, title);
-                    hooks.play(path, id);
-                });
-        connect(button, &QToolButton::customContextMenuRequested, this,
-                [this, path = game.path, id = game.program_id, button] {
-                    ShowGameMenu(path, id, button->mapToGlobal(button->rect().center()));
-                });
-    }
+    // The games live behind the dock's Games button (a full list); there is no tile row
+    // duplicating the hero on the home screen.
     RebuildNavOrder();
+}
+
+void Home::PositionBackButton() {
+    if (!back_button || !window) {
+        return;
+    }
+    // The games list keeps a filter bar at the very bottom; float the button above it.
+    constexpr int kBottomMargin = 90;
+    back_button->setGeometry((window->width() - back_button->width()) / 2,
+                             window->height() - back_button->height() - kBottomMargin,
+                             back_button->width(), back_button->height());
 }
 
 void Home::ShowHome() {
@@ -585,7 +501,7 @@ void Home::ShowHome() {
     placeholder->hide();
     rail->show();
     page->show();
-    pill_home->setChecked(true);
+    back_button->hide();
     home_button->setFocus(Qt::OtherFocusReason);
     nav_index_ = 0;
     Refresh();
@@ -595,8 +511,10 @@ void Home::ShowList() {
     list_mode = true;
     page->hide();
     rail->show();
-    pill_games->setChecked(true);
     library_button->setFocus(Qt::OtherFocusReason);
+    PositionBackButton();
+    back_button->show();
+    back_button->raise();
     nav_index_ = 1;  // the "Games" button in the dock
     if (hooks.game_list_empty()) {
         placeholder->show();
@@ -624,16 +542,22 @@ void Home::OnEmulationStarting() {
     }
     rail->hide();
     page->hide();
+    back_button->hide();
 }
 
 bool Home::HandleNavKey(QKeyEvent* event) {
     const int key = event->key();
+    QString focus_tag;
+    if (QWidget* fw = QApplication::focusWidget()) {
+        focus_tag = QString::fromUtf8(fw->metaObject()->className()) + QStringLiteral("/") +
+                    fw->objectName();
+        if (auto* t = qobject_cast<QToolButton*>(fw)) {
+            focus_tag += QStringLiteral(" tip=") + t->toolTip();
+        }
+    }
+    LOG_INFO(Frontend, "Ocarina2 nav: key={} focus={}", key, focus_tag.toStdString());
     if (nav_order_.isEmpty()) {
         RebuildNavOrder();
-    }
-    const int count = nav_order_.size();
-    if (count == 0) {
-        return false;
     }
 
     // The controller's Home button goes straight to the home screen, like the console.
@@ -642,71 +566,98 @@ bool Home::HandleNavKey(QKeyEvent* event) {
         return true;
     }
 
-    // L/R switches the highlighted game, console style.
-    if (key == Qt::Key_PageUp || key == Qt::Key_PageDown) {
-        const int first_tile = 7;  // dock (6) + play (1) come first
-        if (count <= first_tile) {
-            return false;
-        }
-        int next = nav_index_ >= first_tile ? nav_index_ : first_tile;
-        next += (key == Qt::Key_PageDown ? 1 : -1);
-        if (next >= count) {
-            next = first_tile;
-        } else if (next < first_tile) {
-            next = count - 1;
-        }
-        nav_index_ = next;
-        nav_order_[nav_index_]->setFocus(Qt::OtherFocusReason);
+    // B is the console's Back: on the games screen, it returns home.
+    if (key == Qt::Key_Escape && list_mode) {
+        ShowHome();
         return true;
     }
 
-    int next = nav_index_;
-    const int dock_end = 5;  // home, games, add-games, settings, what's-new, more
-    const int play_index = 6;
-    const int last_tile = count - 1;
+    // A activates whatever button has focus, like the console's confirm key.
+    if (key == Qt::Key_Return || key == Qt::Key_Enter) {
+        if (auto* button = qobject_cast<QAbstractButton*>(QApplication::focusWidget())) {
+            button->click();
+            return true;
+        }
+        return false;
+    }
 
+    int dx = 0;
+    int dy = 0;
     switch (key) {
-        case Qt::Key_Up:
-            if (nav_index_ <= dock_end) {
-                return false;  // nothing above the dock
-            }
-            if (nav_index_ == play_index) {
-                next = last_tile >= play_index + 1 ? last_tile : dock_end;
-            } else {  // tiles: up is the Play button
-                next = play_index;
-            }
-            break;
-        case Qt::Key_Down:
-            if (nav_index_ <= dock_end) {
-                next = play_index;  // down from the dock is the Play button
-            } else if (nav_index_ == play_index) {
-                next = play_index + 1 < count ? play_index + 1 : nav_index_;
-            } else {
-                next = dock_end;  // down from a tile is the dock's last button
-            }
-            break;
         case Qt::Key_Left:
-            if (nav_index_ <= dock_end) {
-                --next;
-            } else if (nav_index_ > play_index) {
-                --next;
-            }
+            dx = -1;
             break;
         case Qt::Key_Right:
-            if (nav_index_ <= dock_end) {
-                ++next;
-            } else if (nav_index_ > play_index) {
-                ++next;
-            }
+            dx = 1;
+            break;
+        case Qt::Key_Up:
+            dy = -1;
+            break;
+        case Qt::Key_Down:
+            dy = 1;
             break;
         default:
             return false;
     }
 
-    next = std::clamp(next, 0, count - 1);
-    if (next != nav_index_) {
-        nav_index_ = next;
-        nav_order_[nav_index_]->setFocus(Qt::OtherFocusReason);
+    // Explicit rows, like the Switch 2: Up/Down jumps between rows (keeping rough horizontal
+    // position), Left/Right walks the row. Rows: 0 = top bar, 1 = hero image, 3 = dock.
+    const auto band_of = [](QWidget* w) {
+        bool ok = false;
+        const int band = w->property("band").toInt(&ok);
+        return ok ? band : 3;
+    };
+    QWidget* current = QApplication::focusWidget();
+    if (current == nullptr || !nav_order_.contains(current)) {
+        nav_order_[0]->setFocus(Qt::OtherFocusReason);
+        return true;
+    }
+    const int count = nav_order_.size();
+    if (count == 0) {
+        return false;
+    }
+    const int band = band_of(current);
+    const int target_band = std::clamp(band + dy, 0, 3);
+    if (dx != 0) {
+        QList<QWidget*> row;
+        for (QWidget* w : nav_order_) {
+            if (band_of(w) == band && w->isVisible() && w->isEnabled()) {
+                row.append(w);
+            }
+        }
+        if (row.isEmpty()) {
+            return false;
+        }
+        const int i = row.indexOf(current);
+        const int step = dx > 0 ? 1 : -1;
+        const int next = ((i < 0 ? 0 : i) + step + row.size()) % row.size();
+        row[next]->setFocus(Qt::OtherFocusReason);
+        return true;
+    }
+    if (target_band == band) {
+        return false;
+    }
+    QList<QWidget*> row;
+    for (QWidget* w : nav_order_) {
+        if (band_of(w) == target_band && w->isVisible() && w->isEnabled()) {
+            row.append(w);
+        }
+    }
+    if (row.isEmpty()) {
+        return false;
+    }
+    const double from_x = current->mapToGlobal(current->rect().center()).x();
+    QWidget* best = row.front();
+    double best_distance = std::numeric_limits<double>::infinity();
+    for (QWidget* w : row) {
+        const double distance = std::abs(w->mapToGlobal(w->rect().center()).x() - from_x);
+        if (distance < best_distance) {
+            best_distance = distance;
+            best = w;
+        }
+    }
+    if (best) {
+        best->setFocus(Qt::OtherFocusReason);
         return true;
     }
     return false;
@@ -714,54 +665,44 @@ bool Home::HandleNavKey(QKeyEvent* event) {
 
 void Home::RebuildNavOrder() {
     nav_order_.clear();
-    nav_order_ = {home_button, library_button, folder_button,
-                  settings_button, update_button, menu_button, play};
-    if (row != nullptr) {
-        for (int i = 0; i < row->count(); ++i) {
-            if (QLayoutItem* item = row->itemAt(i)) {
-                if (QWidget* widget = item->widget()) {
-                    nav_order_.append(widget);
-                }
-            }
-        }
+    if (avatar_button) {
+        nav_order_.append(avatar_button);
     }
-    nav_index_ = std::clamp(nav_index_, 0, static_cast<int>(nav_order_.size()) - 1);
+    nav_order_.append(play);
+    if (list_mode && back_button) {
+        back_button->setProperty("band", 3);
+        nav_order_.append(back_button);
+    }
+    nav_order_.append(home_button);
+    nav_order_.append(library_button);
+    nav_order_.append(folder_button);
+    nav_order_.append(settings_button);
+    nav_order_.append(update_button);
+    nav_order_.append(menu_button);
+    // Focus stays on the dock's Home button at rest; clamps handle list mode.
+    if (nav_index_ < 0 || nav_index_ >= nav_order_.size()) {
+        nav_index_ = std::max(0, static_cast<int>(nav_order_.size()) - 8);
+    }
 }
 
 bool Home::eventFilter(QObject* watched, QEvent* event) {
-    if (watched == page) {
-        if (event->type() == QEvent::Resize || event->type() == QEvent::Show) {
-            if (backdrop) {
-                backdrop->setGeometry(page->rect());
-                RebuildBackdrop();
-            }
-            return false;
-        }
+    if (watched == window && event->type() == QEvent::Resize) {
+        PositionBackButton();
+        return false;
     }
     // The main window shows its game list (start up, a game stopped, the list filled): show
     // the home page instead, unless the player asked for the full list.
     if (event->type() == QEvent::Show && (watched == game_list || watched == placeholder)) {
         QTimer::singleShot(0, this, &Home::Restore);
     }
-    if (event->type() == QEvent::FocusIn) {
-        // Focus (controller or mouse) is what selects the game, console style: the bookmark
-        // row and the Play button follow the focused tile.
-        if (row != nullptr) {
-            for (int i = 0; i < row->count(); ++i) {
-                QLayoutItem* item = row->itemAt(i);
-                if (item && item->widget() == watched) {
-                    auto* button = qobject_cast<QToolButton*>(watched);
-                    SelectGame(button->property("path").toString(),
-                               button->property("id").toULongLong(), button->toolTip());
-                    nav_index_ = 7 + i;  // dock (6) + play (1) come first
-                    break;
-                }
-            }
-        }
-        return false;
-    }
     if (event->type() == QEvent::KeyPress) {
         auto* key = static_cast<QKeyEvent*>(event);
+        auto* t = qobject_cast<const QToolButton*>(watched);
+        LOG_INFO(Frontend, "Ocarina2 keypress on widget={} obj={} tip={} key={}",
+                 watched ? watched->metaObject()->className() : "null",
+                 t ? t->objectName().toStdString() : std::string{},
+                 t ? t->toolTip().toStdString() : std::string{},
+                 key->key());
         // X (and the keyboard's Menu key) opens the options for the focused game.
         if (key->key() == Qt::Key_Menu) {
             if (auto* button = qobject_cast<QToolButton*>(watched);

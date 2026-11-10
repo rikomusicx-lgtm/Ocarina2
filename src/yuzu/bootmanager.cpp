@@ -778,6 +778,7 @@ bool GRenderWindow::InitRenderTarget() {
     const auto target_width = Settings::IsDockedMode() ? Layout::ScreenDocked::Width : Layout::ScreenUndocked::Width;
     const auto target_height = Settings::IsDockedMode() ? Layout::ScreenDocked::Height : Layout::ScreenUndocked::Height;
 
+    child_widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     child_widget->resize(target_width, target_height);
     layout()->addWidget(child_widget);
     // Reset minimum required size to avoid resizing issues on the main window after restarting.
@@ -882,6 +883,7 @@ bool GRenderWindow::InitializeOpenGL() {
 bool GRenderWindow::InitializeVulkan() {
     auto child = new VulkanRenderWidget(this);
     child_widget = child;
+    child_widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     child_widget->windowHandle()->create();
     main_context = std::make_unique<DummyContext>();
     return true;

@@ -104,6 +104,12 @@ void DrawIconPath(QPainterPath& path, const QString& name) {
         path.moveTo(3, 4.5);
         path.lineTo(6, 7.5);
         path.lineTo(9, 4.5);
+    } else if (name == QStringLiteral("arrow-left")) {
+        path.moveTo(12.25, 3.5);
+        path.lineTo(7.75, 8);
+        path.lineTo(12.25, 12.5);
+        path.moveTo(8.25, 8);
+        path.lineTo(16.25, 8);
     } else if (name == QStringLiteral("fullscreen-exit")) {
         path.moveTo(9, 4);
         path.lineTo(9, 8);

@@ -272,7 +272,7 @@ add_executable(yuzu
     game/carousel.h game/carousel.cpp
 )
 
-set_target_properties(yuzu PROPERTIES OUTPUT_NAME "Ocarina2")
+set_target_properties(yuzu PROPERTIES OUTPUT_NAME "Ocarina2" WIN32_EXECUTABLE TRUE)
 
 # Shipped next to the executable: the NX2 switches a GUI launch cannot set another way. Read at
 # startup (LoadNx2Switches in main.cpp); a user copy in %APPDATA%\eden overrides it.
