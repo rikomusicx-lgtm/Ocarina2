@@ -685,11 +685,15 @@ void TextureCache<P>::TickFrame() {
         LOG_INFO(HW_GPU, "Texture cache last 600 frames: {} uploads from guest memory, {} MiB (largest {} MiB, {} by layer)",
                  images_uploaded, uploaded_bytes >> 20, largest_upload >> 20, layer_uploads);
         LOG_INFO(HW_GPU,
+                 "Texture cache last 600 frames: {} new render targets ({} uploaded, {} fresh)",
+                 render_targets_created, render_targets_uploaded, fresh_render_targets);
+        LOG_INFO(HW_GPU,
                  "Texture cache last 600 frames: stale uploads skipped {} ({} MiB), {} uploaded "
                  "for buffer-written pages; {} MiB of pages marked stale",
                  tc_stale_skips, tc_stale_skip_bytes >> 20, tc_stale_gpu_written,
                  (stale_page_count << STALE_PAGE_BITS) >> 20);
         tc_stale_skips = tc_stale_skip_bytes = tc_stale_gpu_written = 0;
+        fresh_render_targets = render_targets_created = render_targets_uploaded = 0;
         images_uploaded = uploaded_bytes = largest_upload = layer_uploads = 0;
         astc_opaque_images = astc_alpha_images = 0;
         std::vector<std::pair<u32, u64>> shapes;
@@ -4001,6 +4005,30 @@ ImageId TextureCache<P>::JoinImages(const ImageInfo& info, GPUVAddr gpu_addr, DA
                         clear_skip ? "" : clear_refusal);
         }
     }
+    // New render targets (the post-processing passes recreate them about every frame while the
+    // camera moves) can hold nothing in guest memory worth uploading: the passes draw such
+    // targets whole, and the bytes there are stale. Pages the buffer cache wrote on the GPU since
+    // the guest last wrote them hold data the upload would bring: those keep it (RefreshContents
+    // applies the same rule). Switch 2 only; EDEN_NX2_RT_FRESH=0 disables.
+    const auto fresh_render_target = [&](const Image& image) {
+        static const int forced = [] {
+            const char* const value = std::getenv("EDEN_NX2_RT_FRESH");
+            return value != nullptr ? std::atoi(value) : -1;
+        }();
+        static const bool nx2 = Tegra::g_nx2_ampere.load(std::memory_order_relaxed);
+        if (forced == 0 || !nx2 || !creating_render_target ||
+            new_info.type != ImageType::e2D || new_info.resources.levels != 1 ||
+            new_info.resources.layers != 1 || new_info.num_samples != 1) {
+            return false;
+        }
+        return False(image.flags & (ImageFlagBits::Sparse | ImageFlagBits::SparseLayers |
+                                    ImageFlagBits::SparseTiles | ImageFlagBits::Unbacked)) &&
+               IsAllStale(image.cpu_addr, image.guest_size_bytes) &&
+               !Tegra::Nx2MayBeGpuWritten(image.cpu_addr, image.guest_size_bytes);
+    };
+    if (creating_render_target) {
+        ++render_targets_created;
+    }
     const auto refresh_start = std::chrono::steady_clock::now();
     if (clear_skip) {
         // Stays CpuModified: UpdateRenderTargets' PrepareImage drops the upload only when
@@ -4011,7 +4039,19 @@ ImageId TextureCache<P>::JoinImages(const ImageInfo& info, GPUVAddr gpu_addr, DA
         new_image.flags &= ~ImageFlagBits::CpuModified;
         TrackImage(new_image, new_image_id);
         runtime.TransitionImageLayout(new_image);
+    } else if (fresh_render_target(new_image)) {
+        // What RefreshContents does, without the upload: the image stays tracked so later CPU
+        // writes reach it, and the layout transition flags it as GPU-owned.
+        new_image.flags &= ~ImageFlagBits::CpuModified;
+        if (False(new_image.flags & ImageFlagBits::Tracked)) {
+            TrackImage(new_image, new_image_id);
+        }
+        runtime.TransitionImageLayout(new_image);
+        ++fresh_render_targets;
     } else {
+        if (creating_render_target && True(new_image.flags & ImageFlagBits::CpuModified)) {
+            ++render_targets_uploaded;
+        }
         // TODO: Only upload what we need
         RefreshContents(new_image, new_image_id);
     }
@@ -4326,11 +4366,13 @@ ImageViewId TextureCache<P>::FindRenderTargetView(const ImageInfo& info, GPUVAdd
     }
     ImageId image_id{};
     bool delete_state = has_deleted_images;
+    creating_render_target = true;
     do {
         has_deleted_images = false;
         image_id = FindOrInsertImage(info, gpu_addr);
         delete_state |= has_deleted_images;
     } while (has_deleted_images);
+    creating_render_target = false;
     has_deleted_images = delete_state;
     if (!image_id) {
         return NULL_IMAGE_VIEW_ID;
