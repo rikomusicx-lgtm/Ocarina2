@@ -52,8 +52,8 @@ inline void SetOcarinaOfTimePerformanceSettings(Values& settings, bool global,
     };
     session(settings.renderer_backend, RendererBackend::Vulkan);
     // The preset mirrors the owner's tuned handheld Ocarina of Time session: Fast GPU mode
-    // with immediate fences/VSync and unsafe DMA reads, 4 GB guest layout, aggressive VRAM
-    // usage and Force Max Clock - what the game needs to hold its frame rate on low-end PCs.
+    // with immediate fences/VSync and unsafe DMA reads, 8 GB guest layout, aggressive VRAM
+    // usage and Force Max Clock.
     session(settings.resolution_setup, ResolutionSetup::Res1X);
     session(settings.gpu_accuracy, GpuAccuracy::Low);
     session(settings.use_asynchronous_gpu_emulation, true);
@@ -76,7 +76,7 @@ inline void SetOcarinaOfTimePerformanceSettings(Values& settings, bool global,
     session(settings.frame_pacing_mode, FramePacingMode::Target_Auto);
     session(settings.aspect_ratio, AspectRatio::R16_9);
     session(settings.gpu_unswizzle_texture_size, GpuUnswizzleSize::VeryLarge);
-    session(settings.memory_layout_mode, MemoryLayout::Memory_4Gb);
+    session(settings.memory_layout_mode, MemoryLayout::Memory_8Gb);
     session(settings.cpu_accuracy, CpuAccuracy::Unsafe);
     session(settings.sync_core_speed, true);
     session(settings.use_docked_mode, ConsoleMode::Handheld);
