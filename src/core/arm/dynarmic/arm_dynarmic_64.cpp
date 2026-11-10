@@ -386,7 +386,8 @@ void ArmDynarmic64::MakeJit(Common::PageTable* page_table, std::size_t address_s
 #if defined(ARCHITECTURE_arm64) || defined(__sun__) || defined(__NetBSD__) || defined(__DragonFly__) || defined(__OpenBSD__)
     config.code_cache_size = std::uint32_t(128_MiB);
 #else
-    config.code_cache_size = std::uint32_t(512_MiB);
+    // 256 MiB: zero evictions in Ocarina of Time (the fork's own profile), 256 MiB kept out of RAM.
+    config.code_cache_size = std::uint32_t(256_MiB);
 #endif
 
     // Allow memory fault handling to work
