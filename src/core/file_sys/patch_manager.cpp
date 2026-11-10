@@ -299,20 +299,18 @@ constexpr std::array BUILTIN_PATCHES{
         .state_size = 16,
     },
     BuiltinPatch{
-        .name = "Occlusion Off (built-in, EDEN_NX2_OCCLUSION_OFF=1)",
+        .name = "Occlusion Off (built-in)",
         .title_id = 0x0400486024DEC000,
         .module = "main",
         .build_id = "E0F3CCFAF50065AE4EA01EB5AEB13B1A45DA3348",
         .records = OCCLUSION_OFF_RECORDS,
-        .enable_env = "EDEN_NX2_OCCLUSION_OFF",
     },
     BuiltinPatch{
-        .name = "Resource poll backoff (built-in, EDEN_NX2_OOT_POLL_BACKOFF=1)",
+        .name = "Resource poll backoff (built-in)",
         .title_id = 0x0400486024DEC000,
         .module = "main",
         .build_id = "E0F3CCFAF50065AE4EA01EB5AEB13B1A45DA3348",
         .records = POLL_BACKOFF_RECORDS,
-        .enable_env = "EDEN_NX2_OOT_POLL_BACKOFF",
     },
 };
 
