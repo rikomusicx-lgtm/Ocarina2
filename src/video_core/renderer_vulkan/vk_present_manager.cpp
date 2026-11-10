@@ -596,9 +596,12 @@ void PresentManager::SetImageCount() {
 #ifdef HAS_LSFG
     const size_t generations = Settings::FrameGenMaxGenerations();
     const size_t queued_composites = Settings::values.frame_gen_queue_target.GetValue() + 1;
+    // The bare minimum (multiplier in flight) starves the guest when the panel scans at its
+    // own rate: every guest frame consumes multiplier swapchain images before the next frame
+    // can start, throttling the game to panel/multiplier. Give the in-flight queue headroom.
+    const size_t wanted = (generations + 1) * queued_composites * 2;
     image_count =
-        std::clamp<size_t>((generations + 1) * queued_composites, swapchain.GetImageCount(),
-                           MAX_FRAMES_IN_FLIGHT);
+        std::clamp<size_t>(wanted, swapchain.GetImageCount(), MAX_FRAMES_IN_FLIGHT);
 #else
     image_count = std::min<size_t>(swapchain.GetImageCount(), MAX_FRAMES_IN_FLIGHT);
 #endif

@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "common/settings.h"
+#include "video_core/nx2_perf.h"
 #include "video_core/renderer_vulkan/present/frame_gen_pacer.h"
 
 namespace Vulkan {
@@ -69,7 +70,20 @@ FrameGenPlan FrameGenPacer::Plan(size_t capacity) {
         return {};
     }
 
-    const f32 target_rate = static_cast<f32>(Settings::values.frame_gen_target_rate.GetValue());
+    const f32 configured_rate =
+        static_cast<f32>(Settings::values.frame_gen_target_rate.GetValue());
+    // 0 ("unlimited") used to emit the multiplier every presented frame no matter how fast the
+    // guest produced; with the forced FIFO mode that made the panel's throughput decide the
+    // guest's rate (at 3x, 72/3 = 24). Target the measured refresh instead: FG fills below it
+    // and emits nothing above it, so the guest free-runs at its own rate. The setting still
+    // overrides with an explicit number.
+    const f32 target_rate =
+        configured_rate > 0.0f
+            ? configured_rate
+            : VideoCommon::Nx2Perf::g_display_refresh_ns.load(std::memory_order_relaxed) > 0
+                  ? 1e9f / static_cast<f32>(VideoCommon::Nx2Perf::g_display_refresh_ns.load(
+                        std::memory_order_relaxed))
+                  : 60.0f;
 
     if (smoothed_interval > 0.0f) {
         f32 burst_threshold = BURST_CADENCE_RATIO / smoothed_interval;
