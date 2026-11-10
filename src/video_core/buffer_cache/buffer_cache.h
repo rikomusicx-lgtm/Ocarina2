@@ -74,6 +74,9 @@ BufferCache<P>::BufferCache(Tegra::MaxwellDeviceMemoryManager& device_memory_, R
     critical_memory = static_cast<u64>(
         (std::max)((std::min)(device_local_memory - min_vacancy_critical, min_spacing_critical),
                  DEFAULT_CRITICAL_MEMORY));
+    // Hard cap regardless of the budget: keep VRAM at 3.8 GB on this class of card, full stop.
+    critical_memory = (std::min)(critical_memory, u64{3800_MiB});
+    minimum_memory = (std::min)(minimum_memory, u64{3800_MiB - 1_GiB});
 }
 
 template <class P>

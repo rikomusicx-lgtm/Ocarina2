@@ -450,6 +450,9 @@ void TextureCache<P>::ApplyThresholdOverrides(bool log) {
             max_critical = (std::max)(max_critical, budget - 2560_MiB);
         }
     }
+    // Hard cap regardless of the driver's budget: keep VRAM at 3.8 GB on this class of card,
+    // full stop (Windows started paging when the process crossed 4 GB).
+    max_critical = (std::min)(max_critical, u64{3800_MiB});
     critical_memory = (std::min)(critical_memory, max_critical);
     expected_memory =
         (std::min)(expected_memory, critical_memory - (std::min)(critical_memory, u64{768_MiB}));
