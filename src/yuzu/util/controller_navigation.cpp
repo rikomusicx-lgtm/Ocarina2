@@ -9,13 +9,7 @@
 ControllerNavigation::ControllerNavigation(Core::HID::HIDCore& hid_core, QWidget* parent) {
     player1_controller = hid_core.GetEmulatedController(Core::HID::NpadIdType::Player1);
     handheld_controller = hid_core.GetEmulatedController(Core::HID::NpadIdType::Handheld);
-    Core::HID::ControllerUpdateCallback engine_callback{
-        .on_change = [this](Core::HID::ControllerTriggerType type) { ControllerUpdateEvent(type); },
-        .is_npad_service = false,
-    };
-    player1_callback_key = player1_controller->SetCallback(engine_callback);
-    handheld_callback_key = handheld_controller->SetCallback(engine_callback);
-    is_controller_set = true;
+    LoadController();
 }
 
 ControllerNavigation::~ControllerNavigation() {
@@ -28,6 +22,19 @@ void ControllerNavigation::UnloadController() {
         handheld_controller->DeleteCallback(handheld_callback_key);
         is_controller_set = false;
     }
+}
+
+void ControllerNavigation::LoadController() {
+    if (is_controller_set) {
+        return;
+    }
+    Core::HID::ControllerUpdateCallback engine_callback{
+        .on_change = [this](Core::HID::ControllerTriggerType type) { ControllerUpdateEvent(type); },
+        .is_npad_service = false,
+    };
+    player1_callback_key = player1_controller->SetCallback(engine_callback);
+    handheld_callback_key = handheld_controller->SetCallback(engine_callback);
+    is_controller_set = true;
 }
 
 void ControllerNavigation::TriggerButton(Settings::NativeButton::Values native_button,
@@ -76,6 +83,11 @@ void ControllerNavigation::ControllerUpdateButton() {
         TriggerButton(Settings::NativeButton::DLeft, Qt::Key_Left);
         TriggerButton(Settings::NativeButton::DRight, Qt::Key_Right);
         TriggerButton(Settings::NativeButton::DUp, Qt::Key_Up);
+        TriggerButton(Settings::NativeButton::X, Qt::Key_Menu);
+        TriggerButton(Settings::NativeButton::Plus, Qt::Key_Menu);
+        TriggerButton(Settings::NativeButton::L, Qt::Key_PageUp);
+        TriggerButton(Settings::NativeButton::R, Qt::Key_PageDown);
+        TriggerButton(Settings::NativeButton::Home, Qt::Key_Home);
         break;
     case Core::HID::NpadStyleIndex::JoyconLeft:
         TriggerButton(Settings::NativeButton::DDown, Qt::Key_Enter);

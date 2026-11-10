@@ -178,54 +178,136 @@ QToolButton#Ocarina2StripButton { background: transparent; border: none; border-
 QToolButton#Ocarina2StripButton:hover { background: #322a52; }
 QToolButton#Ocarina2StripButton:pressed { background: #453a70; }
 
-/* Home and rail (ocarina2/home.cpp) */
-QWidget#Ocarina2Rail { background: #0d0b16; }
-QToolButton#Ocarina2RailButton {
-    background: transparent;
-    border: none;
-    border-radius: 14px;
-    padding: 11px;
+/* Home screen (ocarina2/home.cpp): the Switch 2 top bar, game tiles, dock and bottom strip */
+QWidget#Ocarina2Dock { background: transparent; }
+QToolButton#Ocarina2DockButton {
+    background: #17161f;
+    border: 1px solid #23212c;
+    color: #cfccd9;
+    border-radius: 26px;
+    padding: 10px 10px;
+    min-width: 86px;
 }
-QToolButton#Ocarina2RailButton:hover { background: #1d1930; }
-QToolButton#Ocarina2RailButton:checked { background: #241d3d; }
-QWidget#Ocarina2Home { background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-    stop: 0 #151026, stop: 0.4 #110d1f, stop: 1 #0d0b16); }
-QLabel#Ocarina2HeroTitle { font-size: 34px; font-weight: 600; color: #ececf1; }
-QLabel#Ocarina2Subtitle { font-size: 13px; color: #8f86ad; }
+QToolButton#Ocarina2DockButton:hover { background: #201f29; color: #ffffff; }
+QToolButton#Ocarina2DockButton:pressed { background: #2a2836; }
+QWidget#Ocarina2Home {
+    background: qradialgradient(cx: 0.5, cy: 0.55, radius: 0.85,
+        fx: 0.5, fy: 0.5,
+        stop: 0 #141126,
+        stop: 0.45 #100e20,
+        stop: 1 #06060c);
+}
+QWidget#Ocarina2TopBar {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 rgba(255, 255, 255, 6), stop: 1 rgba(255, 255, 255, 0));
+    border-bottom: 1px solid #1d1b28;
+}
+QToolButton#Ocarina2Avatar {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ff5a47, stop: 1 #c9241f);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 20px;
+    min-width: 40px;
+    min-height: 40px;
+    max-width: 40px;
+    max-height: 40px;
+}
+QToolButton#Ocarina2Avatar:hover { background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ff7264, stop: 1 #d7322c); }
+QLabel#Ocarina2Wordmark {
+    color: #c9c7da;
+    background: transparent;
+}
+QWidget#Ocarina2Pills {
+    background: #14131d;
+    border: 1px solid #242230;
+    border-radius: 999px;
+}
+QToolButton#Ocarina2Pill {
+    background: transparent;
+    border: 1px solid transparent;
+    color: #9896ab;
+    border-radius: 999px;
+    padding: 6px 30px;
+    font-size: 13px;
+    font-weight: 600;
+}
+QToolButton#Ocarina2Pill:hover { color: #e8e6f2; }
+QToolButton#Ocarina2Pill:checked {
+    background: #39374a;
+    color: #ffffff;
+}
+QLabel#Ocarina2Clock {
+    color: #e6e4ee;
+    font-size: 16px;
+    font-weight: 700;
+    background: transparent;
+}
+QLabel#Ocarina2TopIcon { color: #9896ab; background: transparent; }
+QWidget#Ocarina2CurrentGameRow { background: transparent; }
+QLabel#Ocarina2CurrentGame {
+    color: #d4d2df;
+    font-size: 14px;
+    font-weight: 600;
+    background: transparent;
+}
 QLabel#Ocarina2Section { font-size: 15px; color: #b7b2cd; }
 QPushButton#Ocarina2Play {
     background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
-        stop: 0 #8b5cf6, stop: 1 #6d28d9);
+        stop: 0 #8b5cf6, stop: 0.5 #a78bfa, stop: 1 #c4b5fd);
     color: #ffffff;
     border: none;
     border-radius: 999px;
-    min-height: 50px;
-    max-height: 50px;
-    padding: 0 34px;
-    font-size: 17px;
-    font-weight: 600;
+    min-height: 58px;
+    max-height: 58px;
+    min-width: 225px;
+    padding: 0 40px;
+    font-size: 20px;
+    font-weight: 800;
 }
-QPushButton#Ocarina2Play:hover { background: #a87ffa; }
+QPushButton#Ocarina2Play:hover { background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #9b6df8, stop: 0.5 #b59efb, stop: 1 #cfc2fd); }
 QPushButton#Ocarina2Play:pressed { background: #7c3aed; }
 QToolButton#Ocarina2Tile {
     background: transparent;
-    border: 1px solid transparent;
-    border-radius: 16px;
-    padding: 10px;
+    border: 3px solid transparent;
+    border-radius: 20px;
+    padding: 8px;
     color: #c9c6d8;
     font-size: 13px;
 }
-QToolButton#Ocarina2Tile:hover { background: #1d1930; border-color: #332e4d; color: #ececf1; }
+QToolButton#Ocarina2Tile:hover { background: #16161f; color: #ececf1; }
+QWidget#Ocarina2BottomBar {
+    border-top: 1px solid #201e2a;
+    background: transparent;
+}
+QToolButton#Ocarina2ThemeButton {
+    background: transparent;
+    border: none;
+    color: #8b8b9e;
+    padding: 2px 8px;
+    font-size: 12px;
+}
+QToolButton#Ocarina2ThemeButton:hover { color: #ffffff; }
+QLabel#Ocarina2Hints { color: #6f6d80; background: transparent; }
 
-/* Gamepad/keyboard focus rings (Ocarina2 rail, tiles and the Play button) */
-QToolButton#Ocarina2RailButton:focus {
-    background: #241d3d;
-    border: 2px solid #9a7cf5;
+/* Gamepad/keyboard focus rings (Switch 2 aqua) */
+QToolButton#Ocarina2DockButton:focus {
+    border: 2px solid #3fd8ff;
+    background: #1d2026;
+    color: #ffffff;
 }
 QToolButton#Ocarina2Tile:focus {
-    background: #221d33;
-    border: 2px solid #9a7cf5;
+    background: rgba(63, 216, 255, 0.10);
+    border: 3px solid #3fd8ff;
+    color: #ffffff;
 }
 QPushButton#Ocarina2Play:focus {
-    border: 2px solid #c4b5fd;
+    border: 3px solid #3fd8ff;
+}
+QToolButton#Ocarina2Pill:focus {
+    border: 1px solid #3fd8ff;
+}
+QToolButton#Ocarina2Avatar:focus {
+    border: 2px solid #3fd8ff;
 }

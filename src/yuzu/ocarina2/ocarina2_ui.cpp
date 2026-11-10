@@ -2,6 +2,7 @@
 
 #include "yuzu/ocarina2/ocarina2_ui.h"
 
+#include <cmath>
 #include <map>
 #include <string_view>
 
@@ -192,6 +193,92 @@ void DrawIconPath(QPainterPath& path, const QString& name) {
             path.moveTo(pos.x() + 2, pos.y());
             path.addEllipse(pos, 2, 2);
         }
+    } else if (name == QStringLiteral("wifi")) {
+        path.arcMoveTo(QRectF(4, 7, 16, 16), 40);
+        path.arcTo(QRectF(4, 7, 16, 16), 40, 100);
+        path.moveTo(7.8, 11.2);
+        path.arcMoveTo(QRectF(7.5, 10, 9, 10), 40);
+        path.arcTo(QRectF(7.5, 10, 9, 10), 40, 100);
+        path.moveTo(10.4, 14.6);
+        path.arcMoveTo(QRectF(10.3, 13.3, 3.4, 4.2), 40);
+        path.arcTo(QRectF(10.3, 13.3, 3.4, 4.2), 40, 100);
+        path.moveTo(12 - 1.2, 18.6);
+        path.addEllipse(QPointF(12, 18.6), 1.2, 1.2);
+    } else if (name == QStringLiteral("battery")) {
+        path.addRoundedRect(QRectF(2.5, 8.5, 15, 7), 1.8, 1.8);
+        path.moveTo(19.3, 10.7);
+        path.lineTo(20.6, 10.7);
+        path.lineTo(20.6, 13.3);
+        path.lineTo(19.3, 13.3);
+    } else if (name == QStringLiteral("star")) {
+        const QPointF t{12, 4.5};
+        for (int i = 0; i < 10; ++i) {
+            const qreal angle = (qreal(i) * 36.0 - 90.0) * 0.01745329;
+            const qreal r = (i % 2 == 0) ? 7.0 : 3.2;
+            const QPointF p(t.x() + r * std::cos(angle), t.y() + r * std::sin(angle));
+            if (i == 0) {
+                path.moveTo(p);
+            } else {
+                path.lineTo(p);
+            }
+        }
+        path.closeSubpath();
+    } else if (name == QStringLiteral("home")) {
+        path.moveTo(4, 11.2);
+        path.lineTo(12, 4.5);
+        path.lineTo(20, 11.2);
+        path.moveTo(6.5, 9.8);
+        path.lineTo(6.5, 20);
+        path.lineTo(10.6, 20);
+        path.lineTo(10.6, 14);
+        path.lineTo(13.4, 14);
+        path.lineTo(13.4, 20);
+        path.lineTo(17.5, 20);
+        path.lineTo(17.5, 9.8);
+    } else if (name == QStringLiteral("folder")) {
+        path.moveTo(3, 7);
+        path.lineTo(8.6, 7);
+        path.lineTo(10.8, 9.4);
+        path.lineTo(21, 9.4);
+        path.lineTo(21, 18.4);
+        path.lineTo(3, 18.4);
+        path.closeSubpath();
+    } else if (name == QStringLiteral("bag")) {
+        path.moveTo(5.2, 9.5);
+        path.lineTo(18.8, 9.5);
+        path.lineTo(20.3, 19.3);
+        path.lineTo(3.7, 19.3);
+        path.closeSubpath();
+        path.moveTo(8.4, 13.4);
+        path.moveTo(8.4, 13.4);
+        path.moveTo(8.6, 9.5);
+        path.arcMoveTo(QRectF(8.1, 5.5, 7.8, 8), 0);
+        path.arcTo(QRectF(8.1, 5.5, 7.8, 8), 0, 180);
+    } else if (name == QStringLiteral("gamepad")) {
+        path.addRoundedRect(QRectF(2.2, 8, 19.6, 9), 4.5, 4.5);
+        path.moveTo(7.4, 11);
+        path.lineTo(7.4, 14);
+        path.moveTo(5.9, 12.5);
+        path.lineTo(8.9, 12.5);
+        path.addEllipse(QPointF(15.6, 11.4), 0.9, 0.9);
+        path.addEllipse(QPointF(17.4, 14), 0.9, 0.9);
+    } else if (name == QStringLiteral("user")) {
+        path.addEllipse(QPointF(12, 8.3), 3.3, 3.3);
+        path.moveTo(4.9, 19.6);
+        path.quadTo(QPointF(5.5, 13.8), QPointF(12, 13.8));
+        path.quadTo(QPointF(18.5, 13.8), QPointF(19.1, 19.6));
+    } else if (name == QStringLiteral("bookmark")) {
+        path.moveTo(7, 4.6);
+        path.lineTo(7, 19.4);
+        path.lineTo(12, 15.3);
+        path.lineTo(17, 19.4);
+        path.lineTo(17, 4.6);
+        path.closeSubpath();
+    } else if (name == QStringLiteral("droplet")) {
+        path.moveTo(12, 4.2);
+        path.cubicTo(QPointF(16.6, 11.2), QPointF(17.9, 13.9), QPointF(17.9, 16.4));
+        path.lineTo(6.1, 16.4);
+        path.cubicTo(QPointF(6.1, 13.9), QPointF(7.4, 11.2), QPointF(12, 4.2));
     }
 }
 

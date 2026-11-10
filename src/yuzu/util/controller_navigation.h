@@ -26,6 +26,8 @@ public:
 
     /// Disables events from the emulated controller
     void UnloadController();
+    /// Re-enables events after UnloadController (callbacks were deleted there).
+    void LoadController();
 
 signals:
     void TriggerKeyboardEvent(Qt::Key key);

@@ -15,7 +15,6 @@ class QMenu;
 class QPushButton;
 class QStandardItemModel;
 class QTimer;
-class QToolButton;
 
 namespace Ocarina2Ui {
 
@@ -29,18 +28,21 @@ struct HomeHooks {
     /// Fills a menu with the game list's own right-click entries for the game (mod folders,
     /// dumps, Remove, Verify Integrity, Configure Game...).
     std::function<void(QMenu& menu, u64 program_id, const std::string& path)> game_menu;
+    std::function<void()> toggle_fullscreen;
     std::function<bool()> game_list_empty;
     std::function<bool()> single_window;
     std::function<bool()> emulation_running;
     QStandardItemModel* model = nullptr;
     QMenu* help_menu = nullptr;
-    QList<QMenu*> classic_menus;  ///< File, Game, View, Tools, Help behind the rail's menu button
+    QList<QMenu*> classic_menus;  ///< File, Game, View, Tools, Help behind the dock's More button
 };
 
-/// The Ocarina2 main screen: a left icon rail (Library, Settings, Help, and the classic menus
-/// behind a button) and a home page with one big card for Ocarina of Time (or the first game)
-/// and the other games in a small row. The classic game list stays one click away
-/// ("All games"); the main window keeps managing it as before.
+/// The Ocarina2 main screen, drawn like the Switch 2 home menu: a top bar (player avatar,
+/// Home/Games switch, network glyphs and the clock), the highlighted game with a bookmark,
+/// a row of square game tiles (the focus ring is the console's aqua), a row of round
+/// system buttons at the bottom and a thin strip with the theme and the button hints.
+/// The classic game list stays one press away ("Games"); the main window keeps managing
+/// it as before.
 class Home : public QObject {
     Q_OBJECT
 public:
@@ -49,6 +51,8 @@ public:
 
     /// A game is starting in the main window: the render view takes the space.
     void OnEmulationStarting();
+    /// Show the right page (home or the list) and put focus in the dock, console style.
+    void Restore();
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -56,14 +60,15 @@ protected:
 private:
     void ShowHome();
     void ShowList();
-    void Restore();
     void Refresh();
+    /// Cheap selection update (bookmark row + what Play boots); rebuilding the tiles is
+    /// not needed and would yank focus off them.
+    void SelectGame(const QString& path, u64 program_id, const QString& title);
+    /// The per-game context menu (right click / X on a tile / X on the Play button).
+    void ShowGameMenu(const QString& path, u64 program_id, const QPoint& global_pos);
 
     QWidget* MakeRail();
     QWidget* MakePage();
-    QToolButton* RailButton(const QString& icon, const QString& tip);
-    /// Move keyboard focus (and gamepad's mapped keys) between the rail, the play button and
-    /// the tiles, Switch 2 style.
     void RebuildNavOrder();
     bool HandleNavKey(QKeyEvent* event);
 
@@ -74,15 +79,23 @@ private:
 
     QWidget* rail = nullptr;
     QWidget* page = nullptr;
+    QWidget* topbar = nullptr;
+    QToolButton* avatar_button = nullptr;
+    QToolButton* pill_home = nullptr;
+    QToolButton* pill_games = nullptr;
+    QWidget* game_row = nullptr;
+    QLabel* game_row_title = nullptr;
+    QLabel* clock_label = nullptr;
+    QTimer* clock_timer = nullptr;
+    QToolButton* home_button = nullptr;
     QToolButton* library_button = nullptr;
-    QToolButton* help_button = nullptr;
+    QToolButton* folder_button = nullptr;
+    QToolButton* update_button = nullptr;
     QToolButton* settings_button = nullptr;
     QToolButton* menu_button = nullptr;
-    QLabel* cover = nullptr;
-    QLabel* subtitle = nullptr;
-    QLabel* title = nullptr;
     QPushButton* play = nullptr;
-    QList<QWidget*> nav_order_;  ///< Focus order: rail up/down, play, tiles, add-folder/all-games.
+    QToolButton* theme_button = nullptr;
+    QList<QWidget*> nav_order_;  ///< Focus order: dock, play, then the game tiles.
     int nav_index_ = 0;
     QHBoxLayout* row = nullptr;
     QWidget* row_box = nullptr;
@@ -91,6 +104,7 @@ private:
     bool list_mode = false;
     QString hero_path;
     u64 hero_id = 0;
+    QString hero_title;
 };
 
 } // namespace Ocarina2Ui

@@ -127,6 +127,7 @@ void MainWindow::SetUpOcarina2Ui() {
             [this](QMenu& menu, u64 program_id, const std::string& path) {
                 game_list->AddGameMenu(menu, program_id, path);
             },
+        .toggle_fullscreen = [this] { ui->action_Fullscreen->trigger(); },
         .game_list_empty = [this] { return game_list->IsEmpty(); },
         .single_window = [this] { return ui->action_Single_Window_Mode->isChecked(); },
         .emulation_running = [this] { return emulation_running; },

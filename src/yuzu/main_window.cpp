@@ -119,6 +119,7 @@ bool HostOotMaxResolutionDefault() {
 #include "util/clickable_label.h"
 #include "util/controller_navigation.h"
 #include "util/export_log.h"
+#include "ocarina2/home.h"
 #include "ocarina2/ocarina2_ui.h"
 #include "ocarina2/perf_overlay.h"
 #include "util/overlay_dialog.h"
@@ -523,6 +524,12 @@ MainWindow::MainWindow(bool has_broken_vulkan)
     UpdateWindowTitle();
 
     show();
+    // The console boots to the home screen with the dock focused, not to a game tile.
+    QTimer::singleShot(0, this, [this] {
+        if (ocarina2_home) {
+            ocarina2_home->Restore();
+        }
+    });
 
 #ifdef ENABLE_UPDATE_CHECKER
     connect(&update_watcher, &QFutureWatcher<UpdateChecker::CheckResult>::finished, this,
@@ -2616,6 +2623,11 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
     loading_screen->show();
 
     emulation_running = true;
+    // The UI drives itself with the controller when no game is running; while one is, the
+    // sticks and buttons belong to the game alone.
+    if (controller_nav) {
+        controller_nav->UnloadController();
+    }
     if (ui->action_Fullscreen->isChecked()) {
         ShowFullscreen();
     } else if (!(ui->action_Single_Window_Mode->isChecked() ? isMaximized()
@@ -2769,6 +2781,10 @@ void MainWindow::OnEmulationStopped() {
     }
 
     emulation_running = false;
+    // Emulation is over: the controller drives the home screen again.
+    if (controller_nav) {
+        controller_nav->LoadController();
+    }
 
     game_list->SetReportableProgramId(report_session ? report_session->program_id : 0);
 
