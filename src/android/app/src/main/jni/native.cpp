@@ -92,6 +92,7 @@ extern "C" {
 #include "hid_core/hid_types.h"
 #include "input_common/drivers/virtual_amiibo.h"
 #include "jni/native.h"
+#include "video_core/frame_gen/lossless_dll.h"
 #include "video_core/renderer_base.h"
 #include "video_core/renderer_vulkan/renderer_vulkan.h"
 #include "video_core/capture.h"
@@ -1167,6 +1168,37 @@ VkPhysicalDeviceProperties GetVulkanDeviceProperties() {
     return physical_device.GetProperties();
 }
 
+bool GetFrameGenerationSupport() {
+    Common::DynamicLibrary library;
+    if (!library.Open("libvulkan.so")) {
+        return false;
+    }
+
+    Vulkan::vk::InstanceDispatch dld;
+    const auto instance = Vulkan::CreateInstance(library, dld, VK_API_VERSION_1_1);
+    const auto physical_devices = instance.EnumeratePhysicalDevices();
+    if (physical_devices.empty()) {
+        return false;
+    }
+
+    const Vulkan::vk::PhysicalDevice physical_device(physical_devices[0], dld);
+
+    VkPhysicalDeviceShaderFloat16Int8Features float16_int8{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES,
+        .pNext = nullptr,
+    };
+    VkPhysicalDeviceVulkanMemoryModelFeatures memory_model{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES,
+        .pNext = &float16_int8,
+    };
+    VkPhysicalDeviceFeatures2 features{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+        .pNext = &memory_model,
+    };
+    physical_device.GetFeatures2(features);
+
+    return memory_model.vulkanMemoryModel == VK_TRUE && float16_int8.shaderFloat16 == VK_TRUE;
+}
 } // namespace
 
 jstring Java_org_yuzu_yuzu_1emu_NativeLibrary_getVulkanDriverVersion(JNIEnv* env, jobject jobj) {
@@ -1239,6 +1271,14 @@ jstring Java_org_yuzu_yuzu_1emu_NativeLibrary_getVulkanApiVersion(JNIEnv* env, j
         return Common::Android::ToJString(env, version_str);
     } catch (...) {
         return Common::Android::ToJString(env, "N/A");
+    }
+}
+
+jboolean Java_org_yuzu_yuzu_1emu_NativeLibrary_supportsFrameGeneration(JNIEnv* env, jobject jobj) {
+    try {
+        return static_cast<jboolean>(GetFrameGenerationSupport());
+    } catch (...) {
+        return static_cast<jboolean>(false);
     }
 }
 
@@ -1465,6 +1505,39 @@ jint Java_org_yuzu_yuzu_1emu_NativeLibrary_installKeys(JNIEnv* env, jclass clazz
     const auto ext = Common::Android::GetJString(env, jext);
 
     return static_cast<int>(FirmwareManager::InstallKeys(path, ext));
+}
+
+jstring Java_org_yuzu_yuzu_1emu_NativeLibrary_getLosslessDllPath(JNIEnv* env, jclass clazz) {
+#ifdef HAS_LSFG
+    const auto path = VideoCore::FrameGen::GetLosslessDllPath();
+    return Common::Android::ToJString(env, Common::FS::PathToUTF8String(path));
+#else
+    return Common::Android::ToJString(env, "");
+#endif
+}
+
+jint Java_org_yuzu_yuzu_1emu_NativeLibrary_validateLosslessDll(JNIEnv* env, jclass clazz) {
+#ifdef HAS_LSFG
+    return static_cast<jint>(VideoCore::FrameGen::GetInstalledLosslessStatus());
+#else
+    return static_cast<jint>(VideoCore::FrameGen::LosslessStatus::NotInstalled);
+#endif
+}
+
+jint Java_org_yuzu_yuzu_1emu_NativeLibrary_prepareLosslessDll(JNIEnv* env, jclass clazz) {
+#ifdef HAS_LSFG
+    return static_cast<jint>(VideoCore::FrameGen::BuildShaderCache());
+#else
+    return static_cast<jint>(VideoCore::FrameGen::LosslessStatus::NotInstalled);
+#endif
+}
+
+jboolean Java_org_yuzu_yuzu_1emu_NativeLibrary_removeLosslessDll(JNIEnv* env, jclass clazz) {
+#ifdef HAS_LSFG
+    return static_cast<jboolean>(VideoCore::FrameGen::RemoveInstalledLosslessDll());
+#else
+    return static_cast<jboolean>(false);
+#endif
 }
 
 jobjectArray Java_org_yuzu_yuzu_1emu_NativeLibrary_getPatchesForFile(JNIEnv* env, jobject jobj,

@@ -125,7 +125,10 @@ float EmuWindow_Android::GetFrameTimeVerifiedHint() const {
 }
 
 float EmuWindow_Android::GetPresentedFrameMultiplier() {
-    return 1.0f;
+    if (!Settings::values.frame_gen.GetValue()) {
+        return 1.0f;
+    }
+    return static_cast<float>(std::clamp<u32>(Settings::values.frame_gen_multiplier.GetValue(), 2, 4));
 }
 
 float EmuWindow_Android::GetFrameRateHint() const {

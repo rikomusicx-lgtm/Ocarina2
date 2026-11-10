@@ -65,6 +65,7 @@ SWITCHABLE(NvdecEmulation, false);
 SWITCHABLE(Region, true);
 SWITCHABLE(RendererBackend, true);
 SWITCHABLE(ScalingFilter, false);
+SWITCHABLE(FrameGenType, false);
 SWITCHABLE(SpirvOptimizeMode, true);
 SWITCHABLE(TimeZone, true);
 SETTING(VSyncMode, true);
@@ -399,15 +400,14 @@ void UpdateRescalingInfo() {
     TranslateResolutionInfo(setup, info);
 }
 
-// The Ocarina2 fork removed frame generation entirely (it caused camera flicker). These
-// permanently-disabled shims exist only so call sites merged from Fritchii keep working;
-// frame generation never runs here, exactly like the upstream "Fritchii" build behaviour.
+// Frame generation was removed earlier and restored on request.
 u32 FrameGenMultiplier() {
-    return 1;
+    return std::clamp(values.frame_gen_multiplier.GetValue(), MIN_FRAME_GEN_MULTIPLIER,
+                      MAX_FRAME_GEN_MULTIPLIER);
 }
 
 bool FrameGenActive() {
-    return false;
+    return values.frame_gen.GetValue();
 }
 
 namespace {
@@ -441,11 +441,20 @@ bool SpeedLimitEnabled() {
 }
 
 size_t FrameGenGenerations() {
-    return 0;
+    if (!values.frame_gen.GetValue()) {
+        return 0;
+    }
+    return FrameGenMultiplier() - 1;
 }
 
 size_t FrameGenMaxGenerations() {
-    return 0;
+    if (!values.frame_gen.GetValue()) {
+        return 0;
+    }
+    if (values.frame_gen_target_rate.GetValue() != 0) {
+        return MAX_FRAME_GEN_MULTIPLIER - 1;
+    }
+    return FrameGenMultiplier() - 1;
 }
 
 void RestoreGlobalState(bool is_powered_on) {

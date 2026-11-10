@@ -8,7 +8,6 @@
 
 #include <array>
 #include <atomic>
-#include <chrono>
 
 #include "common/common_types.h"
 #include "video_core/vulkan_common/vulkan_wrapper.h"
@@ -53,15 +52,8 @@ public:
     /// layout). Returns false when DLSS can't run, so the caller can fall back to FSR 3.1.
     bool Upscale(const Inputs& inputs);
 
-    /// True while a failed DLSS evaluation is cooling down. DLSS gets another attempt every
-    /// few seconds instead of staying off for the rest of the session: a lighter scene may
-    /// have freed enough VRAM for NGX to create its feature.
     [[nodiscard]] bool Failed() const noexcept {
-        if (!failed.load(std::memory_order_relaxed)) {
-            return false;
-        }
-        return std::chrono::steady_clock::now().time_since_epoch().count() <
-               resume_ns.load(std::memory_order_relaxed);
+        return failed.load();
     }
 
     [[nodiscard]] VkImage OutputImage() const noexcept {
@@ -76,9 +68,6 @@ public:
     }
 
 private:
-    /// How long to wait after an NVIDIA DLSS evaluation failure before trying it again.
-    static constexpr auto kDlssRetryAfter = std::chrono::seconds{10};
-
     void CreateOutput(VkExtent2D upscale_size);
 
     const Device& device;
@@ -93,7 +82,6 @@ private:
     vk::ImageView output_view;
     vk::Sampler point_sampler;
     std::atomic<bool> failed{};
-    mutable std::atomic<s64> resume_ns{};
 };
 
 } // namespace Vulkan

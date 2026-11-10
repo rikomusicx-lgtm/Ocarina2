@@ -29,6 +29,7 @@ import org.yuzu.yuzu_emu.features.settings.model.StringSetting
 import org.yuzu.yuzu_emu.features.settings.model.UShortSetting
 import org.yuzu.yuzu_emu.features.settings.model.view.*
 import org.yuzu.yuzu_emu.utils.InputHandler
+import org.yuzu.yuzu_emu.utils.LosslessScalingHelper
 import org.yuzu.yuzu_emu.utils.NativeConfig
 import org.yuzu.yuzu_emu.utils.NativePostProcessing
 import org.yuzu.yuzu_emu.utils.DirectoryInitialization
@@ -87,6 +88,45 @@ class SettingsFragmentPresenter(
         }
     }
 
+    private fun addFrameGenSettings(sl: ArrayList<SettingsItem>) {
+        sl.apply {
+            if (!LosslessScalingHelper.isSupportedByGpu()) {
+                add(
+                    RunnableSetting(
+                        titleId = R.string.frame_gen_unsupported,
+                        descriptionId = R.string.frame_gen_unsupported_description,
+                        isRunnable = false
+                    ) {}
+                )
+            } else if (!LosslessScalingHelper.isInstalled()) {
+                add(
+                    RunnableSetting(
+                        titleId = R.string.lossless_scaling_missing,
+                        descriptionId = R.string.lossless_scaling_missing_description,
+                        isRunnable = false
+                    ) {}
+                )
+            }
+
+            add(BooleanSetting.RENDERER_FRAME_GEN.key)
+            add(IntSetting.RENDERER_FRAME_GEN_TARGET_RATE.key)
+            if (IntSetting.RENDERER_FRAME_GEN_TARGET_RATE.getInt(
+                    getNeedsGlobalForKey(IntSetting.RENDERER_FRAME_GEN_TARGET_RATE.key)
+                ) == 0
+            ) {
+                add(IntSetting.RENDERER_FRAME_GEN_MULTIPLIER.key)
+            }
+            add(IntSetting.RENDERER_FRAME_GEN_QUEUE_TARGET.key)
+            add(BooleanSetting.RENDERER_FRAME_GEN_FLOW_SCALE_AUTO.key)
+            if (!BooleanSetting.RENDERER_FRAME_GEN_FLOW_SCALE_AUTO.getBoolean(
+                    getNeedsGlobalForKey(BooleanSetting.RENDERER_FRAME_GEN_FLOW_SCALE_AUTO.key)
+                )
+            ) {
+                add(IntSetting.RENDERER_FRAME_GEN_FLOW_SCALE.key)
+            }
+        }
+    }
+
     private fun isSharpnessScalingFilterSelected(): Boolean {
         val needsGlobal = getNeedsGlobalForKey(IntSetting.RENDERER_SCALING_FILTER.key)
         val selectedFilter = IntSetting.RENDERER_SCALING_FILTER.getInt(needsGlobal)
@@ -132,6 +172,7 @@ class SettingsFragmentPresenter(
             MenuTag.SECTION_ROOT -> addConfigSettings(sl)
             MenuTag.SECTION_SYSTEM -> addSystemSettings(sl)
             MenuTag.SECTION_RENDERER -> addGraphicsSettings(sl)
+            MenuTag.SECTION_FRAME_GEN -> addFrameGenSettings(sl)
             MenuTag.SECTION_POST_PROCESSING -> addPostProcessingSettings(sl)
             MenuTag.SECTION_PERFORMANCE_STATS -> addPerformanceOverlaySettings(sl)
             MenuTag.SECTION_SOC_OVERLAY -> addSocOverlaySettings(sl)

@@ -818,8 +818,9 @@ Device::Device(VkInstance instance_, vk::PhysicalDevice physical_, VkSurfaceKHR 
     }
 
     // AMD FSR 4 runs AMD's own shaders inside AMD's runtime, which need float16 on the device.
-    // Guest shaders still follow float16_math, so the AMD float16 workaround above stays in force.
-    // Ocarina2's Ampere workaround keeps float16 on for host-only shaders on AMD too.
+    // The Ampere workaround above only concerns guest shaders: enable float16 on the device so
+    // host-only shaders (frame generation, FSR 4) may use it. The AMD and Intel workarounds turn
+    // it off for every shader, host ones included; the AMD FSR path still wants it.
     const bool fsr4_wants = device_float16 && WantsAmdFsr4(driver_id);
     host_float16_supported |= float16_math;
     if (host_float16_supported || fsr4_wants) {

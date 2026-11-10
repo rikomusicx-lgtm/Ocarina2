@@ -11,6 +11,7 @@ object Settings {
         SECTION_ROOT(R.string.advanced_settings),
         SECTION_SYSTEM(R.string.preferences_system),
         SECTION_RENDERER(R.string.preferences_graphics),
+        SECTION_FRAME_GEN(R.string.frame_gen),
         SECTION_POST_PROCESSING(R.string.post_processing),
         SECTION_PERFORMANCE_STATS(R.string.stats_overlay_options),
         SECTION_INPUT_OVERLAY(R.string.input_overlay_options),
