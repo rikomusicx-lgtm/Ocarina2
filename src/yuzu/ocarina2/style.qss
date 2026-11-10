@@ -203,17 +203,15 @@ QWidget#Ocarina2TopBar {
     border-bottom: 1px solid #1d1b28;
 }
 QToolButton#Ocarina2Avatar {
-    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-        stop: 0 #ff5a47, stop: 1 #c9241f);
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    border-radius: 20px;
-    min-width: 40px;
-    min-height: 40px;
-    max-width: 40px;
-    max-height: 40px;
+    background: #0a0a10;
+    border: 2px solid rgba(245, 196, 69, 0.55);
+    border-radius: 16px;
+    min-width: 32px;
+    min-height: 32px;
+    max-width: 32px;
+    max-height: 32px;
 }
-QToolButton#Ocarina2Avatar:hover { background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-        stop: 0 #ff7264, stop: 1 #d7322c); }
+QToolButton#Ocarina2Avatar:hover { border-color: #ffd75e; background: #100f0c; }
 QLabel#Ocarina2Wordmark {
     color: #c9c7da;
     background: transparent;
@@ -310,4 +308,199 @@ QToolButton#Ocarina2Pill:focus {
 }
 QToolButton#Ocarina2Avatar:focus {
     border: 2px solid #3fd8ff;
+}
+
+/* Quick menu (ocarina2/quick_menu.cpp): the L3+R3 emulator pause screen */
+QDialog#Ocarina2QuickMenu { background: rgba(7, 7, 13, 150); }
+QWidget#Ocarina2QuickMenuPanel {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #191725, stop: 1 #131120);
+    border: 1px solid #2b2940;
+    border-radius: 22px;
+}
+QLabel#Ocarina2QuickMenuEyebrow { color: #3fd8ff; font-size: 11px; font-weight: 800; }
+QLabel#Ocarina2QuickMenuTitle {
+    color: #f2f0f7;
+    font-size: 25px;
+    font-weight: 800;
+}
+QPushButton#Ocarina2QuickMenuItem {
+    background: transparent;
+    border: 2px solid transparent;
+    border-radius: 14px;
+    color: #e6e3ef;
+    font-size: 15px;
+    padding: 11px 14px;
+    text-align: left;
+}
+QPushButton#Ocarina2QuickMenuItem:hover { background: #201e2e; }
+QPushButton#Ocarina2QuickMenuItem:pressed { background: #272436; }
+QPushButton#Ocarina2QuickMenuItem:focus { border: 2px solid #3fd8ff; background: #1d2029; }
+QPushButton#Ocarina2QuickMenuItem:disabled { color: #54525f; }
+QPushButton#Ocarina2QuickMenuItemDanger {
+    background: transparent;
+    border: 2px solid transparent;
+    border-radius: 14px;
+    color: #ff8a80;
+    font-size: 15px;
+    padding: 11px 14px;
+    text-align: left;
+}
+QPushButton#Ocarina2QuickMenuItemDanger:hover { background: #2a1e24; }
+QPushButton#Ocarina2QuickMenuItemDanger:pressed { background: #33232b; }
+QPushButton#Ocarina2QuickMenuItemDanger:focus { border: 2px solid #ff8a80; background: #221b20; }
+QPushButton#Ocarina2QuickMenuItemDanger:disabled { color: #54525f; }
+QPushButton#Ocarina2QuickMenuResume {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #8b5cf6, stop: 1 #a78bfa);
+    border: 2px solid transparent;
+    border-radius: 15px;
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 800;
+    padding: 12px;
+}
+QPushButton#Ocarina2QuickMenuResume:hover { background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+    stop: 0 #9b6df8, stop: 1 #b59efb); }
+QPushButton#Ocarina2QuickMenuResume:focus { border: 2px solid #3fd8ff; }
+
+/* Bubbly settings (ocarina2: configure dialog + per-game configure dialog) */
+QDialog#ConfigureDialog, QDialog#ConfigurePerGame { background: #151320; }
+QDialog#ConfigureDialog QLabel, QDialog#ConfigurePerGame QLabel { color: #d8d5e6; }
+QDialog#ConfigureDialog QGroupBox, QDialog#ConfigurePerGame QGroupBox {
+    border: 1px solid #2b2840;
+    border-radius: 18px;
+    margin-top: 14px;
+    padding: 16px 14px 12px;
+    background: rgba(255, 255, 255, 0.024);
+}
+QDialog#ConfigureDialog QGroupBox::title, QDialog#ConfigurePerGame QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 14px;
+    padding: 0 8px;
+    color: #cfc9ea;
+    font-weight: 700;
+    font-size: 13px;
+}
+QDialog#ConfigureDialog QPushButton, QDialog#ConfigurePerGame QPushButton {
+    background: #221f33;
+    border: 1px solid #35324a;
+    border-radius: 14px;
+    padding: 9px 18px;
+    font-size: 13px;
+    color: #e6e3ef;
+}
+QDialog#ConfigureDialog QPushButton:hover, QDialog#ConfigurePerGame QPushButton:hover {
+    background: #2a2740;
+    border-color: #474260;
+}
+QDialog#ConfigureDialog QPushButton:pressed, QDialog#ConfigurePerGame QPushButton:pressed {
+    background: #322f4e;
+}
+QDialog#ConfigureDialog QPushButton:focus, QDialog#ConfigurePerGame QPushButton:focus {
+    border: 2px solid #9a7cf5;
+    padding: 8px 17px;
+}
+QDialog#ConfigureDialog QPushButton:default, QDialog#ConfigurePerGame QPushButton:default {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #8b5cf6, stop: 1 #a78bfa);
+    border: none;
+    color: #ffffff;
+    font-weight: 700;
+}
+QDialog#ConfigureDialog QPushButton:default:hover, QDialog#ConfigurePerGame QPushButton:default:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #9b6df8, stop: 1 #b59efb);
+}
+QDialog#ConfigureDialog QLineEdit, QDialog#ConfigureDialog QComboBox,
+QDialog#ConfigureDialog QAbstractSpinBox, QDialog#ConfigureDialog QPlainTextEdit,
+QDialog#ConfigureDialog QTextEdit,
+QDialog#ConfigurePerGame QLineEdit, QDialog#ConfigurePerGame QComboBox,
+QDialog#ConfigurePerGame QAbstractSpinBox, QDialog#ConfigurePerGame QPlainTextEdit,
+QDialog#ConfigurePerGame QTextEdit {
+    background: #1d1b2b;
+    border: 1px solid #322f47;
+    border-radius: 12px;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: #e6e3ef;
+}
+QDialog#ConfigureDialog QLineEdit:focus, QDialog#ConfigureDialog QComboBox:focus,
+QDialog#ConfigureDialog QAbstractSpinBox:focus, QDialog#ConfigurePerGame QLineEdit:focus,
+QDialog#ConfigurePerGame QComboBox:focus, QDialog#ConfigurePerGame QAbstractSpinBox:focus {
+    border: 2px solid #9a7cf5;
+    padding: 7px 11px;
+}
+QDialog#ConfigureDialog QCheckBox::indicator, QDialog#ConfigurePerGame QCheckBox::indicator {
+    width: 19px;
+    height: 19px;
+    border-radius: 7px;
+    border: 1px solid #4b4867;
+    background: #1d1b2b;
+}
+QDialog#ConfigureDialog QCheckBox::indicator:checked, QDialog#ConfigurePerGame QCheckBox::indicator:checked {
+    background: #9a7cf5;
+    border-color: #a78bfa;
+}
+QDialog#ConfigureDialog QRadioButton::indicator, QDialog#ConfigurePerGame QRadioButton::indicator {
+    width: 17px;
+    height: 17px;
+    border-radius: 9px;
+    border: 1px solid #4b4867;
+    background: #1d1b2b;
+}
+QDialog#ConfigureDialog QRadioButton::indicator:checked, QDialog#ConfigurePerGame QRadioButton::indicator:checked {
+    background: #9a7cf5;
+    border-color: #a78bfa;
+}
+QDialog#ConfigureDialog QListWidget#selectorList, QDialog#ConfigurePerGame QListWidget#selectorList {
+    background: transparent;
+    border: none;
+    outline: none;
+}
+QDialog#ConfigureDialog QListWidget#selectorList::item, QDialog#ConfigurePerGame QListWidget#selectorList::item {
+    padding: 13px 16px;
+    border-radius: 14px;
+    margin: 2px 0;
+    font-size: 15px;
+    color: #a5a2b6;
+}
+QDialog#ConfigureDialog QListWidget#selectorList::item:hover, QDialog#ConfigurePerGame QListWidget#selectorList::item:hover {
+    background: #1e1c2b;
+    color: #eceaf2;
+}
+QDialog#ConfigureDialog QListWidget#selectorList::item:selected, QDialog#ConfigurePerGame QListWidget#selectorList::item:selected {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #322a52, stop: 1 #2b2544);
+    color: #ffffff;
+    border: 1px solid #3d355a;
+}
+QDialog#ConfigureDialog QTabBar::tab, QDialog#ConfigurePerGame QTabBar::tab {
+    padding: 8px 26px;
+    margin: 2px;
+    border-radius: 13px;
+    background: transparent;
+    color: #9896ab;
+    border: none;
+    font-size: 13px;
+    font-weight: 600;
+}
+QDialog#ConfigureDialog QTabBar::tab:hover, QDialog#ConfigurePerGame QTabBar::tab:hover {
+    background: #1e1c2b;
+    color: #eceaf2;
+}
+QDialog#ConfigureDialog QTabBar::tab:selected, QDialog#ConfigurePerGame QTabBar::tab:selected {
+    background: #322a52;
+    color: #ffffff;
+    border-bottom: none;
+}
+QDialog#ConfigureDialog QTabWidget::pane, QDialog#ConfigurePerGame QTabWidget::pane { border: none; }
+QDialog#ConfigureDialog QScrollArea, QDialog#ConfigurePerGame QScrollArea { background: transparent; }
+QDialog#ConfigureDialog QScrollArea > QWidget > QWidget, QDialog#ConfigurePerGame QScrollArea > QWidget > QWidget {
+    background: transparent;
+}
+QDialog#ConfigureDialog QDialogButtonBox QPushButton, QDialog#ConfigurePerGame QDialogButtonBox QPushButton {
+    min-width: 110px;
+    padding: 10px 22px;
 }

@@ -225,6 +225,8 @@ add_executable(yuzu
     ocarina2/perf_overlay.h
     ocarina2/precompile_gate.cpp
     ocarina2/precompile_gate.h
+    ocarina2/quick_menu.cpp
+    ocarina2/quick_menu.h
     ocarina2/whats_new.cpp
     ocarina2/whats_new.h
     util/export_log.cpp

@@ -122,6 +122,7 @@ bool HostOotMaxResolutionDefault() {
 #include "ocarina2/home.h"
 #include "ocarina2/ocarina2_ui.h"
 #include "ocarina2/perf_overlay.h"
+#include "ocarina2/quick_menu.h"
 #include "util/overlay_dialog.h"
 
 #include "multiplayer/state.h"
@@ -1582,6 +1583,7 @@ void MainWindow::InitializeHotkeys() {
             ToggleFullscreen();
         }
     });
+    connect_shortcut(QStringLiteral("Open Quick Menu"), &MainWindow::OpenQuickMenu);
     connect_shortcut(QStringLiteral("Change Adapting Filter"), &MainWindow::OnToggleAdaptingFilter);
     connect_shortcut(QStringLiteral("Change Docked Mode"), &MainWindow::OnToggleDockedMode);
     connect_shortcut(QStringLiteral("Change GPU Mode"), &MainWindow::OnToggleGpuAccuracy);
@@ -5581,6 +5583,37 @@ void MainWindow::OnToggleOotFrameRate() {
     Settings::values.oot_fps_asked.SetValue(true);
     UpdateOotFpsButton();
     config->SaveAllValues();
+}
+
+void MainWindow::OpenQuickMenu() {
+    const bool was_running =
+        emulation_running && QtCommon::emu_thread && QtCommon::emu_thread->IsRunning();
+    if (was_running) {
+        OnPauseGame();
+    }
+    auto* menu = new Ocarina2Ui::QuickMenu(
+        this, Ocarina2Ui::QuickMenuHooks{
+                  .in_game = emulation_running,
+                  .toggle_frame_rate = [this] { OnToggleOotFrameRate(); },
+                  .toggle_fullscreen = [this] { ui->action_Fullscreen->trigger(); },
+                  .screenshot = [this] { ui->action_Capture_Screenshot->trigger(); },
+                  .open_settings = [this] { OnConfigure(); },
+                  .restart = [this] { ui->action_Restart->trigger(); },
+                  .stop = [this] { ui->action_Stop->trigger(); },
+              });
+    connect(menu, &QDialog::finished, this,
+            [this, was_running](int) {
+                // A restart or stop already stopped the emu thread; only resume it when the
+                // game was running when the menu opened.
+                if (was_running && emulation_running && QtCommon::emu_thread &&
+                    !QtCommon::emu_thread->IsRunning()) {
+                    OnStartGame();
+                }
+            });
+    // Modal on purpose: a windowless shortcut (e.g. the app's own Esc mapping) would
+    // otherwise swallow the keys before they ever reach the menu.
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    menu->exec();
 }
 
 void MainWindow::UpdateDockedButton() {

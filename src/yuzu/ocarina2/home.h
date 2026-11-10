@@ -71,6 +71,9 @@ private:
     QWidget* MakePage();
     void RebuildNavOrder();
     bool HandleNavKey(QKeyEvent* event);
+    /// Blurred hero-art backdrop, Switch 2 style: the cover stretched and darkened behind
+    /// everything. Falls back to the plain gradient when there is nothing to draw.
+    void RebuildBackdrop();
 
     QMainWindow* window;
     QWidget* game_list;
@@ -80,6 +83,8 @@ private:
     QWidget* rail = nullptr;
     QWidget* page = nullptr;
     QWidget* topbar = nullptr;
+    QLabel* backdrop = nullptr;
+    QPixmap hero_pixmap;
     QToolButton* avatar_button = nullptr;
     QToolButton* pill_home = nullptr;
     QToolButton* pill_games = nullptr;

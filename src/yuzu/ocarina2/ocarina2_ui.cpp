@@ -211,10 +211,11 @@ void DrawIconPath(QPainterPath& path, const QString& name) {
         path.lineTo(20.6, 13.3);
         path.lineTo(19.3, 13.3);
     } else if (name == QStringLiteral("star")) {
-        const QPointF t{12, 4.5};
+        // Centred on (12, 12): the previous one rose above the canvas and was clipped.
+        const QPointF t{12, 12.2};
         for (int i = 0; i < 10; ++i) {
             const qreal angle = (qreal(i) * 36.0 - 90.0) * 0.01745329;
-            const qreal r = (i % 2 == 0) ? 7.0 : 3.2;
+            const qreal r = (i % 2 == 0) ? 7.2 : 3.3;
             const QPointF p(t.x() + r * std::cos(angle), t.y() + r * std::sin(angle));
             if (i == 0) {
                 path.moveTo(p);
@@ -223,6 +224,22 @@ void DrawIconPath(QPainterPath& path, const QString& name) {
             }
         }
         path.closeSubpath();
+    } else if (name == QStringLiteral("timer")) {
+        path.addEllipse(QPointF(12, 13.5), 6.5, 6.5);
+        path.moveTo(12, 10.4);
+        path.lineTo(12, 13.5);
+        path.lineTo(13.8, 15.3);
+        path.moveTo(9.5, 3.6);
+        path.lineTo(14.5, 3.6);
+        path.moveTo(12, 3.6);
+        path.lineTo(12, 6.4);
+    } else if (name == QStringLiteral("camera")) {
+        path.addRoundedRect(QRectF(2.5, 8, 19, 12.5), 2.6, 2.6);
+        path.addEllipse(QPointF(12, 14.2), 3.6, 3.6);
+        path.moveTo(9, 8);
+        path.lineTo(10.2, 5);
+        path.lineTo(13.8, 5);
+        path.lineTo(15, 8);
     } else if (name == QStringLiteral("home")) {
         path.moveTo(4, 11.2);
         path.lineTo(12, 4.5);
@@ -315,6 +332,20 @@ QPixmap RenderIcon(const QString& name, const QColor& color, int px) {
         path.lineTo(8.2, 18.6);
         path.closeSubpath();
         painter.fillPath(path, color);
+        return pixmap;
+    }
+    if (name == QStringLiteral("triforce")) {
+        // Three small equilateral triangles around a hollow middle, Zelda's mark.
+        constexpr qreal R = 9.8;
+        const QPointF A{12, 12 - R}, B{12 - R * 0.866, 12 + R * 0.5}, C{12 + R * 0.866, 12 + R * 0.5};
+        const QPointF mAB((A.x() + B.x()) / 2, (A.y() + B.y()) / 2);
+        const QPointF mAC((A.x() + C.x()) / 2, (A.y() + C.y()) / 2);
+        const QPointF mBC((B.x() + C.x()) / 2, (B.y() + C.y()) / 2);
+        QPainterPath tri;
+        tri.moveTo(A); tri.lineTo(mAB); tri.lineTo(mAC); tri.closeSubpath();
+        tri.moveTo(B); tri.lineTo(mAB); tri.lineTo(mBC); tri.closeSubpath();
+        tri.moveTo(C); tri.lineTo(mAC); tri.lineTo(mBC); tri.closeSubpath();
+        painter.fillPath(tri, color);
         return pixmap;
     }
     DrawIconPath(path, name);

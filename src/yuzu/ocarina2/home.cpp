@@ -35,7 +35,7 @@ namespace Ocarina2Ui {
 namespace {
 
 constexpr u64 OcarinaOfTime = 0x0400486024DEC000ULL;
-constexpr int TileIcon = 104;
+constexpr int TileIcon = 128;
 
 struct Game {
     QString title;
@@ -254,6 +254,13 @@ QWidget* Home::MakePage() {
         ShowGameMenu(hero_path, hero_id, page->mapToGlobal(pos));
     });
 
+    backdrop = new QLabel(page);
+    backdrop->setObjectName(QStringLiteral("Ocarina2Backdrop"));
+    backdrop->setAttribute(Qt::WA_TransparentForMouseEvents);
+    backdrop->setScaledContents(true);
+    backdrop->hide();
+    page->installEventFilter(this);
+
     auto* layout = new QVBoxLayout(page);
     layout->setContentsMargins(0, 0, 0, 6);
     layout->setSpacing(0);
@@ -267,8 +274,8 @@ QWidget* Home::MakePage() {
 
     avatar_button = new QToolButton(topbar);
     avatar_button->setObjectName(QStringLiteral("Ocarina2Avatar"));
-    avatar_button->setIcon(Icon(QStringLiteral("user"), 19));
-    avatar_button->setIconSize(QSize(19, 19));
+    avatar_button->setIcon(Glyph(QStringLiteral("triforce"), 0xf5c445, 17));
+    avatar_button->setIconSize(QSize(17, 17));
     avatar_button->setToolTip(tr("Player 1 - toggle fullscreen"));
     avatar_button->setCursor(Qt::PointingHandCursor);
     avatar_button->setFocusPolicy(Qt::StrongFocus);
@@ -425,6 +432,46 @@ QWidget* Home::MakePage() {
     return page;
 }
 
+void Home::RebuildBackdrop() {
+    if (backdrop == nullptr) {
+        return;
+    }
+    if (hero_pixmap.isNull() || !page) {
+        backdrop->hide();
+        return;
+    }
+    const QSize cover = page->size();
+    if (cover.width() < 16 || cover.height() < 16) {
+        return;
+    }
+    const double scale =
+        std::max(cover.width() / double(hero_pixmap.width()),
+                 cover.height() / double(hero_pixmap.height()));
+    const QSize grown = QSize(qCeil(hero_pixmap.width() * scale), qCeil(hero_pixmap.height() * scale));
+    QPixmap big = hero_pixmap.scaled(grown, Qt::KeepAspectRatioByExpanding,
+                                     Qt::SmoothTransformation);
+    QPixmap out(cover);
+    out.fill(Qt::transparent);
+    {
+        QPainter painter(&out);
+        painter.setRenderHint(QPainter::SmoothPixmapTransform);
+        painter.drawPixmap((cover.width() - big.width()) / 2,
+                           (cover.height() - big.height()) / 2, big);
+    }
+    // Frosted: shrink then stretch back — a cheap blur good enough behind text.
+    QPixmap blurred =
+        out.scaled(QSize(std::max(1, cover.width() / 6), std::max(1, cover.height() / 6)),
+                   Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
+            .scaled(cover, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    {
+        QPainter painter(&blurred);
+        painter.fillRect(blurred.rect(), QColor(8, 8, 14, 152));
+    }
+    backdrop->setPixmap(blurred);
+    backdrop->setGeometry(page->rect());
+    backdrop->show();
+}
+
 void Home::SelectGame(const QString& path, u64 program_id, const QString& title_text) {
     hero_path = path;
     hero_id = program_id;
@@ -479,14 +526,17 @@ void Home::Refresh() {
     }
 
     if (hero) {
+        hero_pixmap = hero->icon;
         SelectGame(hero->path, hero->program_id, hero->title);
         play->setText(tr("Play"));
         play->setIcon(Glyph(QStringLiteral("play"), 0xffffff, 20));
     } else {
+        hero_pixmap = QPixmap();
         SelectGame(QString(), 0, tr("Ocarina2"));
         play->setText(tr("Add games"));
         play->setIcon(Glyph(QStringLiteral("plus"), 0xffffff, 20));
     }
+    RebuildBackdrop();
 
     // The Switch 2 row of game tiles: every game. Activating a tile boots the game;
     // right click (or the controller's X) opens the game menu.
@@ -679,6 +729,15 @@ void Home::RebuildNavOrder() {
 }
 
 bool Home::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == page) {
+        if (event->type() == QEvent::Resize || event->type() == QEvent::Show) {
+            if (backdrop) {
+                backdrop->setGeometry(page->rect());
+                RebuildBackdrop();
+            }
+            return false;
+        }
+    }
     // The main window shows its game list (start up, a game stopped, the list filled): show
     // the home page instead, unless the player asked for the full list.
     if (event->type() == QEvent::Show && (watched == game_list || watched == placeholder)) {
