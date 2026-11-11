@@ -52,6 +52,7 @@
 #include "shader_recompiler/translate_profile.h"
 #include "shader_recompiler/ir_opt/passes.h"
 #include "shader_recompiler/ir_opt/oot_visual_workaround.h"
+#include "shader_recompiler/ir_opt/oot_nan_guard.h"
 #include "shader_recompiler/program_header.h"
 #include "video_core/async_translate.h"
 #include "video_core/engines/kepler_compute.h"
@@ -706,6 +707,10 @@ PipelineCache::PipelineCache(Tegra::MaxwellDeviceMemoryManager& device_memory_,
       use_asynchronous_shaders{Settings::values.use_asynchronous_shaders.GetValue()},
       use_vulkan_pipeline_cache{Settings::values.use_vulkan_driver_pipeline_cache.GetValue() &&
                                 (!DriverCachesPipelines(device_) || AmdAppCache(device_))},
+       oot_nan_guard{[] {
+           const char* value = std::getenv("EDEN_NX2_OOT_NAN_GUARD");
+           return value != nullptr && std::string_view{value} == "1";
+       }()},
       oot_visual_workaround{[] {
           const char* value = std::getenv("EDEN_NX2_OOT_VISUAL_WORKAROUND");
           return value != nullptr && std::string_view{value} == "1";
@@ -4683,11 +4688,12 @@ std::string PipelineCache::KeptStamp(const std::string& prepared_stamp) const {
     // distances; #820 noperspective varyings, then its revert), which the sample only sees if it hits one.
     // NX2KEPT5 (v5.6): F32->S32 conversions saturate in range (zortos293/Lichii#1051), and the
     // fragment output masks are kept with the infos (Fritchii #29, AMD horizon rainbow).
-    return fmt::format("{}kept NX2KEPT5 cache {} settings {:#x} gpl {} oot {} {:016x} canonical "
+    return fmt::format("{}kept NX2KEPT5 cache {} settings {:#x} gpl {} oot {} {:016x} nan {} canonical "
                        "{}\n",
                        prepared_stamp, CACHE_VERSION, SpirvSettingsStamp(),
                        device.IsExtGraphicsPipelineLibrarySupported() ? 1 : 0,
                        oot_visual_workaround ? 1 : 0, visual_workaround_title,
+                       oot_nan_guard ? 1 : 0,
                        CanonicalKeys() ? 1 : 0);
 }
 
@@ -6338,6 +6344,13 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline(
         if (t_runtime_build) {
             t_build_split.translation += std::chrono::steady_clock::now() - translate_begin;
         }
+        if (const auto edits = Shader::Optimization::ApplyOotNaNGuard(
+                programs[index], program_id != 0 ? program_id : visual_workaround_title,
+                key.unique_hashes[index], oot_nan_guard)) {
+            LOG_WARNING(Render_Vulkan,
+                        "TEMPORARY OoT NaN guard: shader {:016x}, {} scalar edits",
+                        key.unique_hashes[index], *edits);
+        }
 
         if (const auto edits = Shader::Optimization::ApplyOotVisualWorkaround(
                 programs[index], program_id != 0 ? program_id : visual_workaround_title,
@@ -7456,7 +7469,14 @@ ComputePipelineCacheEntry PipelineCache::CreateComputePipeline(
         env.Dump(hash, key.unique_hash);
     }
 
-    auto program{TranslateProgram(pools.inst, pools.block, env, cfg, host_info)};
+    auto program{TranslateProgram(pools.inst, pools.block, env, cfg, host_info)};    if (const auto edits = Shader::Optimization::ApplyOotNaNGuard(
+            program, program_id != 0 ? program_id : visual_workaround_title, key.unique_hash,
+            oot_nan_guard)) {
+        LOG_WARNING(Render_Vulkan,
+                    "TEMPORARY OoT NaN guard: shader {:016x}, {} scalar edits", key.unique_hash,
+                    *edits);
+    }
+
     if (const auto edits = Shader::Optimization::ApplyOotVisualWorkaround(
             program, program_id != 0 ? program_id : visual_workaround_title, key.unique_hash,
             oot_visual_workaround)) {

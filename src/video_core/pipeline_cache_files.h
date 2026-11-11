@@ -28,7 +28,7 @@ inline constexpr u32 OpenGLPipelineCacheVersion = 48;
 /// so they are not migrated. 55 was ours KeyedAttributeTypes (#408), written identically to
 /// Ocarina2's 54, so shared caches and #895 recipes of 54 are taken as they are.
 /// Moving to a later format is this number plus VulkanOwnPreviousVersions.
-inline constexpr u32 VulkanPipelineCacheVersion = 56;
+inline constexpr u32 VulkanPipelineCacheVersion = 57;
 /// This fork's earlier versions of the same record format, newest first: their files are copied
 /// once to the current version's names (header version rewritten; records unchanged).
 inline constexpr std::array<u32, 2> VulkanOwnPreviousVersions{54, 52};

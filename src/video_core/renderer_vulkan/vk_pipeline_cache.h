@@ -562,6 +562,7 @@ private:
     VideoCore::ShaderNotify& shader_notify;
     bool use_asynchronous_shaders{};
     bool use_vulkan_pipeline_cache{};
+    bool oot_nan_guard{};
     bool oot_visual_workaround{};
     u64 visual_workaround_title{};
     const size_t num_pipeline_workers;
