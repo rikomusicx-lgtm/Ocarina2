@@ -731,6 +731,30 @@ if (MSVC AND CXX_CLANG)
     link_libraries(llvm-mingw-runtime)
 endif()
 
+# rc.exe (resource compilation) does not always locate the Windows SDK's include directories
+# on its own; pass them explicitly so the .rc files build everywhere. The registry lists the SDK
+# root, but some setups' rc.exe just can't find winresrc.h without these.
+if (WIN32)
+    set(_win_kit_roots "$ENV{ProgramFiles\(x86\)}/Windows Kits/10/Include" "$ENV{ProgramFiles}/Windows Kits/10/Include" "C:/Program Files (x86)/Windows Kits/10/Include" "C:/Program Files/Windows Kits/10/Include")
+    foreach(_root IN LISTS _win_kit_roots)
+        if (EXISTS "${_root}")
+            file(GLOB _kit_versions RELATIVE "${_root}" "${_root}/*")
+            list(SORT _kit_versions COMPARE NATURAL ORDER DESCENDING)
+            list(LENGTH _kit_versions _kit_count)
+            if (_kit_count GREATER 0)
+                list(GET _kit_versions 0 _kit_version)
+                foreach(_sub IN ITEMS um shared ucrt)
+                    set(_kit_subdir "${_root}/${_kit_version}/${_sub}")
+                    if (EXISTS "${_kit_subdir}")
+                        string(APPEND CMAKE_RC_FLAGS " /I \"${_kit_subdir}\"")
+                    endif()
+                endforeach()
+                message(STATUS "[RC] Windows SDK include paths ${_kit_version} (um, shared, ucrt)")
+            endif()
+        endif()
+    endforeach()
+endif()
+
 add_subdirectory(src)
 
 if (ENABLE_DEBUG_TOOLS)
