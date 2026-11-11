@@ -582,3 +582,73 @@ other sub-4K outputs) fits NGX and lets the replacement engage. The nvidia_dlss 
 on 6 GB cards DLSS only fits at 1080p-or-below output. `EDEN_NX2_GRAPHICS_SCALE=20` (1440p output)
 is documented in dist/nx2_switches.txt as the lever to shrink the output. Preset K stays forced for
 every mode (M/L draws thin lines in Fire Emblem at 2x scale).
+
+
+## 2026-11-11 - the "Link turns into bright light" flash: IN PROGRESS, NOT FIXED
+
+Status of the glow/white-flash artifact on investigated/fsr3-fg. It is being
+worked on, it is not fixed, and any build you see with the guard in it is a
+test build - not a solution.
+
+What is known, in the order it was learned:
+
+- The flash happens at the Kokiri load-in, on hitch frames. The game is not
+  crashed when it happens; HUD still renders; the world blows out.
+- A captured flash frame (capture-1794369252-001, frame 3932) shows the
+  velocity/motion buffer with 3,195 NaN texels of 74,336 and max 14,272
+  (clean frame: exactly 0; white-out frame: 0 too but everything else pegged
+  at format max). The resolve/glow chain fans NaN out to a white-out.
+- A captured white-out frame (capture-1794367830-001, frame 2214) shows the
+  whole glow/fog/HDR chain pegged at the B10G11R11/R16G16B16A16 ceilings;
+  half the scene surface holds stale stripe garbage; the exposure feedback
+  latches; the game eventually stops presenting.
+- The Kokiri load-in is also when the pending-write trace spiked (41 hits per
+  10 s at 120 s to 5,960 per 10 s at 130 s) - the same stale-CPU-write family
+  as the water flicker.
+- Every flash report points at the same family of passes going 2-22x over
+  their neighbors: the bloom chain (55dbc0e56184236b+017ecb55c0c058c7), a
+  432x240 HDR pass (deca253405f92330+29a6643e..., up to 12.1x), and the
+  log-bloom final (bded5ce917183214 - the pass OOT_VISUAL_WORKAROUND.md
+  already edits, gated by EDEN_NX2_OOT_VISUAL_WORKAROUND=1).
+
+What has been applied on this branch (cherry-picked from upstream/nx2,
+none of which fixes the flash):
+
+- #692 cf4c470117 (TC MIB cap at device budget), #718 ccce17e4d9 (occlusion
+  query reset cap 4 banks), #264 1a94e51f63 (read-trap arming), #817
+  784cbb3924 (skip uploads overwritten by join copies), #818 9ab4690978
+  (stale guest memory / StalePages, env-gated default off), #1210
+  d94d16b0ea (host commit memory limit; OoT OOM), #778 57b5f4aee8 (Frizti
+  v4 import; page_filter fix taken - out-of-range marks are now untracked
+  instead of poisoning the filter). #910 skipped (needs SampledTextureMemo),
+  #699 skipped (this fork already implements it as clear_variant).
+
+What has been tried for the flash itself (it is env-gated, opt-in, test
+builds only: EDEN_NX2_OOT_NAN_GUARD=1):
+
+- A translation-time guard (src/shader_recompiler/ir_opt/oot_nan_guard.h)
+  clamps the velocity pass (885ac67a.../23c42939.../df0bc0a65c87f552) and
+  companions: NaN becomes 0, +-Inf/huge becomes +-1024. The measured build
+  logged edits: eae2677b666c08a9 5 edits, 23c42939fea640ad 2 edits,
+  92b7f9d9f1726b50 2 edits.
+- One relaunch with the guard showed 1 alternating-frame event in the whole
+  session vs the constant storm before it, and Kokiri rendering clean.
+- One load-in flare still fired: frame 10779 (~221 s), 13 tiles, ghost/dirt
+  mip chain (8e97cea098cfdbc6+ee1273e135cf7577, 128x67), finite values,
+  not NaN. THE FLASH IS NOT FIXED. The guard is a probe, not a cure, and the
+  white-out end state has not been excluded. Do not report it fixed.
+
+Next steps, if picked up:
+
+1. Make the guard always-on after owner validation (or extend it to the
+   ghost chain, same idiom).
+2. The remaining load-in flare needs the ghost/dirt chain clamped the same
+   way (shader hashes 8e97cea098cfdbc6, 7abdd0a2c4698e50, e6f57a6a5c523021,
+   f2b14c43ca0e4300).
+3. The Kokiri ~10 s "menu" hold at boot is the game's own scripted hold
+   (working set +~0.9 GB around it, decoder idle, no thread saturated).
+   Not emulation; not fixed; do not attempt to remove it blindly.
+4. There are upstream fork bugs to report separately: EDEN_NX2_FRAME_DUMP_PAIR
+   wedges the frame dumper (pair capture always fails "cannot write" and never
+   re-arms); the SAMPLED frame dump records only passes 0-44 (stops at draw
+   ~1232 of ~2183), so it cannot currently see the scene/fog passes.
