@@ -469,3 +469,18 @@ QDialog#ConfigureDialog QDialogButtonBox QPushButton, QDialog#ConfigurePerGame Q
     min-width: 110px;
     padding: 10px 22px;
 }
+
+/* The Saves button in the home top bar: a quiet dark pill. */
+QPushButton#Ocarina2Link {
+    background: #1b1b1f;
+    color: #ececf1;
+    border: none;
+    border-radius: 17px;
+    min-height: 34px;
+    max-height: 34px;
+    padding: 0 16px;
+    font-size: 14px;
+    font-weight: 500;
+}
+QPushButton#Ocarina2Link:hover { background: #26222f; }
+QPushButton#Ocarina2Link:pressed { background: #1f1b2e; }

@@ -6,5 +6,7 @@
         <file>whats-new.md</file>
         <file>fonts/Inter-Regular.ttf</file>
         <file>fonts/Inter-Medium.ttf</file>
+        <file>icons/community.svg</file>
+        <file>icons/heart.svg</file>
     </qresource>
 </RCC>

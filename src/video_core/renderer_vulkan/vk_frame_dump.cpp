@@ -9,6 +9,7 @@
 #include <limits>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include <fmt/format.h>
 
@@ -20,6 +21,7 @@
 #include "common/zstd_compression.h"
 #include "video_core/nx2_debug_control.h"
 #include "video_core/renderer_vulkan/maxwell_to_vk.h"
+#include "video_core/nx2_debug_control.h"
 #include "video_core/renderer_vulkan/vk_frame_dump.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_texture_cache.h"
@@ -279,6 +281,17 @@ void FrameDump::StopWriter() {
     queue_ready.notify_one();
     writer.join();
     stop_writer = false;
+}
+
+bool FrameDump::RequestNow(u64 id, const std::filesystem::path& dir, bool buffers, bool host) {
+    if (Capturing()) {
+        return false;
+    }
+    // Arm refuses while a capture runs and tells the caller; the Capturing() check covers the
+    // usual case, and Arm's error path (busy) would already have told the server.
+    host_copies = host;
+    Arm(std::move(dir), buffers, buffers, id);
+    return true;
 }
 
 void FrameDump::Arm(std::filesystem::path directory_, bool sampled, bool buffers, u64 id) {
@@ -941,15 +954,17 @@ void FrameDump::WriteFile(const std::string& name, std::span<const u8> data) {
     written_bytes += data.size();
 }
 
-void FrameDump::Rearm() {
-    // File trigger: each new capture.now takes another capture, into capture-2, capture-3...
+void FrameDump::ResetAfterCapture() {
     {
         std::scoped_lock lock{queue_mutex};
         stop_writer = true;
     }
     queue_ready.notify_one();
-    writer.join();
+    if (writer.joinable()) {
+        writer.join();
+    }
     stop_writer = false;
+    host_copies = false;
     std::error_code error;
     std::filesystem::remove(schedule.TriggerFile(), error);
     probes.clear();
@@ -966,6 +981,13 @@ void FrameDump::Rearm() {
     seen_buffers.clear();
     written_buffers.clear();
     pass_index = pass_first_draw = draws = dispatches = 0;
+}
+
+void FrameDump::Rearm() {
+    // File trigger: each new capture.now takes another capture, into capture-2, capture-3...
+    ResetAfterCapture();
+    std::error_code error;
+    std::filesystem::remove(trigger_file, error);
     directory = base_directory / fmt::format("capture-{}", ++captures + 1);
     LOG_INFO(Render_Vulkan, "Frame dump re-armed: the next capture.now captures into {}",
              directory.string());
@@ -1006,6 +1028,13 @@ void FrameDump::TickFrame() {
                                      draws, dispatches),
                  .summary = true,
                  .truncated = truncated});
+        if (const u64 id = schedule.CaptureId(); id != 0) {
+            // capture_frame: answer once every file is on disk; a boot trigger stays as it was.
+            host_copies = false;
+            ResetAfterCapture();
+            VideoCore::Nx2Debug::FinishCapture(id, {});
+            return;
+        }
         if (schedule.FileTriggered()) {
             if (pair && !pair_active) {
                 pair_active = true;
@@ -1032,6 +1061,7 @@ void FrameDump::TickFrame() {
     if (!manifest) {
         LOG_ERROR(Render_Vulkan, "Frame dump: cannot write {}", directory.string());
         if (const u64 id = schedule.CaptureId(); id != 0) {
+            host_copies = false;
             VideoCore::Nx2Debug::FinishCapture(
                 id, {.error = fmt::format("cannot write {}", directory.generic_string())});
         }

@@ -53,7 +53,8 @@ inline void SetOcarinaOfTimePerformanceSettings(Values& settings, bool global,
     };
     session(settings.renderer_backend, RendererBackend::Vulkan);
     // The preset mirrors the owner's tuned handheld Ocarina of Time session: Fast GPU mode
-    // with immediate fences/VSync and unsafe DMA reads, 8 GB guest layout, aggressive VRAM
+    // with immediate fences/VSync and unsafe DMA reads, the host-adaptive guest layout
+    // (12 GB on 16 GB+ machines, else 8 GB), aggressive VRAM
     // usage and Force Max Clock.
     session(settings.resolution_setup, ResolutionSetup::Res1X);
     session(settings.gpu_accuracy, GpuAccuracy::Low);

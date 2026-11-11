@@ -37,6 +37,7 @@
 #include "common/logging.h"
 #include "qt_common/game_list/game_list_p.h"
 #include "yuzu/ocarina2/ocarina2_ui.h"
+#include "yuzu/ocarina2/saves_window.h"
 #include "yuzu/ocarina2/whats_new.h"
 
 namespace Ocarina2Ui {
@@ -347,6 +348,16 @@ QWidget* Home::MakePage() {
                     Qt::AlignVCenter);
     topb->addWidget(makeTopIcon(QStringLiteral("gamepad"), tr("Pro Controller")), 0,
                     Qt::AlignVCenter);
+    // Fritchii v5.8.3: the Saves window (export, import, copy saves between Ocarina2, Eden and
+    // Lichii). In the top bar, next to the other system buttons.
+    auto* saves = new QPushButton(Icon(QStringLiteral("list"), 16), tr("Saves"), topbar);
+    saves->setObjectName(QStringLiteral("Ocarina2Link"));
+    saves->setIconSize(QSize(16, 16));
+    saves->setCursor(Qt::PointingHandCursor);
+    saves->setFocusPolicy(Qt::NoFocus);
+    connect(saves, &QPushButton::clicked, this,
+            [this] { ShowSavesWindow(window, hooks.emulation_running); });
+    topb->addWidget(saves, 0, Qt::AlignVCenter);
     clock_label = new QLabel(topbar);
     clock_label->setObjectName(QStringLiteral("Ocarina2Clock"));
     clock_label->setText(QDateTime::currentDateTime().toString(QStringLiteral("h:mm AP")));

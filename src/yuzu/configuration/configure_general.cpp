@@ -49,8 +49,8 @@ ConfigureGeneral::ConfigureGeneral(const Core::System& system_,
         ui->button_reset_defaults->setVisible(false);
     } else if (Ocarina2Ui::Enabled()) {
         // Reset goes back to Fritchii's own settings after saving a backup; this brings one back.
-        ui->button_reset_defaults->setText(tr("Reset to Defaultsâ€¦"));
-        auto* const restore = new QPushButton(tr("Restore Settingsâ€¦"), this);
+        ui->button_reset_defaults->setText(tr("Reset to Defaults…"));
+        auto* const restore = new QPushButton(tr("Restore Settings…"), this);
         if (auto* const row = qobject_cast<QBoxLayout*>(
                 ui->button_reset_defaults->parentWidget()->layout())) {
             row->insertWidget(row->indexOf(ui->button_reset_defaults) + 1, restore);

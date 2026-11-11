@@ -59,7 +59,7 @@ TEST_CASE("OOT 60 FPS preset restores Max Resolution and enables frame generatio
         *settings, Settings::OcarinaOfTimeProgramId, true, true));
     CHECK(settings->frame_gen.GetValue());
     CHECK(settings->frame_gen_type.GetValue() == Settings::FrameGenType::Fsr3);
-    CHECK(settings->frame_gen_multiplier.GetValue() == 2);
+    CHECK(settings->frame_gen_multiplier.GetValue() == 3);
     CHECK(settings->frame_gen_target_rate.GetValue() == 60);
     CHECK(settings->oot_dynamic_fps_preset_enabled);
     CHECK(settings->oot_preflush_preset_enabled);
@@ -79,7 +79,10 @@ TEST_CASE("OOT 60 FPS preset restores Max Resolution and enables frame generatio
     CHECK(settings->use_reactive_flushing.GetValue() == false);
     CHECK(settings->nvidia_dlss.GetValue() == false);
     CHECK(settings->post_shader_enabled.GetValue() == false);
-    CHECK(settings->memory_layout_mode.GetValue() == Settings::MemoryLayout::Memory_4Gb);
+    const u64 host_ram = Common::GetMemInfo().TotalPhysicalMemory;
+    const auto expected_layout = host_ram >= (u64{16} << 30) ? Settings::MemoryLayout::Memory_12Gb
+                                                             : Settings::MemoryLayout::Memory_8Gb;
+    CHECK(settings->memory_layout_mode.GetValue() == expected_layout);
     CHECK(settings->cpu_accuracy.GetValue() == Settings::CpuAccuracy::Unsafe);
     CHECK(settings->use_docked_mode.GetValue() == Settings::ConsoleMode::Handheld);
     CHECK(settings->oot_split_disabled);

@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <QApplication>
+#include <QMessageBox>
+#include <cstdlib>
+#include <exception>
 
 #include "common/fs/fs_paths.h"
 #include "common/fs/path_util.h"
@@ -267,10 +270,15 @@ int main(int argc, char* argv[]) {
     // generating shaders
     setlocale(LC_ALL, "C");
 
-    MainWindow main_window{has_broken_vulkan};
-    // After settings have been loaded by GMainWindow, apply the filter
-    main_window.show();
-
-    app.connect(&app, &QGuiApplication::applicationStateChanged, &main_window, &MainWindow::OnAppFocusStateChanged);
-    return app.exec();
+    try {
+        MainWindow main_window{has_broken_vulkan};
+        main_window.show();
+        app.connect(&app, &QGuiApplication::applicationStateChanged, &main_window,
+                    &MainWindow::OnAppFocusStateChanged);
+        return app.exec();
+    } catch (const std::exception& exception) {
+        QMessageBox::critical(nullptr, QObject::tr("Fritchii startup stopped"),
+                              QString::fromUtf8(exception.what()));
+        return EXIT_FAILURE;
+    }
 }

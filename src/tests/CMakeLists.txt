@@ -9,6 +9,7 @@ add_executable(tests
     video_core/vulkan_overlay_filter.cpp
     video_core/buffer_cache_ports.cpp
     video_core/unswizzle_workers.cpp
+    video_core/block_linear_swizzle.cpp
     video_core/aftermath_dump.cpp
     video_core/gpu_timestamp.cpp
     core/nx2_streamplay.cpp
@@ -45,6 +46,8 @@ add_executable(tests
     video_core/storage_write_extent.cpp
     video_core/storage_buffer_control_flow.cpp
     core/nup_validation.cpp
+    core/nx_archive.cpp
+    frontend_common/nx_archive.cpp
     input_common/calibration_lifetime.cpp
     input_common/tas_input.cpp
     video_core/ampere_logged_numeric.cpp
@@ -65,6 +68,7 @@ add_executable(tests
     video_core/host_memory_limit.cpp
     video_core/fire_emblem_upscale.cpp
     video_core/dlss_contract.cpp
+    video_core/dlss_mode.cpp
     video_core/ampere_fast_fusion.cpp
     video_core/ampere_async_copy.cpp
     video_core/ampere_trap_guards.cpp
@@ -131,6 +135,7 @@ add_executable(tests
     common/cityhash.cpp
     common/container_hash.cpp
     common/core_pinning.cpp
+    common/data_directories.cpp
     common/event.cpp
     common/fibers.cpp
     common/fs_iterate.cpp
@@ -206,6 +211,9 @@ if (TARGET dynarmic::dynarmic)
     target_link_libraries(tests PRIVATE dynarmic::dynarmic)
 endif()
 
+target_compile_definitions(tests PRIVATE
+    LICHII_NX_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/core/nx_fixtures")
+
 add_test(NAME tests COMMAND tests)
 
 if (TARGET SDL3::SDL3)
@@ -213,6 +221,10 @@ if (TARGET SDL3::SDL3)
     target_link_libraries(sdl_window_state_tests PRIVATE SDL3::SDL3 Catch2::Catch2WithMain)
     add_test(NAME sdl_window_state_tests COMMAND sdl_window_state_tests)
 endif()
+add_executable(profile_migration_tests
+    common/profile_migration.cpp)
+target_link_libraries(profile_migration_tests PRIVATE common Catch2::Catch2WithMain)
+add_test(NAME profile_migration_tests COMMAND profile_migration_tests)
 
 if (WIN32 AND ARCHITECTURE_x86_64)
     add_executable(event_wait_probe ../../tools/nx2/event_wait_probe.cpp)
@@ -237,6 +249,12 @@ if (NOT ANDROID)
     target_link_libraries(config_tests PRIVATE common SimpleIni::SimpleIni Catch2::Catch2WithMain
         ${PLATFORM_LIBRARIES})
     add_test(NAME config_tests COMMAND config_tests)
+    add_executable(profile_import_tests
+        frontend_common/profile_import.cpp
+        ../frontend_common/profile_import.cpp)
+    target_link_libraries(profile_import_tests PRIVATE common SimpleIni::SimpleIni
+        Catch2::Catch2WithMain ${PLATFORM_LIBRARIES})
+    add_test(NAME profile_import_tests COMMAND profile_import_tests)
 endif()
 
 # needed for vma

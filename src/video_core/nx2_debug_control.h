@@ -1,4 +1,4 @@
-﻿// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
+// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
@@ -6,7 +6,6 @@
 #include <atomic>
 #include <cstdlib>
 #include <chrono>
-#include <cstdlib>
 #include <filesystem>
 #include <optional>
 #include <span>
@@ -48,10 +47,6 @@ inline std::atomic<int> g_dma_wait_writers{-1};
 /// semaphore acquires without draining the back
 /// when the value is already met and no queued write overlaps it (puller.cpp).
 inline std::atomic<int> g_sem_fast{-1};
-/// EXPERIMENT (not for nx2): EDEN_NX2_LIST_FAST=1, command list entries skip the wait for queued
-/// compute and copies while no page was newly GPU-written for 2 s; =2 also checks each skipped
-/// entry on the back and logs misses (dma_pusher.cpp).
-inline std::atomic<int> g_list_fast{-1};
 /// TEST: EDEN_NX2_LIST_VERIFY=1 (live), each command list the split's front reads on GPU-written
 /// pages is read again as before EXP40 and compared (video_core/nx2_list_verify.h; "list
 /// verify" every 10 s). Changes timing: the front waits for every writer again for each list.
@@ -63,10 +58,8 @@ inline std::atomic<int> g_loop_skip{-1};
 
 /// EDEN_NX2_DMA_SNAPSHOT (from EvilOOT's dma-snapshot fix): macro DMA reads of pages a drained
 /// read flushed whole skip the drain while nothing sent since may write them (Maxwell3D::
-/// FrontDmaRead) and no 3D draw was sent since (draws may write storage buffers); the query
-/// cache must also list no report there. 9 = on (default: Lake Hylia 46.5 -> 52.3 fps; verify 0
-/// differences in 235k reads with EDEN_NX2_DMA_SNAPSHOT=10), 10 = on and verify every skipped
-/// read against the drained path, 0 = off.
+/// FrontDmaRead). 9 = on (default: Lake Hylia 46.5 -> 52.3 fps; verify 0 differences in 235k
+/// reads), 10 = on and verify every skipped read against the drained path, 0 = off.
 inline std::atomic<int> g_dma_snapshot{-1};
 
 /// EDEN_NX2_ACCURATE_PARTS (bit mask, 0 = none, read once at boot): parts of GPU accuracy High in
@@ -82,17 +75,19 @@ inline std::atomic<int> g_dma_snapshot{-1};
     return Settings::IsGPULevelHigh() || (parts & part) != 0;
 }
 
-/// Whether fences run their callbacks (fence-timed releases among them) once the host GPU
-/// passed the work before them, not when made (FenceManager::DelayFences).
+/// Whether fences run their callbacks (fence-timed releases among them) once the host GPU passed
+/// the work before them, not when made (FenceManager::DelayFences).
 [[nodiscard]] inline bool DelayedFences() {
     return Settings::IsGPUFenceBehaviorDefault()
                ? AccuratePart(16)
                : Settings::IsGPUFenceBehaviorBalanced() || Settings::IsGPUFenceBehaviorAccurate();
 }
+
 /// EDEN_NX2_HOST_PACE: the host frame pacer (vk_host_pacer.h). 1 = on (default), 0 = only
 /// measure how long each frame was shown.
 inline std::atomic<int> g_host_pace{-1};
 
+/// EDEN_NX2_ARB_SPIN (zortos293/Lichii#641; off by default here, #641 uses 8): microseconds a
 /// guest thread about to sleep in WaitForAddress first watches the word (KAddressArbiter), 0 =
 /// off. Live: read on every wait, so profile_toggle.py can A/B it in one session.
 inline std::atomic<int> g_arb_spin{-1};
@@ -430,6 +425,11 @@ inline void LoadExperiments() {
         // the last submit. Castle Town live toggle: empty submits 4,600 -> 145 a second, 43.0 ->
         // 45.6 fps (3 of 4 pairs, the 4th a tie), GPU thread split drain 432 -> 396 ms/s.
         g_experiments[61].store(1, std::memory_order_relaxed);
+        // EXP49 = 1 (2026-11-10, owner's call for v5.7): the async read-back. Stalchild fight,
+        // flipped every 30 s while the owner fought: 51.9 -> 56.9 fps, the back's read flushes
+        // 35 -> 6 ms/s, guest lock waits halved. No beams in that session or two later ones
+        // played with it on from boot.
+        g_experiments[49].store(1, std::memory_order_relaxed);
         // EXP39 = 3: publish to a back that waits after 8 words, no snapshot refresh of entries
         // that ran (zortos293/Lichii#805 62db242b34; see the EXP39 notes above). Timing only.
         g_experiments[39].store(3, std::memory_order_relaxed);
@@ -475,9 +475,6 @@ inline void LoadExperiments() {
     }
     if (name == "EDEN_NX2_SEM_FAST") {
         return &g_sem_fast;
-    }
-    if (name == "EDEN_NX2_LIST_FAST") {
-        return &g_list_fast;
     }
     if (name == "EDEN_NX2_DMA_SNAPSHOT") {
         return &g_dma_snapshot;

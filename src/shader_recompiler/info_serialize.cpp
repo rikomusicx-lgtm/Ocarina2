@@ -17,6 +17,7 @@ namespace {
 // StorageWriteExtent is ocarina2's (storage buffer stores bound), visited via VisitWriteExtent.
 // A new field here also needs VulkanPipelineCacheVersion (pipeline_cache_files.h) bumped, so kept
 // files written before it are rebuilt.
+// Bump Magic in vk_precompiled_kept.cpp when this layout changes.
 #if defined(_MSC_VER) && defined(_WIN64)
 static_assert(sizeof(Info) == 6960,
               "Shader::Info changed: list the new fields in VisitInfo, then update this size");

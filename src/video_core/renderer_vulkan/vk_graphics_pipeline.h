@@ -187,6 +187,16 @@ public:
         return stage_infos[NUM_STAGES - 1].uses_demote_to_helper_invocation;
     }
 
+    /// Color components of a render target the fragment shader writes, as VkColorComponentFlags
+    VkColorComponentFlags ColorOutputMask(size_t render_target) const noexcept {
+        return (color_output_mask >> (render_target * 4)) & 0xF;
+    }
+
+    /// Color components the fragment shader writes, 4 bits per render target
+    u32 ColorOutputMask() const noexcept {
+        return color_output_mask;
+    }
+
     bool UsesExtendedDynamicState() const noexcept {
         return key.state.extended_dynamic_state != 0;
     }
@@ -428,6 +438,7 @@ private:
     bool fragment_has_color0_output{};
     u32 color_output_mask{};
     u32 zero_texture_handles{};
+    u32 color_output_mask{};
     bool writes_storage{};
     TextureMemo texture_memo;
 

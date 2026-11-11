@@ -26,6 +26,7 @@
 
 #include "common/alignment.h"
 #include "common/memory_detect.h"
+#include "common/memory_detect.h"
 #include "common/scope_exit.h"
 #include "common/settings.h"
 #include "common/slot_vector.h"
@@ -386,7 +387,20 @@ void TextureCache<P>::ApplyThresholdOverrides(bool log) {
         (std::min)(expected_memory, critical_memory - (std::min)(critical_memory, u64{768_MiB}));
     minimum_memory =
         (std::min)(minimum_memory, expected_memory - (std::min)(expected_memory, u64{1_GiB}));
-    // EDEN_NX2_TC_EXPECTED_MIB / EDEN_NX2_TC_CRITICAL_MIB raise the collector's thresholds past
+    // EDEN_NX2_TC_CEILING_MIB: a ceiling for the critical threshold (expected 1.5 GiB under it),
+    // which only ever lowers them, so cards with a smaller budget keep theirs. Fritchii builds it
+    // in at 7680 (2026-11-10, owner's playtests: 16 GB card, VRAM 10 -> ~6 GB, 4-6 GB of RAM kept
+    // free instead of ~1.5 since Windows charges device memory to commit, 58.8 fps over 30 min).
+    if (const char* value = std::getenv("EDEN_NX2_TC_CEILING_MIB")) {
+        const u64 ceiling = std::strtoull(value, nullptr, 10) << 20;
+        if (ceiling >= 2_GiB) {
+            critical_memory = (std::min)(critical_memory, ceiling);
+            expected_memory = (std::min)(expected_memory, ceiling - 1536_MiB);
+            minimum_memory = (std::min)(minimum_memory,
+                                        expected_memory - (std::min)(expected_memory, u64{1_GiB}));
+        }
+    }
+    // EDEN_NX2_TC_EXPECTED_MIB / EDEN_NX2_TC_CRITICAL_MIB override the collector's thresholds past
     // MaxCriticalMemory, but never past what the device budget allows: set outright, they kept
     // the cache above a shrinking budget (other programs' video memory, out-of-memory margins) and
     // the driver paged (drops to 9 fps on an 8 GB card in Ocarina's Kokiri Forest).
@@ -474,8 +488,11 @@ void TextureCache<P>::TickFrame() {
                     }
                     critical_memory =
                         budget - (std::min)(margin + pressure_margin + slack_margin, budget / 2);
-                    // The device's budget is not all the room there is: see HostCriticalMemory.
-                    // The usage is the driver's, which still counts images waiting to be freed.
+                    // zortos293/Lichii#1210: the device's budget is not all the room there is.
+                    // Windows charges device memory to the system's commit limit, so the cache
+                    // may also hold no more than the device memory in use plus the commit still
+                    // free, less 2 GiB (HostCriticalMemory; an OoT out-of-memory crash on a PC
+                    // with 16 GiB of RAM). The usage is the driver's.
                     const std::optional<u64> commit_room = Common::GetSystemCommitRoom();
                     const u64 host_critical =
                         commit_room
@@ -968,6 +985,40 @@ void TextureCache<P>::SweepColdImages() {
                  cold_kept_guarded, cold_kept_read, cold_watch.size(), slot_images.size(),
                  total_used_memory >> 20, expected_memory >> 20);
         cold_deleted = cold_kept_guarded = cold_kept_read = cold_superseded = 0;
+        // The image families made in those frames, most made first (fable52_answer_13 sec. 6).
+        std::vector<std::pair<std::pair<u32, u32>, const MadeShapes*>> families;
+        u64 made_total = 0;
+        for (const auto& [key, shapes] : made_shapes) {
+            families.emplace_back(key, &shapes);
+            made_total += shapes.made;
+        }
+        if (made_total != 0) {
+            std::ranges::sort(families, [](const auto& a, const auto& b) {
+                return a.second->made > b.second->made;
+            });
+            std::string text;
+            for (size_t i = 0; i < (std::min)(families.size(), size_t{6}); ++i) {
+                const auto& [key, shapes] = families[i];
+                const auto [low, high] = std::ranges::minmax(shapes->heights);
+                text += fmt::format("{}format {} width {}: {} made, {} heights {}-{}",
+                                    i == 0 ? "" : "; ", key.first, key.second, shapes->made,
+                                    shapes->heights.size(), low, high);
+            }
+            LOG_INFO(HW_GPU, "Images made in the last 600 frames: {} in {} (format, width) "
+                             "families; most made: {}",
+                     made_total, families.size(), text);
+        }
+        made_shapes.clear();
+    }
+}
+
+template <class P>
+void TextureCache<P>::NoteMadeShape(const ImageInfo& info) {
+    auto& shapes = made_shapes[{static_cast<u32>(info.format), info.size.width}];
+    ++shapes.made;
+    if (shapes.heights.size() < 64 &&
+        std::ranges::find(shapes.heights, info.size.height) == shapes.heights.end()) {
+        shapes.heights.push_back(info.size.height);
     }
 }
 
@@ -3682,6 +3733,20 @@ ImageId TextureCache<P>::JoinImages(const ImageInfo& info, GPUVAddr gpu_addr, DA
         const u32 width = new_info.size.width;
         const u32 height = new_info.size.height;
         if (!ClearCovers(width, height)) {
+            // EXP7: the numbers, for the per-object depth targets whose width is padded to
+            // 16 (fable52_answer_4: is the clear only a few pixels of padding short?).
+            static std::atomic<u32> clear_cover_logged{};
+            if (VideoCore::Nx2Debug::Experiment(7) != 0 &&
+                clear_cover_logged.fetch_add(1, std::memory_order_relaxed) < 40) {
+                const auto& scissor = regs.scissor_test[0];
+                LOG_WARNING(HW_GPU,
+                            "Clear rule: scissor ({},{})-({},{}) vs new image format {} "
+                            "{}x{} at {:#x} (clip {}x{})",
+                            scissor.min_x.Value(), scissor.min_y.Value(),
+                            scissor.max_x.Value(), scissor.max_y.Value(),
+                            static_cast<u32>(new_info.format), width, height, gpu_addr,
+                            regs.surface_clip.width.Value(), regs.surface_clip.height.Value());
+            }
             return (clear_refusal = "does not cover the target", false);
         }
         // The clear covers the framebuffer's render area, the smallest bound target.
@@ -3815,6 +3880,7 @@ ImageId TextureCache<P>::JoinImages(const ImageInfo& info, GPUVAddr gpu_addr, DA
     const auto create_start = std::chrono::steady_clock::now();
     const ImageId new_image_id = slot_images.insert(runtime, new_info, gpu_addr, cpu_addr);
     rt_stats.create_ns += NsSince(create_start);
+    NoteMadeShape(new_info);
     if constexpr (requires(const Image& image) { image.FromPool(); }) {
         rt_stats.pooled_images += slot_images[new_image_id].FromPool() ? 1 : 0;
         Churn::Add(Churn::ImagesPooled, slot_images[new_image_id].FromPool() ? 1 : 0);
