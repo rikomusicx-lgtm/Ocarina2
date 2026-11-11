@@ -748,3 +748,29 @@ Owner's v1 edits, all in (each its own commit, on merge/fritchii-v5.4-try):
 
 State: build green on merge/fritchii-v5.4-try. Not pushed. Not merged to nx2. Owner has not
 approved releasing/tags; the next talk is merge to nx2 and release planning.
+
+## 2026-11-11 (evening, rename) - profile directory is now ocarina2
+
+Owner's call: the app-data profile folder is %APPDATA%\\ocarina2 on Windows (the ocarina2
+directories under $XDG_DATA_HOME / $XDG_CONFIG_HOME / $XDG_CACHE_HOME on Linux and macOS).
+Previously (v5.8 via the Fritchii merge) it was fritchii; before that, eden.
+
+Kept as migration sources so existing players keep their saves: eden (pre-merge fork),
+fritchii (the v5.8 profile builds), lichii, yuzu, suyu, sudachi, citron. All four shapes work
+unchanged: the first-launch import can target them, the Help > Copy Data dialog lists them,
+and the import-worker prompt offers them.
+
+Touch points:
+- src/common/fs/fs_paths.h: EDEN_DIR ocarina2, EDEN_LEGACY_DIR eden (kept), FRITCHII_DIR fritchii
+- src/common/fs/path_util.{h,cpp}: EmuPath Fritchii{,Config,Cache}Dir + LEGACY_PATH both platforms
+- src/yuzu/migration_worker.h: legacy_emus now includes Fritchii (GUI import prompt)
+- src/frontend_common/profile_import.cpp: the Help > Copy Data request allowlist accepts fritchii
+- src/yuzu/user_data_migration.cpp: Fritchii in the v5.8 import candidate list + Ocarina2 wording
+  in the (Lichii) import dialog
+- nx2_switches.txt.txt and nx2_switches.h fallback: ocarina2 -> eden -> fritchii
+- tests/common/data_directories.cpp: expects ocarina2
+- docs: Mods.md %AppData%\\ocarina2; README profile section; dist/nx2_switches.txt comments
+- UI strings with "Fritchii" as the app name replaced with "Ocarina2" (reset/restore dialogs,
+  migration prompt, startup error, export_log stuck-process note, migration_worker prompt)
+
+Verified: BUILD_EXIT=0 on the merged tree with these changes; Ocarina2.exe links.
