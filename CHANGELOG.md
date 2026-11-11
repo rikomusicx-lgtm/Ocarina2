@@ -4,6 +4,46 @@ All notable changes to Eglantine are documented here. Each release's notes are t
 `## [X.Y.Z]` section (release candidates use the section of the version they are a candidate for).
 New entries go under `## [Unreleased]`; `tools/ci/bump-version.sh` turns them into a version section.
 
+## [Ocarina2 v1.0] - 2026-11-11
+
+First real release of the Ocarina2 fork, built on Frizti's Fritchii 5.8.4 (itself on Eglantine/
+Eden via Lichii). The Fritchii 5.8.4 feature set ships unchanged — the OoT performance path
+(handheld-tuned OOT 60 FPS preset at boot, 12 GB emulated DRAM layout on 16 GB+ hosts with an
+8 GB floor elsewhere, FSR anti-aliasing options, warm shader preload, DLSS off by default).
+The Ocarina2 layer on top:
+
+Added:
+- Lossless Scaling (LSFG) frame generation, selectable and switchable in game. F12 / L3+R3 quick
+  menu cycles Frame generation between Optical Flow x3 (FSR3, zero extra files) and Lossless
+  Scaling x3 — applies live and saves. The FG status-bar button toggles on/off (left click) and
+  switches type (right click), both persisted.
+- LSFG auto-install from the user's own Steam install: the emulator locates the Steam library
+  (registry SteamPath / libraryfolders.vdf), copies common/Lossless Scaling/Lossless.dll into the
+  profile lossless folder and validates it. Nothing downloads or redistributes; Optical Flow is
+  the built-in fallback and needs no copies at all. New "Install Lossless.dll from Steam" action
+  in the FG menu; the FG unavailability tooltip explains both paths.
+- Profile directory renamed eden -> ocarina2 with full import migration from eden / fritchii /
+  lichii / yuzu / suyu / sudachi / citron (first-launch import prompt and Help > Copy Data).
+- Ocarina2 branding throughout: window title, menus, dialogs, What's New, Export Log. Discord and
+  Donate buttons removed; Saves button kept.
+
+Changed:
+- Update notes replaced for the first real release; version track is now Ocarina2 v1
+  (dist/ocarina2_version.txt = 1.0).
+- FG: LSFG build/warn path is gated so the FG pipeline works out of the box; FG type applies
+  live and is switchable without a restart.
+
+Fixed:
+- Build bring-up for the Fritchii 5.8.4 merge: merge repair of the renderer_base
+  FrameGenStatus union brace, vk_frame_dump Rearm(), rc.exe include paths for yuzu-cmd/
+  yuzu-room resources, the BuiltPipeline forwarding overload in vk_pipeline_cache, and the
+  duplicated ColorOutputMask.
+
+Known issues:
+- Intermittent white flash in combat-heavy Ocarina scenes (under investigation).
+- First-boot shader compile hitches persist until the cache is warm; the preloader mitigates but
+  does not eliminate them.
+
 ## [Unreleased]
 
 - Clang flavor: the fork now also builds with clang-cl (iiVM 23.1.5), shipped as a separate
