@@ -774,3 +774,32 @@ Touch points:
   migration prompt, startup error, export_log stuck-process note, migration_worker prompt)
 
 Verified: BUILD_EXIT=0 on the merged tree with these changes; Ocarina2.exe links.
+
+## 2026-11-11 (evening) - v1 play test: boots into Kokiri, survives input, preset confirmed
+
+Setup used for the smoke test: the merged + renamed build was run on this machine. The
+%APPDATA%/fritchii profile (from the v5.8-era merged builds) did NOT exist here - only the
+pre-merge %APPDATA%/eden profile, so the play test ran against a manual copy
+eden -> ocarina2 (the v1 import flow does exactly that copy on first launch; eden itself
+untouched, it stays as the rollback).
+
+What was verified, with the emulator driven headlessly through the NX2 debug server:
+- Ocarina2.exe (build 732822c4e5, version string "Ocarina2 1.0", Vulkan, switch2=true) boots
+  THE LEGEND OF ZELDA OOT and lands in actual gameplay (Kokiri Forest, Link running with HUD,
+  minimap present), rather than sitting at the title.
+- OOT preset applied from the log: OOT 60 FPS patch on, FG x3 (Fsr3), oot_anti_aliasing=Fsr3,
+  memory_layout_mode=Memory_12Gb, OOT Max Resolution off (correct for the 6 GB card).
+- Input works end to end (debug-server left-stick forward walk for 90 presented frames; Link
+  advanced through the forest, fairy and signpost visible in the before/after screenshots).
+- No crash, no white flash observed in the smoke session. Not a certification - the flash is
+  intermittent and the Kokiri dogfight is what exercises it.
+- Warnings seen are the normal stubs (AM/NVDRV/NIFM). One real error class worth noting:
+  HW.Memory ReportUnmappedRead during the Kokiri scene load (buffer_cache unmapped reads);
+  the game kept running past it and presents resumed. Also one 1.5 s present hitch at ~82 s,
+  dominated by first-area shader JIT (not a regression signal, but worth watching).
+- Guest frames measured at a very steady ~60 ms mean (~16.7 FPS in this scene) with 0 stutters
+  reported in the sample window - a different, lower FPS class than the title/cutscene case;
+  the owner should confirm whether that matches their experience of the merged build.
+
+What this does NOT verify: UI strings render in-game, Saves window works with real saves,
+settings restore/reset behavior, full traversal to any other area, the white flash.
