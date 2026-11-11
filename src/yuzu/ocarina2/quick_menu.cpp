@@ -132,6 +132,8 @@ QuickMenu::QuickMenu(QWidget* parent, QuickMenuHooks hooks_) : QDialog(parent), 
                    hooks.scaling_filter_text, hooks.cycle_scaling_filter);
     addSettingsRow(settings_layout, QStringLiteral("droplet"), tr("Anti-aliasing"),
                    hooks.anti_aliasing_text, hooks.cycle_anti_aliasing);
+    addSettingsRow(settings_layout, QStringLiteral("triforce"), tr("Frame generation"),
+                   hooks.frame_gen_text, hooks.cycle_frame_gen);
 
     auto* back_row = new QPushButton(settings_page);
     back_row->setObjectName(QStringLiteral("Ocarina2QuickMenuItem"));

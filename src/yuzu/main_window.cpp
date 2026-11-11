@@ -1331,6 +1331,8 @@ void MainWindow::InitializeWidgets() {
     frame_gen_status_button->setCheckable(true);
     connect(frame_gen_status_button, &QPushButton::clicked, this, [this] {
         Settings::values.frame_gen.SetValue(!Settings::values.frame_gen.GetValue());
+        QtCommon::system->ApplySettings();
+        config->SaveAllValues();
         UpdateFrameGenButton();
     });
     UpdateFrameGenButton();
@@ -1342,6 +1344,8 @@ void MainWindow::InitializeWidgets() {
                     context_menu.addAction(text, [this, type] {
                         Settings::values.frame_gen_type.SetValue(type);
                         Settings::values.frame_gen.SetValue(true);
+                        QtCommon::system->ApplySettings();
+                        config->SaveAllValues();
                         UpdateFrameGenButton();
                     });
                 }
@@ -5861,6 +5865,19 @@ void MainWindow::OpenQuickMenu() {
                       const auto next = cycle_in_map(Settings::values.anti_aliasing.GetValue(),
                                                      direction, ConfigurationShared::anti_aliasing_texts_map);
                       Settings::values.anti_aliasing.SetValue(next);
+                      apply_live();
+                  },
+                  .frame_gen_text = [map_text] {
+                      return map_text(ConfigurationShared::frame_gen_type_texts_map,
+                                      Settings::values.frame_gen_type.GetValue());
+                  },
+                  .cycle_frame_gen = [apply_live](int) {
+                      const auto current = Settings::values.frame_gen_type.GetValue();
+                      const auto next = current == Settings::FrameGenType::Lsfg
+                                            ? Settings::FrameGenType::Fsr3
+                                            : Settings::FrameGenType::Lsfg;
+                      Settings::values.frame_gen_type.SetValue(next);
+                      Settings::values.frame_gen.SetValue(true);
                       apply_live();
                   },
               });

@@ -49,6 +49,8 @@ struct QuickMenuHooks {
     std::function<void(int direction)> cycle_scaling_filter;
     std::function<QString()> anti_aliasing_text;
     std::function<void(int direction)> cycle_anti_aliasing;
+    std::function<QString()> frame_gen_text;       ///< e.g. LSFG / OPTICAL FLOW
+    std::function<void(int direction)> cycle_frame_gen;
 };
 
 class QuickMenu : public QDialog {

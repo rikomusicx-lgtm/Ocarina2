@@ -907,3 +907,22 @@ Open test questions to watch while playing:
 
 Files in Downloads\LSFG-setup are now obsolete (Lossless.dll copy + README + the wrapper bat):
 the setup is done. Owner can delete the folder; Downloads does NOT need it anymore.
+
+## 2026-11-11 (night) - FG type switching in game: F12 QuickMenu row + persistent status-bar toggle
+
+Owner asked: switch between Optical Flow and LSFG while in game. Two gaps wired up:
+- The Ocarina2 UI hides ALL frame_gen* settings from the config pages (HidesSetting in
+  yuzu/ocarina2/ocarina2_ui.cpp: "No frame generation in Ocarina2, and its options are dev
+  tools") - so the Graphics tab looks like it has no FG settings at all. The FG status-bar
+  button (left-click on/off, right-click type menu) was the intended in-game surface.
+- The right-click menu flipped frame_gen_type in memory but never saved. Now both it and the
+  left-click handler call ApplySettings + SaveAllValues (same path as OnToggleOotFrameRate),
+  so the switch persists across restarts.
+- The F12 / L3+R3 QuickMenu (yuzu/ocarina2/quick_menu.cpp) gained a "Frame generation" row on
+  its Settings page (triforce icon): shows LSFG / OPTICAL FLOW, cycles on tap
+or Left/Right,
+  applies live (FrameGen reads Settings::values per frame) and saves, same contract as the
+  other rows. QuickMenuHooks gained frame_gen_text + cycle_frame_gen.
+
+Status: syntax-checked only (clang-cl /Zs, both TUs clean). NOT rebuilt yet - the running
+game holds Ocarina2.exe open (link would fail). Relink once the owner closes the game.
