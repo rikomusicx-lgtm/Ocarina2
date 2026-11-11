@@ -12,7 +12,7 @@
 > **Lichii has no official website.** The only site run by this project is the **game compatibility website, [lichii.zortos.me](https://lichii.zortos.me)**, for compatibility reports only. Download Lichii **only** from this repository's [releases page](https://github.com/zortos293/Lichii/releases). Any other "Lichii" website or download (such as lichii.org) is not ours and may contain malware ([#545](https://github.com/zortos293/Lichii/issues/545)).
 
 <p align="center">
-  <img src="dist/ocarina2.png" alt="Ocarina2" width="600">
+  <img src="dist/ocarina2-triforce.png" alt="Ocarina2" width="256">
 </p>
 
 # Ocarina2
