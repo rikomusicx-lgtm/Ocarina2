@@ -874,3 +874,36 @@ To verify in-game: launch Ocarina2.exe from that folder, then check eden_log.txt
 `LSFG shaders loaded: 25 modules`. FG button should read FG LSFG x3 (not UNAVAILABLE). NOTE: the
 first LSFG run builds the shader cache (one-time, fast). If LSFG looks/performs worse than Optical
 Flow here, the config flip is a two-line revert (backups kept).
+
+## 2026-11-11 (very late) - LSFG x3 is LIVE on the owner's profile
+
+After a long detour, the working path was the GUI flip, not file edits. Verified in the
+14:10-launch log (eden_log.txt):
+- [286.8s] Config <Info> LogSettings: M- Renderer.frame_gen_type: Lsfg
+- [286.8s] MC Renderer.frame_gen_multiplier: 3, MC Renderer.frame_gen: true
+- [305.4s] LsfgShaders: LSFG shaders loaded: 25 modules
+No "LSFG unavailable" warning. The FG status button shows FG LSFG x3.
+
+How the pieces got there:
+- Lossless.dll (Steam install at `D:\Steam Game Files\steamapps\common\Lossless Scaling\Lossless.dll`)
+  was copied to `%APPDATA%\ocarina2\lossless\` at 13:58. Offline PE/resource validation passes
+  (all 25 native FP16 SPIR-V modules present). The GUI-side flip made the running game build the
+  chain, which logged the 25-module load - i.e. the DLL is present and usable on the real profile.
+- Direct edits of qt-config.ini from the tool environment are NOT persistent: the game rewrites
+  qt-config.ini at every boot from its in-memory state (verified twice - edits reverted to Fsr3).
+  Gui-apply (per-game Graphics page, or the global page) is the only write path that sticks.
+- The frame_gen FG type/multiplier widgets read Settings::values live, so the change applied
+  without a restart. The OOT preset does NOT force frame_gen_type; it stays LSFG across reboots.
+
+Test setup owner is running: pid from the 14:21 wrapper-bat launch (EDEN_NX2_APPDATA_ROOT was a
+red herring - launched instances run with the user's environment and always resolve
+C:\Users\user\AppData\Roaming\ocarina2). Applies to normal launches as well.
+
+Open test questions to watch while playing:
+- FPS/pacing vs Optical Flow (LSFG costs more GPU; on the 3050 listen/look for drops in heavy areas)
+- HUD artifacts generated into frames (minimap/HUD can ghost under frame gen)
+- Hitch class regression vs the 12 GB DRAM emulation build
+- If bad: flip Frame Generation Type back to Optical Flow in the same dialog (applies live)
+
+Files in Downloads\LSFG-setup are now obsolete (Lossless.dll copy + README + the wrapper bat):
+the setup is done. Owner can delete the folder; Downloads does NOT need it anymore.
