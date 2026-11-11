@@ -63,11 +63,6 @@ struct GraphicsHooks {
 /// Loading screen bar in the Graphite colours.
 [[nodiscard]] const char* LoadingBarStyle();
 
-/// The Fritchii Discord server and the owner's donation page, opened in the browser.
-inline constexpr const char* DiscordInvite = "https://discord.gg/fritchii";
-inline constexpr const char* DonateLink = "https://paypal.me/frizti";
-void OpenDiscord();
-void OpenDonate();
 /// Help > Copy Data from Eden or Lichii (v5.8.1): asks, then restarts into the import.
 void CopyDataFromOldFolder(QMainWindow& window);
 

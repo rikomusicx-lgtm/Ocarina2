@@ -268,12 +268,6 @@ QWidget* Home::MakeRail() {
         make(QStringLiteral("star"), tr("What's new"), tr("See what's new in this build"));
     connect(update_button, &QToolButton::clicked, this, [this] { ShowWhatsNew(window); });
 
-    discord_button = make(QStringLiteral("community"), tr("Discord"), tr("Join the Discord server"));
-    connect(discord_button, &QToolButton::clicked, this, [] { OpenDiscord(); });
-
-    donate_button = make(QStringLiteral("heart"), tr("Donate"), tr("Support Ocarina2"));
-    connect(donate_button, &QToolButton::clicked, this, [] { OpenDonate(); });
-
     auto* classic = new QMenu(rail);
     for (QMenu* menu : hooks.classic_menus) {
         classic->addMenu(menu);
@@ -286,7 +280,7 @@ QWidget* Home::MakeRail() {
 
     for (QWidget* button :
          {home_button, library_button, folder_button, settings_button, update_button,
-          discord_button, donate_button, menu_button}) {
+          menu_button}) {
         layout->addWidget(button->parentWidget());
         button->installEventFilter(this);
     }
@@ -696,8 +690,6 @@ void Home::RebuildNavOrder() {
     nav_order_.append(folder_button);
     nav_order_.append(settings_button);
     nav_order_.append(update_button);
-    nav_order_.append(discord_button);
-    nav_order_.append(donate_button);
     nav_order_.append(menu_button);
     // Focus stays on the dock's Home button at rest; clamps handle list mode.
     if (nav_index_ < 0 || nav_index_ >= nav_order_.size()) {
