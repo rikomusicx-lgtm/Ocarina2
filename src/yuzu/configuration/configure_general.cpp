@@ -140,7 +140,7 @@ void ConfigureGeneral::SetResetCallback(std::function<void()> callback) {
 void ConfigureGeneral::ResetDefaults() {
     const QString text =
         Ocarina2Ui::Enabled()
-            ? tr("Put every setting back to Fritchii's defaults?\n\nYour current settings are saved "
+            ? tr("Put every setting back to Ocarina2's defaults?\n\nYour current settings are saved "
                  "first: Restore Settings brings them back. Controls and game folders stay.")
             : tr("This reset all settings and remove all per-game configurations. This will not "
                  "delete game directories, profiles, or input profiles. Proceed?");

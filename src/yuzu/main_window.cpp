@@ -4242,7 +4242,7 @@ void MainWindow::OnConfigure() {
 
         if (!restore.isEmpty() && !Ocarina2Ui::RestoreSettingsFiles(restore)) {
             QMessageBox::warning(this, tr("Restore Settings"),
-                                 tr("Some settings could not be restored. Fritchii's defaults "
+                                 tr("Some settings could not be restored. Ocarina2's defaults "
                                     "fill the gaps."));
         }
         config = std::make_unique<QtConfig>();

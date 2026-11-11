@@ -459,16 +459,16 @@ std::optional<ProfileImportChoice> UserDataMigrator::AskImport(QWidget* parent, 
         return std::nullopt;
     }
     QDialog dialog(parent);
-    dialog.setWindowTitle(QStringLiteral("Fritchii"));
+    dialog.setWindowTitle(QStringLiteral("Ocarina2"));
     dialog.setWindowFlag(Qt::WindowContextHelpButtonHint, false);
     auto* layout = new QVBoxLayout(&dialog);
     layout->setSpacing(12);
     QFont big = dialog.font();
     big.setPointSizeF(big.pointSizeF() * 1.15);
     auto* text = new QLabel(
-        from_menu ? QObject::tr("Copy your data from another folder?\nFritchii restarts and "
+        from_menu ? QObject::tr("Copy your data from another folder?\nOcarina2 restarts and "
                                 "copies it over its own. What it has now is kept as a backup.")
-                  : QObject::tr("Fritchii keeps its data in its own folder now.\nCopy your data "
+                  : QObject::tr("Ocarina2 keeps its data in its own folder now.\nCopy your data "
                                 "from another emulator folder?"),
         &dialog);
     text->setFont(big);
@@ -565,9 +565,9 @@ void UserDataMigrator::AutoImport(QMainWindow* main_window,
             return;
         }
         auto* progress = new QProgressDialog(main_window);
-        progress->setWindowTitle(QStringLiteral("Fritchii"));
+        progress->setWindowTitle(QStringLiteral("Ocarina2"));
         progress->setLabelText(
-            QObject::tr("Copying your data from the %1 folder to Fritchii's own folder (%2 GB)...")
+            QObject::tr("Copying your data from the %1 folder to Ocarina2's own folder (%2 GB)...")
                 .arg(folder, Gigabytes(import.copy_bytes)));
         progress->setRange(0, 0);
         progress->setCancelButton(nullptr);
@@ -645,7 +645,7 @@ void UserDataMigrator::AutoImport(QMainWindow* main_window,
         }
         QString what = parts.join(QStringLiteral(", "));
         what[0] = what[0].toUpper();
-        QString text = QObject::tr("Fritchii now keeps its data in its own folder:\n%1\n\n"
+        QString text = QObject::tr("Ocarina2 now keeps its data in its own folder:\n%1\n\n"
                                    "%2 copied from the %3 folder.")
                            .arg(destination_text, what, folder);
         if (!import.linked.empty()) {
@@ -655,13 +655,13 @@ void UserDataMigrator::AutoImport(QMainWindow* main_window,
                                                        : QStringLiteral("nand and sdmc"));
         }
         if (requested) {
-            text += QObject::tr("\n\nFritchii's previous data is kept next to it, in the folders "
+            text += QObject::tr("\n\nOcarina2's previous data is kept next to it, in the folders "
                                 "ending in \".backup\".");
         }
         text += QObject::tr("\n\nShaders get prepared again the first time you start a game.\n"
                             "Your old folder was not changed: %1")
                     .arg(old_text);
-        QMessageBox box(QMessageBox::Information, QStringLiteral("Fritchii"), text,
+        QMessageBox box(QMessageBox::Information, QStringLiteral("Ocarina2"), text,
                         QMessageBox::Ok, main_window);
         auto* open = box.addButton(QObject::tr("Open folder"), QMessageBox::ActionRole);
         box.exec();
@@ -674,10 +674,10 @@ void UserDataMigrator::AutoImport(QMainWindow* main_window,
     if (Migration::GetState(state_dir) == Migration::State::Pending) {
         Migration::Recover(state_dir);
     }
-    QMessageBox box(QMessageBox::Warning, QStringLiteral("Fritchii"),
-                    QObject::tr("Your data in the %1 folder could not be copied to Fritchii's "
+    QMessageBox box(QMessageBox::Warning, QStringLiteral("Ocarina2"),
+                    QObject::tr("Your data in the %1 folder could not be copied to Ocarina2's "
                                 "folder. Nothing was changed.\n\n%2\n\nClose any emulator or "
-                                "program using it, then start Fritchii again.")
+                                "program using it, then start Ocarina2 again.")
                         .arg(folder, failure),
                     QMessageBox::NoButton, main_window);
     auto* later = box.addButton(QObject::tr("Close and try again"), QMessageBox::AcceptRole);
