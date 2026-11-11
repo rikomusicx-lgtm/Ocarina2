@@ -18,6 +18,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
+#define ZSTD_STATIC_LINKING_ONLY
 #include <zstd.h>
 
 #include "common/fs/path_util.h"
