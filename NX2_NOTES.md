@@ -803,3 +803,32 @@ What was verified, with the emulator driven headlessly through the NX2 debug ser
 
 What this does NOT verify: UI strings render in-game, Saves window works with real saves,
 settings restore/reset behavior, full traversal to any other area, the white flash.
+
+## 2026-11-11 (late) - FG x3 follow-up: "Lossless.dll status 1" root-caused (not installed); LSFG warning gated to the LSFG path
+
+Question carried out of the v1 play test: why does the log say `LSFG unavailable: Lossless.dll
+status 1` while FG x3 is configured.
+
+Findings:
+- LosslessStatus 1 = NotInstalled. `%APPDATA%\ocarina2\lossless` (and the eden one) exist but
+  are empty. Lossless Scaling is NOT installed on this PC - not in D:\Steam, C:\SteamLibrary or
+  D:\SteamLibrary, and a scan of C:\ finds no Lossless.dll anywhere. The emulator was reporting
+  exactly what is on disk; the code looks in the right place (EdenPath::LosslessDir =
+  `%APPDATA%\ocarina2\lossless\Lossless.dll`).
+- LSFG is not needed for the configured frame generation: frame_gen_type is Fsr3 (shown in the
+  UI as "Optical Flow"), which builds from the embedded SPIR-V in
+  src/video_core/host_shaders/ (fsr3_frame_interpolation_comp_spv / fsr3_optical_flow_comp_spv).
+  The missing-DLL unavailable path in FrameGen::Process only applied when type == Lsfg.
+- The warning itself was misleading: LsfgShaders is constructed whenever frame_gen is on, and
+  its constructor logged "LSFG unavailable" even on the Fsr3 path. Fixed: the warning only fires
+  when frame_gen_type == Lsfg, and LsfgShaders is not constructed at all on the Fsr3 path.
+  (present/lsfg_shaders.cpp, present/frame_gen.cpp)
+- To use real LSFG the owner must buy/install Lossless Scaling (Steam) and drop its Lossless.dll
+  into `%APPDATA%\ocarina2\lossless\`. Until then LSFG stays unavailable by design; Optical
+  Flow FG x3 is unaffected.
+- FG x3 visibility: the guest asks for swap interval 1 at 60 Hz with FPS limit 60, so presents
+  cap at 60 (the log shows ~615-720 presents per 10 s = 61-72 fps against the 71.91 Hz refresh).
+  In Kokiri the native frame runs ~17.5 ms (~55 fps) so FG is invisible at the cap; FG only shows
+  through in the heavy areas where native drops below 60 (the "ran a frame ahead" counters of
+  400-600 per 600 presents in the heavy windows indicate generated frames are being presented).
+  Not measured in a controlled A/B yet.

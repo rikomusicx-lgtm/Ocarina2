@@ -198,7 +198,9 @@ void FrameGen::Process(const Device& device, Frame* frame, VkFormat format,
                        VkExtent2D guest_extent) {
     generated = false;
 
-    if (!shaders) {
+    const bool use_fsr3 =
+        Settings::values.frame_gen_type.GetValue() == Settings::FrameGenType::Fsr3;
+    if (!shaders && !use_fsr3) {
         shaders.emplace(device);
     }
 
@@ -212,10 +214,11 @@ void FrameGen::Process(const Device& device, Frame* frame, VkFormat format,
         return;
     }
 
-    if (!shaders->IsValid() && Settings::values.frame_gen_type.GetValue() != Settings::FrameGenType::Fsr3) {
+    if (!use_fsr3 && (!shaders || !shaders->IsValid())) {
         unavailable = true;
-        state.store(shaders->IsDeviceSupported() ? VideoCore::FrameGenState::MissingLosslessDll
-                                                 : VideoCore::FrameGenState::UnsupportedGpu,
+        state.store(shaders && shaders->IsDeviceSupported()
+                        ? VideoCore::FrameGenState::MissingLosslessDll
+                        : VideoCore::FrameGenState::UnsupportedGpu,
                     std::memory_order_relaxed);
         return;
     }
@@ -245,8 +248,6 @@ void FrameGen::Process(const Device& device, Frame* frame, VkFormat format,
     warm_streak = warm ? warm_streak + 1 : 0;
     generated = warm && warm_streak >= LSFG_RECURRENCE_FRAMES && plan.generations > 0;
     generated_frames.fetch_add(GeneratedFrameCount(), std::memory_order_relaxed);
-
-    const bool use_fsr3 = Settings::values.frame_gen_type.GetValue() == Settings::FrameGenType::Fsr3;
 
     if (use_fsr3 && fsr3_chain) {
         scheduler.RequestOutsideRenderPassOperationContext();
