@@ -83,7 +83,7 @@ std::string TakeProfileImportRequest() {
     fs::remove(request, ec);
     // The first line names the folder; v5.8.2 adds what to copy on the next lines.
     const std::string folder = text.substr(0, text.find('\n'));
-    constexpr std::array known{"eden", "lichii", "yuzu", "suyu", "sudachi", "citron"};
+    constexpr std::array known{"eden", "lichii", "yuzu", "suyu", "sudachi", "citron", "fritchii"};
     if (std::ranges::find(known, folder) == known.end()) {
         return {};
     }
@@ -105,7 +105,7 @@ std::string TakeProfileImportRequest() {
 void CheckLegacyProfileBeforeConfig() {
     if (NeedsLegacyProfileImport()) {
         throw std::runtime_error("Legacy emulator data or an unfinished import was found. "
-                                 "Open the Fritchii window to import it or explicitly start fresh "
+                                 "Open Ocarina2 to import it or explicitly start fresh "
                                  "before using eden-cli. No configuration was created.");
     }
 }

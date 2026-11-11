@@ -133,6 +133,7 @@ public:
         LEGACY_PATH(Yuzu, YUZU)
         LEGACY_PATH(Suyu, SUYU)
         LEGACY_PATH(LegacyEden, EDEN_LEGACY)
+        LEGACY_PATH(Fritchii, FRITCHII)
         LEGACY_PATH(Lichii, LICHII)
 #undef LEGACY_PATH
 #elif __ANDROID__
@@ -159,6 +160,7 @@ public:
         LEGACY_PATH(Yuzu, YUZU)
         LEGACY_PATH(Suyu, SUYU)
         LEGACY_PATH(LegacyEden, EDEN_LEGACY)
+        LEGACY_PATH(Fritchii, FRITCHII)
         LEGACY_PATH(Lichii, LICHII)
 #undef LEGACY_PATH
 #endif

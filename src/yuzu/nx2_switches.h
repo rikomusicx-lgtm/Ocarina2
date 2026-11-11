@@ -17,7 +17,7 @@
 // set. nx2_switches.txt holds "NAME=VALUE" lines, one per line, '#' comments. A variable already
 // in the real environment always wins, so a launcher script can still override one run; between
 // files the later one wins, so the copy next to the executable (shipped with the build) can be
-// overridden by %APPDATA%\fritchii\nx2_switches.txt without editing the one that gets replaced.
+// overridden by %APPDATA%\ocarina2\nx2_switches.txt without editing the one that gets replaced.
 static void ParseSwitchFile(const std::filesystem::path& path,
                             std::map<std::string, std::string>& entries) {
     std::ifstream file{path};
@@ -127,11 +127,14 @@ static void LoadNx2Switches(const char* argv0) {
     const auto config_base = Common::FS::GetDataDirectory("XDG_CONFIG_HOME");
 #endif
     if (config_base.is_absolute()) {
-        // Before the first launch's import has copied it, the player's file is still in the old
-        // folder (the profile moved from eden to fritchii in v5.8).
+        // v1: eden (pre-merge fork) and fritchii (the v5.8 profile) are the legacy folders;
+        // the first-launch import copies them into ocarina2.
         auto user_file = config_base / EDEN_DIR / "nx2_switches.txt";
         if (!std::filesystem::exists(user_file)) {
             user_file = config_base / EDEN_LEGACY_DIR / "nx2_switches.txt";
+            if (!std::filesystem::exists(user_file)) {
+                user_file = config_base / FRITCHII_DIR / "nx2_switches.txt";
+            }
         }
         ParseSwitchFile(user_file, entries);
     }

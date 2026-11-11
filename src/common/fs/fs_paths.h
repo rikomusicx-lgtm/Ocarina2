@@ -8,10 +8,13 @@
 
 // yuzu data directories
 
-// Fritchii keeps its own profile (v5.8, the owner's call): imported from eden (Eden, Lichii
-// before build 150, earlier Fritchii) or lichii (Lichii 150+) on the first launch.
-#define EDEN_DIR "fritchii"
+// Ocarina2 keeps its own profile: %APPDATA%\ocarina2 on Windows (and the ocarina2 directories
+// under $XDG_DATA_HOME, $XDG_CONFIG_HOME and $XDG_CACHE_HOME on Linux and macOS). v1 renamed it
+// from fritchii, which is still picked up as a migration source for players coming from the
+// v5.8 profile builds. eden and lichii remain sources as before.
+#define EDEN_DIR "ocarina2"
 #define EDEN_LEGACY_DIR "eden"
+#define FRITCHII_DIR "fritchii"
 #define LICHII_DIR "lichii"
 #define PORTABLE_DIR "user"
 

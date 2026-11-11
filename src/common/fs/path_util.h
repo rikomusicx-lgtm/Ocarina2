@@ -44,6 +44,10 @@ enum EmuPath {
     LegacyEdenConfigDir,
     LegacyEdenCacheDir,
 
+    FritchiiDir,
+    FritchiiConfigDir,
+    FritchiiCacheDir,
+
     LichiiDir,
     LichiiConfigDir,
     LichiiCacheDir,

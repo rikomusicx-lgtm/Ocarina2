@@ -35,7 +35,7 @@ Some mods are designed for real Nintendo Switch consoles and refer to the **SD c
 The emulated SD card is located at:
 
 ```
-%AppData%\fritchii\sdmc
+%AppData%\ocarina2\sdmc
 ```
 
 Example:
@@ -76,7 +76,7 @@ https://github.com/Raytwo/ARCropolis/releases/
 Extract the **`atmosphere`** folder into:
 
 ```
-%AppData%\fritchii\sdmc
+%AppData%\ocarina2\sdmc
 ```
 
 This is the **emulated SD card directory**.
@@ -112,7 +112,7 @@ The `exefs` folder should be **next to the `romfs` folder**.
 Verify installation by checking that the following file exists:
 
 ```
-%AppData%\fritchii\sdmc\atmosphere\contents\01006A800016E000\exefs\subsdk9
+%AppData%\ocarina2\sdmc\atmosphere\contents\01006A800016E000\exefs\subsdk9
 ```
 
 ---
@@ -164,7 +164,7 @@ sdmc\atmosphere\contents\01006A800016E000\exefs
 - Files were extracted to:
 
 ```
-%AppData%\fritchii\sdmc
+%AppData%\ocarina2\sdmc
 ```
 
 ---

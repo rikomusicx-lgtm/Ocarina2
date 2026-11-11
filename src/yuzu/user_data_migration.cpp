@@ -140,11 +140,11 @@ void UserDataMigrator::ShowMigrationPrompt(QMainWindow* main_window) {
                      [=](bool linked) { clear_shaders->setEnabled(!linked); });
     update_cache_default();
     migration_prompt.setText(
-        QObject::tr("Import an existing emulator profile into Lichii?\n"
+        QObject::tr("Import an existing emulator profile into Ocarina2?\n"
                     "Copy keeps the original profile unchanged and is recommended.\n"
                     "Move retains a recovery backup and requires space for a full copy.\n"
                     "Link shares settings and saves with the source emulator.\n"
-                    "Existing Lichii data is kept in backup directories, not merged or deleted.\n\n"
+                    "Existing Ocarina2 data is kept in backup directories, not merged or deleted.\n\n"
                     "Close the source emulator, then choose its profile below.\n"
                     "Close this window to decide on the next launch."));
     migration_prompt.addButton(QObject::tr("Import"));
@@ -304,6 +304,7 @@ std::vector<OldProfile> ListOldProfiles() {
     constexpr std::array candidates{
         Candidate{QT_TR_NOOP("Eden"), LegacyEdenDir, LegacyEdenConfigDir, 0},
         Candidate{QT_TR_NOOP("Lichii"), LichiiDir, LichiiConfigDir, 0},
+        Candidate{QT_TR_NOOP("Fritchii"), FritchiiDir, FritchiiConfigDir, 0},
         Candidate{QT_TR_NOOP("Citron"), CitronDir, CitronConfigDir, 1},
         Candidate{QT_TR_NOOP("Sudachi"), SudachiDir, SudachiConfigDir, 1},
         Candidate{QT_TR_NOOP("Suyu"), SuyuDir, SuyuConfigDir, 1},
