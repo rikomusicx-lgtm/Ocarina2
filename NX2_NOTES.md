@@ -926,3 +926,22 @@ or Left/Right,
 
 Status: syntax-checked only (clang-cl /Zs, both TUs clean). NOT rebuilt yet - the running
 game holds Ocarina2.exe open (link would fail). Relink once the owner closes the game.
+
+## 2026-11-11 (night, final) - FG in-game switch landed and verified
+
+Owner relaunched on the rebuilt exe (14:36:37). Verified in the fresh log:
+- M- Renderer.frame_gen_type: Lsfg (multiplier 3) - LSFG still active across the reboot
+- LsfgShaders: LSFG shaders loaded: 25 modules
+- Ocarina2 quickmenu key=... events at 4.4-5.4s - owner opened F12 menu and navigated it;
+  the new row is wired (owner confirmed it was them).
+
+Available in game now:
+- F12 / L3+R3 -> Settings page -> "Frame generation  LSFG / OPTICAL FLOW" (tap or Left/Right),
+  applies live, persists to config on save like the other quick-menu rows.
+- FG status bar button: left-click toggles FG on/off (now persists), right-click picks
+  Optical Flow or Lossless Scaling (LSFG) (now persists).
+- The Graphics-page FG rows remain hidden by design (Ocarina2 "real frames only" reskin).
+
+A/B plan for the owner: Kokiri vs heavy zones with LSFG vs Optical Flow; watch pacing,
+HUD ghosting, and hitch class vs the 12 GB DRAM emulation build. If LSFG loses, flip back
+in the same menu - no restart.
