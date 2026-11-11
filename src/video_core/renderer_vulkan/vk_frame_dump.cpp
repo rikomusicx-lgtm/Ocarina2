@@ -987,7 +987,7 @@ void FrameDump::Rearm() {
     // File trigger: each new capture.now takes another capture, into capture-2, capture-3...
     ResetAfterCapture();
     std::error_code error;
-    std::filesystem::remove(trigger_file, error);
+    std::filesystem::remove(schedule.TriggerFile(), error);
     directory = base_directory / fmt::format("capture-{}", ++captures + 1);
     LOG_INFO(Render_Vulkan, "Frame dump re-armed: the next capture.now captures into {}",
              directory.string());
