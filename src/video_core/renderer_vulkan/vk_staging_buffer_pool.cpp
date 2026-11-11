@@ -39,8 +39,9 @@ constexpr VkDeviceSize MAX_ALIGNMENT = 256;
 #if defined(__FreeBSD__)
 constexpr VkDeviceSize MAX_STREAM_BUFFER_SIZE = 128_MiB;
 #else
-// 128 MiB on Windows too: 256 MiB sat mostly unused in device memory on Switch 2 titles.
-constexpr VkDeviceSize MAX_STREAM_BUFFER_SIZE = 128_MiB;
+// 64 MiB on Windows: the host-visible streaming heap is charged to the 6 GB card's budget on
+// this PC, and 128 MiB sat mostly unused in device memory on Switch 2 titles.
+constexpr VkDeviceSize MAX_STREAM_BUFFER_SIZE = 64_MiB;
 #endif
 
 // Unused space after the end of the stream buffer. Constant buffers are bound from it and the

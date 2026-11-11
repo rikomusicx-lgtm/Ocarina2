@@ -74,3 +74,9 @@ EDEN_NX2_FENCE_BATCH=1
 # Warm-up builds skip our vulkan_pipelines file (only the driver's cache keeps them); =1 adds
 # them to it.
 #EDEN_NX2_WARM_APP_CACHE=1
+
+# Background pipeline-cache compiler threads. Unset: hardware threads minus one. On this PC
+# (Ryzen 5 3600, 6 GB 3050) 3 is enough; more just thrash the GPU drivers\' shared budget and
+# the JIT threads during Kokiri'\''s load-in. Nothing is applied to the fork as a default -
+# copy into your own nx2_switches.txt to use it.
+#EDEN_NX2_PIPELINE_WORKERS=3

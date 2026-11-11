@@ -162,6 +162,17 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
         high_priority_mode = out_of_memory || total_used_memory >= expected_memory;
         aggressive_mode =
             allow_aggressive && (out_of_memory || total_used_memory >= critical_memory);
+        static bool was_aggressive = false;
+        if (aggressive_mode && !was_aggressive) {
+            // Explicit, once per engagement: the owner asked for the >10-frame evictions to be
+            // visible in the log. It evicts decoded ASTC and render targets alike; Kokiri's
+            // ASTC textures are the usual victims.
+            LOG_INFO(HW_GPU,
+                     "Aggressive GC engaged: used {} MiB >= critical {} MiB; evicting images "
+                     "unused for >10 frames",
+                     total_used_memory >> 20, critical_memory >> 20);
+        }
+        was_aggressive = aggressive_mode;
         ticks_to_destroy = aggressive_mode ? 10ULL : high_priority_mode ? 25ULL : 50ULL;
         // EDEN_NX2_TC_MIN_AGE=<frames>: never evict images used more recently (thrash tests).
         static const u64 min_age = [] {
@@ -446,6 +457,7 @@ void TextureCache<P>::TickFrame() {
             }
             if (native_thresholds_applied && budget_check_frames++ % 30 == 0) {
                 const u64 budget = runtime.GetDeviceMemoryBudget();
+                const u64 old_critical = critical_memory;
                 if (budget > 2_GiB) {
                     const u64 margin = (std::min)(budget / 8, 1_GiB);
                     if constexpr (requires { runtime.GetDeviceMemorySlack(); }) {
@@ -493,6 +505,25 @@ void TextureCache<P>::TickFrame() {
                                      critical_memory == host_critical
                                          ? "which bounds the thresholds"
                                          : "the device budget bounds the thresholds");
+                        }
+                    }
+                    // Verify against the driver's VK_EXT_memory_budget view, not the cache's
+                    // accounting: the driver refuses allocations once device-local memory is out,
+                    // no matter what the cache believes it freed. Every 30 frames.
+                    if (runtime.CanReportMemoryUsage()) {
+                        const u64 device_budget = runtime.GetDeviceMemoryBudget();
+                        const u64 driver_used = runtime.GetDeviceMemoryUsage();
+                        LOG_INFO(HW_GPU,
+                                 "Device budget: {} MiB (used {} MiB, free {} MiB); texture cache "
+                                 "{} MiB",
+                                 device_budget >> 20, driver_used >> 20,
+                                 (device_budget > driver_used ? device_budget - driver_used : 0) >> 20,
+                                 total_used_memory >> 20);
+                        if (total_used_memory >= critical_memory) {
+                            LOG_WARNING(HW_GPU,
+                                        "Texture cache ABOVE CRITICAL: {} MiB used vs {} MiB limit; "
+                                        "aggressive GC evicts 10-frame-old images next pass",
+                                        total_used_memory >> 20, critical_memory >> 20);
                         }
                     }
                 }
