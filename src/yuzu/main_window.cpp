@@ -246,6 +246,7 @@ static FileSys::VirtualFile VfsDirectoryCreateFileWrapper(const FileSys::Virtual
 // Video Core //
 #include "video_core/gpu.h"
 #include "video_core/renderer_base.h"
+#include "video_core/frame_gen/lossless_install.h"
 #include "video_core/shader_notify.h"
 
 #include <SDL3/SDL.h>
@@ -1349,6 +1350,23 @@ void MainWindow::InitializeWidgets() {
                         UpdateFrameGenButton();
                     });
                 }
+                context_menu.addSeparator();
+                auto* install_action = context_menu.addAction(tr("Install Lossless.dll from Steam…"));
+                connect(install_action, &QAction::triggered, this, [this] {
+                    const auto result = VideoCore::FrameGen::TryAutoInstallLosslessDll();
+                    switch (result.status) {
+                    case VideoCore::FrameGen::LosslessInstallStatus::AlreadyPresent:
+                    case VideoCore::FrameGen::LosslessInstallStatus::Installed:
+                        QMessageBox::information(this, tr("Lossless Scaling"),
+                                                 QString::fromStdString(result.message));
+                        break;
+                    default:
+                        QMessageBox::warning(this, tr("Lossless Scaling"),
+                                             QString::fromStdString(result.message));
+                        break;
+                    }
+                    UpdateFrameGenButton();
+                });
                 context_menu.exec(frame_gen_status_button->mapToGlobal(menu_location));
                 frame_gen_status_button->repaint();
             });
@@ -6081,8 +6099,10 @@ void MainWindow::UpdateFrameGenButton() {
                          "generated frames can't be presented.");
         break;
     case VideoCore::FrameGenState::MissingLosslessDll:
-        unavailable = tr("LSFG needs Lossless.dll from Lossless Scaling in the \"lossless\" folder "
-                         "of the user directory. It is missing or could not be loaded.");
+        unavailable = tr("LSFG needs Lossless.dll from the Lossless Scaling app (Steam). "
+                         "Right-click here and choose \"Install Lossless.dll from Steam\", or drop "
+                         "Lossless.dll into the \"lossless\" folder of the user directory. "
+                         "Optical Flow works with no download.");
         break;
     }
 

@@ -60,6 +60,7 @@ private:
     u32 warm_streak{};
     bool generated{};
     bool unavailable{};
+    bool lsfg_auto_install_attempted{};
     bool dumped{};
     std::atomic<VideoCore::FrameGenState> state{VideoCore::FrameGenState::Pending};
     std::atomic<u64> generated_frames{};

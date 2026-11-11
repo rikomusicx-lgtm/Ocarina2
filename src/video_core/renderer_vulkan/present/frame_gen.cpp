@@ -9,6 +9,7 @@
 #include "common/fs/fs.h"
 #include "common/fs/path_util.h"
 #include "common/settings.h"
+#include "video_core/frame_gen/lossless_install.h"
 #include "video_core/renderer_vulkan/present/frame_gen.h"
 #include "video_core/renderer_vulkan/present/util.h"
 #include "video_core/renderer_vulkan/vk_present_manager.h"
@@ -215,12 +216,25 @@ void FrameGen::Process(const Device& device, Frame* frame, VkFormat format,
     }
 
     if (!use_fsr3 && (!shaders || !shaders->IsValid())) {
-        unavailable = true;
-        state.store(shaders && shaders->IsDeviceSupported()
-                        ? VideoCore::FrameGenState::MissingLosslessDll
-                        : VideoCore::FrameGenState::UnsupportedGpu,
-                    std::memory_order_relaxed);
-        return;
+        if (!lsfg_auto_install_attempted) {
+            lsfg_auto_install_attempted = true;
+            // A missing or stale DLL may just be an install the user never did: try the
+            // Steam copy automatically before declaring LSFG unavailable.
+            const auto install = VideoCore::FrameGen::TryAutoInstallLosslessDll();
+            if (install.status == VideoCore::FrameGen::LosslessInstallStatus::Installed ||
+                install.status == VideoCore::FrameGen::LosslessInstallStatus::AlreadyPresent) {
+                shaders.reset();
+                shaders.emplace(device);
+            }
+        }
+        if (!shaders || !shaders->IsValid()) {
+            unavailable = true;
+            state.store(shaders && shaders->IsDeviceSupported()
+                            ? VideoCore::FrameGenState::MissingLosslessDll
+                            : VideoCore::FrameGenState::UnsupportedGpu,
+                        std::memory_order_relaxed);
+            return;
+        }
     }
 
     if (!frame->storage_view) {

@@ -945,3 +945,32 @@ Available in game now:
 A/B plan for the owner: Kokiri vs heavy zones with LSFG vs Optical Flow; watch pacing,
 HUD ghosting, and hitch class vs the 12 GB DRAM emulation build. If LSFG loses, flip back
 in the same menu - no restart.
+
+## 2026-11-11 (night, release-prep) - LSFG auto-install from Steam: shipped feature, verified end-to-end
+
+Owner asked: the GitHub zip must work for everyone, zero downloads, merging to nx2 afterwards.
+Legality: Lossless.dll is Lossless Scaling's paid, copyrighted code - it can NEVER be in the
+public zip. The answer is auto-install from the user's own Steam install, exactly what lsfg-vk
+and Lossless Scaling itself do:
+- video_core/frame_gen/lossless_install.{h,cpp}: TryAutoInstallLosslessDll() finds Steam
+  (HKCU/HKLM SteamPath on Windows; STEAM_HOME/.steam/.local/share/Steam elsewhere; plus
+  libraryfolders.vdf for non-default library drives), copies common/Lossless Scaling/Lossless.dll
+  into the ocarina2 lossless folder and validates it (ValidateLosslessDll). No downloads ever.
+- FrameGen::Process retries once per run: if LSFG shaders are invalid (DLL missing/stale), it
+  auto-installs and rebuilds LsfgShaders in the SAME session; only then declares unavailable.
+- New "Install Lossless.dll from Steam..." action in the FG status button right-click menu;
+  the MissingLosslessDll tooltip now explains both paths. CMakeLists: files added under ENABLE_LSFG.
+
+Verified live on this PC (owner closed the game for the test; backup of the profile DLL taken):
+- deleted the profile's Lossless.dll (sha256 626B196D...), booted Zelda, close to title:
+  - video_core/renderer_vulkan/present/lsfg_shaders.cpp:33 LSFG unavailable: Lossless.dll status 1
+  - video_core/frame_gen/lossless_install.cpp:182 TryAutoInstallLosslessDll: LSFG: installed
+    Lossless.dll from D:\Steam Game Files\steamapps\common\Lossless Scaling\Lossless.dll
+  - video_core/renderer_vulkan/present/lsfg_shaders.cpp:37 LsfgShaders: LSFG shaders loaded: 25 modules
+- reinstalled DLL is sha256-identical to the Steam original (626B196D...). LSFG engaged in the
+  same run - no restart needed once the game presents frames.
+- Build green (D:\Ocarina2-merge-build-dclang, exit 0), clang-cl /Zs clean on the new TU too.
+
+Default for fresh downloads stays frame_gen_type=Fsr3 (Optical Flow, zero deps, works for
+everyone); LSFG owners get one-click/self-installing LSFG. FG button right-click menu has both
+switch actions now, both persisting.
