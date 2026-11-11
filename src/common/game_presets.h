@@ -3,6 +3,7 @@
 #pragma once
 
 #include <cstdlib>
+#include "common/memory_detect.h"
 #include "common/settings.h"
 
 namespace Settings {
@@ -68,6 +69,8 @@ inline void SetOcarinaOfTimePerformanceSettings(Values& settings, bool global,
     session(settings.dma_accuracy, DmaAccuracy::Unsafe);
     session(settings.async_presentation, true);
     session(settings.renderer_force_max_clock, true);
+    session(settings.frame_gen, true);
+    session(settings.frame_gen_multiplier, 3);
     session(settings.scaling_filter, ScalingFilter::Area);
     session(settings.anti_aliasing, AntiAliasing::None);
     session(settings.post_shader_enabled, false);
@@ -76,7 +79,13 @@ inline void SetOcarinaOfTimePerformanceSettings(Values& settings, bool global,
     session(settings.frame_pacing_mode, FramePacingMode::Target_Auto);
     session(settings.aspect_ratio, AspectRatio::R16_9);
     session(settings.gpu_unswizzle_texture_size, GpuUnswizzleSize::VeryLarge);
-    session(settings.memory_layout_mode, MemoryLayout::Memory_8Gb);
+    // 12 GB emulation removes Kokiri's streaming stalls (the fork's 25 FPS case). It needs the
+    // host to back the mapping, so only enable it on machines with the memory to pay for it;
+    // lower-end PCs (8-12 GB RAM) keep the game's 8 GB floor.
+    const u64 host_ram = Common::GetMemInfo().TotalPhysicalMemory;
+    const auto layout = host_ram >= (u64{16} << 30) ? MemoryLayout::Memory_12Gb
+                                                   : MemoryLayout::Memory_8Gb;
+    session(settings.memory_layout_mode, layout);
     session(settings.cpu_accuracy, CpuAccuracy::Unsafe);
     session(settings.sync_core_speed, true);
     session(settings.use_docked_mode, ConsoleMode::Handheld);
