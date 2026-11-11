@@ -652,3 +652,62 @@ Next steps, if picked up:
    wedges the frame dumper (pair capture always fails "cannot write" and never
    re-arms); the SAMPLED frame dump records only passes 0-44 (stops at draw
    ~1232 of ~2183), so it cannot currently see the scene/fog passes.
+
+## 2026-11-11 (later) - Fritchii v5.8.4 merged into the fork; Ocarina2 v1 queued
+
+Fritchii v5.5 -> v5.8.4 merged into merge/fritchii-v5.4-try (merge commit 0fd7ab7b4b),
+on top of investigate/fsr3-fg (FG x3 + adaptive 12 GB DRAM OoT preset, 38a51a8a9e).
+fritchii is Frizti'\''s own upstream line; the fork keeps its OoT-specific patches and
+the Ocarina2 branding. What landed and how (the parts that were contended):
+
+- Built on the Fritchii v5.4 import (38a51a8a9e lineage). fritchii-v5.8.4 fetched as
+  tags (fritchii-v5.8.4 -> 4f5c53149b). 177 upstream commits since v5.4: Saves window,
+  Help > Copy Data/fix orphans, per-game DLSS quality & preset (NVIDIA range-validated,
+  DLSS preset per game), Nx2Hitch hitch tracing, hot/clean tracked-pages collector with
+  epoch reset, TC_CEILING_MIB (7680), JIT_WARM on, zero-trim idle timing, EXP49 default,
+  the Fritchii own-profile move (%APPDATA%\fritchii, imported once on first launch),
+  Settings reset-to-defaults backups, TX notes v5.7, NXFormat .nx convert/manage,
+  Hyrule Cheat Menu-safe cave (0x3C46E00) + call re-encode, EDS2/EXE fixes, DLSS N, S,
+  Metro Exodus game entry visibility, FXAA default off, 12 GB Switch 2 memory layout
+  ("Switch 2" label), skin notes.
+
+- Conflict resolutions kept the fork where it was specific: ours'\''s 12 GB/FG x3/hook
+  addresses semantics via the fork'\''s settings, Memory_12Gb adaptive, the OoT
+  high-refresh Ctrl+U work aligns with upstream'\''s (shared Dark routine + cave at
+  0x3C46E00 + water-ripple builtin behind SDL; EDEN_NX2_OOT_HIGH_REFRESH +
+  EDEN_NX2_FRAME_DUMP_PAIR interplay preserved), Ocarina2 namespace (Ocarina2Ui) and
+  Ocarina2 folder layout kept, Fritchii builds keep their own profile + EXP49 +
+  hitch tracing + defaults. FrameGenActive kept upstream'\''s Fritchii-build gate.
+  Wired upstream'\''s per-game DLSS (NvidiaDlssQuality) in, hid it without Streamline,
+  kept the fork'\''s OotAntiAliasing(Game, NoSharpening, Fsr3, Fsr4) and the OOT preset
+  default.
+
+- The fork'\''s test helper bugs fixed along the way: test expected multiplier 2 and
+  Memory_4Gb (stale after 38a51a8a9e; now adaptive-expected), update_checker hidden-
+  marker duplicate test removed, builtin_patches Dynamic FPS fork tests kept alongside
+  upstream'\''s ripple/high-refresh tests, game_presets comment corrected (8 GB ->
+  adaptive 8/12 GB).
+
+- FrameDump stays Ocarina2'\''s FrameDumpSchedule (white-flash tooling, pair capture,
+  frame dump tests); upstream'\''s host-copies capture plumbing (EDEN_NX2_FRAME_DUMP_HOST
+  via RequestNow(id, dir, buffers, host)) integrates into it: HostCopies() now rides on
+  the schedule, capture_frame completes through Nx2Debug::FinishCapture on completion.
+
+- Build: NOT GREEN YET at merge commit time (renderer_base.h FrameGenStatus missing
+  brace from the resolution, fixed in this round; remaining errors TBD per rebuild).
+  v1 candidate happens once Kokiri/playtest re-verified after this merge.
+
+- v1 GUI (pending, owner'\''s ask): remove Discord/Donate buttons from the GUI (home rail
+  + Help menu + constants/icons/qrc), rewrite update notes short and sweet (improve
+  performance and stuttering/gameplay, not framerate; bugs known and being worked on;
+  this is build Ocarina2 v1), bump dist/ocarina2_version.txt appropriately for the
+  release, then merge to nx2 and talk about releasing. No pushing or releasing without
+  owner approval.
+
+## 2026-11-11 (later) - renderer_base.h union broke the struct brace; fixed
+
+Merge note: the bop-union for renderer_base.h glued ours'\''s unterminated FrameGenStatus
+open onto theirs'\''s DlssStatus, dropping the shared closing brace after generated_frames{};
+the compiler expected ';' at namespace VideoCore'\''s close. Fixed by closing
+FrameGenStatus before DlssStatus (sibling, not nested). If a similar resolution-union
+breaks elsewhere, the test of it is always the compiler, not my reading.
