@@ -711,3 +711,40 @@ open onto theirs'\''s DlssStatus, dropping the shared closing brace after genera
 the compiler expected ';' at namespace VideoCore'\''s close. Fixed by closing
 FrameGenStatus before DlssStatus (sibling, not nested). If a similar resolution-union
 breaks elsewhere, the test of it is always the compiler, not my reading.
+
+## 2026-11-11 (evening) - Ocarina2 v1: merge complete, GUI buttons removed, notes rewritten, build green
+
+The Fritchii v5.8.4 merge (merge/fritchii-v5.4-try, merge commit 0fd7ab7b4b) now BUILDS and links
+bin/Ocarina2.exe (BUILD_EXIT=0) after these post-merge fixes:
+
+- renderer_base.h: union glued ours' FrameGenStatus (unterminated in ours' side of the conflict) onto
+  theirs' DlssStatus, dropping ours' closing brace - closed it before DlssStatus (sibling, not nested)
+  (f935b49335)
+- vk_graphics_pipeline.h: merge auto-resolver duplicated ColorOutputMask/color_output_mask (both
+  forks added the same block independently) - deduped (ecd4b1492a)
+- vk_frame_dump.cpp: FrameworkDump's Rearm() referenced trigger_file, which ours keeps in
+  FrameDumpSchedule - schedule.TriggerFile() (a74159de0f)
+- CMakeLists.txt: rc.exe never got the Windows SDK um/shared/ucrt includes (winresrc.h missing) -
+  CMAKE_RC_FLAGS now carries the SDK paths; fixes yuzu-cmd and yuzu-room .rc compilation (ec05f80004)
+- vk_pipeline_cache.cpp: restored ours' non-const BuiltPipeline forwarding overload - header declares it
+  and call sites bind it (3fcc92b4ca)
+
+Build status: BUILD_EXIT=0 on the merged tree; Ocarina2.exe links. Unit tests are wired in CI
+(build-check.yml, -DYUZU_TESTS=ON, ctest) - they cannot build on this machine (no Qt6Test component),
+so the three merged test TUs were syntax-checked with clang-cl /Zs against the real flags (clean).
+YUZU_TESTS is back OFF locally, as it was.
+
+Owner's v1 edits, all in (each its own commit, on merge/fritchii-v5.4-try):
+- v1: remove Discord and Donate from the GUI (ff6123dfa2) - the dock buttons, the Help menu
+  entries, OpenDiscord/OpenDonate + URL constants, the painted community/heart icons, the SVGs and
+  their qrc entries. Saves button (Fritchii v5.8.3 feature) stays. Discord Rich Presence setting
+  untouched (not the button the owner meant).
+- v1: short and sweet update notes (687a584fdb) - performance and stuttering and actual gameplay,
+  NOT fps; known bugs, being worked on; this is build Ocarina2 v1. dist/ocarina2_version.txt is "1.0".
+- Crash-note: fritchii.qrc icons/ names (community, heart) were unused at runtime (icons are painted);
+  upstream shipped them anyway. Ours now matches upstream minus the buttons.
+- whats-new.md keeps credits for Eglantine/Eden, Lichii and Frizti's Fritchii; the v5.4-v5.8.4
+  changes are condensed into the merged section upstream notes referenced.
+
+State: build green on merge/fritchii-v5.4-try. Not pushed. Not merged to nx2. Owner has not
+approved releasing/tags; the next talk is merge to nx2 and release planning.
