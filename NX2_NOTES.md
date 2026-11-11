@@ -832,3 +832,45 @@ Findings:
   through in the heavy areas where native drops below 60 (the "ran a frame ahead" counters of
   400-600 per 600 presents in the heavy windows indicate generated frames are being presented).
   Not measured in a controlled A/B yet.
+
+## 2026-11-11 (evening, later) - LSFG x3 wired up: Lossless.dll installed + validated, config switched, logged-clean build
+
+Owner pointed at the install: `D:\Steam Game Files\steamapps\common\Lossless Scaling\Lossless.dll`
+(7,521,280 bytes, 2026-11-05). It is now copied to `%APPDATA%\ocarina2\lossless\Lossless.dll`
+(SHA-256 identical, 626B196D...). The two `lossless` folders were empty before.
+
+Validation (offline PE/resource parse mirroring `lossless_dll.cpp`, plus `lsfg_translate.cpp`):
+- Format PE32+, 6 sections, RCDATA type 10, 300 resources, IDs 101-400.
+- All 25 required native fp16 SPIR-V modules (ids 304, 305, 329-351 = base + NATIVE_FP16_OFFSET 49)
+  present and valid (SPIR-V magic 0x07230203, size % 4 == 0, >= 20 bytes).
+- Expect on first launch: `LSFG shaders loaded: 25 modules` and a one-time `lsfg_spirv.cache` build.
+  No `LSFG unavailable` warning (the file exists; also the warn is now gated to type == Lsfg).
+
+Config (owner's call: use LSFG, x3, as low latency as possible while keeping detail):
+- qt-config.ini (main, MC in the log) frame_gen_type: 1 (Fsr3) -> 0 (Lsfg). sdl2-config.ini matched.
+  Backups: *.bak-lsfg-fgen-switch. Single line changed; no BOM; byte-identical otherwise.
+- The OOT per-game config (0400486024DEC000.ini) inherits frame_gen_type from the main config
+  (use_global=true), keeps its frame_gen=true and frame_gen_multiplier=3 overrides, and the OOT
+  preset does NOT force the type (only enablement + x3 multiplier), so the switch sticks.
+- Low-latency knobs kept: frame_gen_queue_target=0 (min composites in flight), vsync Immediate
+  (preset), pacer target_rate=0 (targets the measured 71.91 Hz refresh). Detail kept:
+  flow_scale_auto=true (computes flow scale from the render/present ratio; at 1x render it is
+  effectively 100%, i.e. full-resolution optical flow - the manual 75 would soften edges).
+  LSFG itself costs ~a frame vs Optical Flow; that is the price of the better interpolation.
+
+Build: D:\Ocarina2-merge-build-dclang (clang-cl, RelWithDebInfo, ninja from VS 2022 BuildTools,
+12 jobs). Rebuilt after the 3f54e4cdf1 FG fix (frame_gen.cpp + lsfg_shaders.cpp recompiled,
+Ocarina2.exe relinked 14:08, scm_rev bumped). First invocation ended exit 1 without printing any
+FAILED line; the immediate re-run reports `ninja: no work to do`, exit 0, and the ninja log shows
+all 13 edges completed including bin/Ocarina2.exe. Build is good.
+
+FG log audit before the build (owner asked for this first): the ONLY FG-related Warning/Error in
+the current log (eden_log.txt, 13:51) is `LsfgShaders: LSFG unavailable: Lossless.dll status 1`
+(L891); the previous log has the same single line. No frame_gen/pacer/Fsr3 warnings or errors
+anywhere else. With the DLL installed the line cannot fire again; with the gating fix it only
+fires on the Lsfg path with a genuinely broken DLL.
+
+To verify in-game: launch Ocarina2.exe from that folder, then check eden_log.txt for
+`LSFG shaders loaded: 25 modules`. FG button should read FG LSFG x3 (not UNAVAILABLE). NOTE: the
+first LSFG run builds the shader cache (one-time, fast). If LSFG looks/performs worse than Optical
+Flow here, the config flip is a two-line revert (backups kept).
