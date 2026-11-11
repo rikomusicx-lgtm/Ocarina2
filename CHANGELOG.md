@@ -6,11 +6,11 @@ New entries go under `## [Unreleased]`; `tools/ci/bump-version.sh` turns them in
 
 ## [Ocarina2 v1.0] - 2026-11-11
 
-First real release of the Ocarina2 fork, built on Frizti's Fritchii 5.8.4 (itself on Eglantine/
-Eden via Lichii). The Fritchii 5.8.4 feature set ships unchanged — the OoT performance path
-(handheld-tuned OOT 60 FPS preset at boot, 12 GB emulated DRAM layout on 16 GB+ hosts with an
-8 GB floor elsewhere, FSR anti-aliasing options, warm shader preload, DLSS off by default).
-The Ocarina2 layer on top:
+First real release of Ocarina2 — our own fork of the Eglantine/Eden family, built on Frizti's
+Fritchii 5.8.4 (itself on Eglantine/Eden via Lichii). The Fritchii 5.8.4 feature set ships
+unchanged — the OoT performance path (handheld-tuned OOT 60 FPS preset at boot, 12 GB emulated
+DRAM layout on 16 GB+ hosts with an 8 GB floor elsewhere, FSR anti-aliasing options, warm shader
+preload, DLSS off by default). What Ocarina2 adds on top:
 
 Added:
 - Lossless Scaling (LSFG) frame generation, selectable and switchable in game. F12 / L3+R3 quick
@@ -22,9 +22,9 @@ Added:
   profile lossless folder and validates it. Nothing downloads or redistributes; Optical Flow is
   the built-in fallback and needs no copies at all. New "Install Lossless.dll from Steam" action
   in the FG menu; the FG unavailability tooltip explains both paths.
-- Profile directory renamed eden -> ocarina2 with full import migration from eden / fritchii /
+- Own profile directory (`%APPDATA%\ocarina2`) with full import migration from eden / fritchii /
   lichii / yuzu / suyu / sudachi / citron (first-launch import prompt and Help > Copy Data).
-- Ocarina2 branding throughout: window title, menus, dialogs, What's New, Export Log. Discord and
+- Ocarina2 throughout: window title, icon, menus, dialogs, What's New, Export Log. Discord and
   Donate buttons removed; Saves button kept.
 
 Changed:

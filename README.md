@@ -17,7 +17,7 @@
 
 # Ocarina2
 
-Ocarina2 is The Legend of Zelda: Ocarina of Time on Lichii — an experimental, open-source Nintendo Switch and Switch 2 emulator written in C++. It builds on Eglantine, Eden, yuzu and Sudachi, and this fork's work comes from zortos293's Lichii fork and Frizti's (Fritchii) line, with the focus kept on one game: 0400486024DEC000.
+Ocarina2 is our own fork of the Eglantine/Eden family — built on Lichii and Frizti's Fritchii — made to do one game justice: The Legend of Zelda: Ocarina of Time. An experimental, open-source Nintendo Switch and Switch 2 emulator written in C++.
 
 This is an independent fork, not an official release of those upstream projects. Ocarina2 is not affiliated with Nintendo.
 
@@ -31,7 +31,7 @@ On Windows, extract the entire build archive and run **Ocarina2.exe**. Only use 
 
 ### Existing saves and settings
 
-Ocarina2 keeps its own profile: `%APPDATA%\ocarina2` on Windows, and the `ocarina2` directories under `$XDG_DATA_HOME`, `$XDG_CONFIG_HOME` and `$XDG_CACHE_HOME` on Linux and macOS (renamed from fritchii in v1; `%APPDATA%\fritchii` is still picked up as a source below). An existing portable `user/` directory still takes priority and is not imported or changed.
+Ocarina2 keeps its own profile: `%APPDATA%\ocarina2` on Windows, and the `ocarina2` directories under `$XDG_DATA_HOME`, `$XDG_CONFIG_HOME` and `$XDG_CACHE_HOME` on Linux and macOS. Eden, Fritchii, Lichii, yuzu, suyu, sudachi and citron profiles are all still picked up as import sources (see below). An existing portable `user/` directory still takes priority and is not imported or changed.
 
 On the first launch the emulator copies your newest existing profile (an earlier Fritchii or Eden in `%APPDATA%\eden`, Lichii 150+ in `%APPDATA%\lichii`, else yuzu, suyu, sudachi or citron) into its own folder and shows what it copied. Settings, keys, mods and saves are copied; caches are not, so shaders are prepared again once. The old folder is never changed. If the emulator using it is still open, close it and start Ocarina2 again. An interrupted copy is put back and retried on the next launch. Back up your saves before testing experimental builds.
 

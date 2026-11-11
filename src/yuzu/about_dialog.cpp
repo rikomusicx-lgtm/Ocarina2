@@ -47,16 +47,17 @@ AboutDialog::AboutDialog(QWidget* parent)
     credits->setFixedHeight(150);
     credits->setMarkdown(QStringLiteral(
         "**Credits** \u2014 unofficial fan project\n\n"
+        "Ocarina2 is our own fork, built on the work of:\n\n"
         "- **Eglantine** \u2014 Camille LaVey (original developer) and contributors\n"
         "- **Eden** \u2014 the Eden team, continuation of yuzu; **yuzu** \u2014 yuzu-emu; "
         "**Sudachi** \u2014 Man Sorahia and contributors\n"
         "- **Lichii** \u2014 zortos293 (maintainer) and contributors; Djihads80\n"
-        "- **Fritchii / the Ocarina2 line** \u2014 Frizti (lead: AMD shader preparation, the "
+        "- **Fritchii** \u2014 Frizti (lead: AMD shader preparation, the "
         "Graphite UI), leonardochappuis (Linux, water), CheezerWheezer (AMD), koriko\n"
         "- **Community** \u2014 janvitos, ProphetWild, 101Leafy, nyakuoff, monsterlag, "
         "Dark (Dynamic FPS), EvilOOT (DMA snapshot)\n"
         "- **Artwork** \u2014 YOB (yobslab); **Ocarina of Forks Discord**\n"
-        "- **This fork** \u2014 rikomusicx-lgtm/Ocarina2, with its testers and bug "
+        "- **Ocarina2** \u2014 rikomusicx-lgtm/Ocarina2, with its testers and bug "
         "reporters"));
     ui->verticalLayout_3->insertWidget(1, credits);
 }
