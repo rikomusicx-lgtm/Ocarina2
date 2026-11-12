@@ -82,6 +82,7 @@ static int memfd_create(const char* name, unsigned int flags) {
 #endif
 
 namespace Common {
+thread_local HostMemory::AllocationTestControl* HostMemory::allocation_test_control{};
 
 [[maybe_unused]] constexpr size_t PageAlignment = 0x1000;
 [[maybe_unused]] constexpr int BackingAttempts = 5; // fastmem backing allocation tries (Windows)
@@ -213,6 +214,12 @@ public:
     {}
 
     bool Init() {
+        if (allocation_test_control) {
+            ++allocation_test_control->fastmem_attempts;
+            if (allocation_test_control->fail_fastmem) {
+                return false;
+            }
+        }
         if (!kernelbase_dll.IsOpen()) {
             LOG_CRITICAL(HW_Memory, "Failed to load Kernelbase.dll");
             return false;
@@ -317,6 +324,12 @@ public:
     }
 
     void* Allocate(size_t size) {
+        if (allocation_test_control) {
+            ++allocation_test_control->fallback_attempts;
+            if (allocation_test_control->fail_fallback) {
+                return nullptr;
+            }
+        }
         auto* ptr = VirtualAlloc(nullptr, size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
         if (ptr == nullptr) {
             LOG_CRITICAL(HW_Memory, "Failed to allocate fallback buffer with size {:#x}, error {}", size, GetLastError());
@@ -699,6 +712,12 @@ public:
 #endif
 
     bool Init() {
+        if (allocation_test_control) {
+            ++allocation_test_control->fastmem_attempts;
+            if (allocation_test_control->fail_fastmem) {
+                return false;
+            }
+        }
         const long page_size = sysconf(_SC_PAGESIZE);
         if (page_size < static_cast<long>(PageAlignment) ||
             page_size % static_cast<long>(PageAlignment) != 0) {
@@ -806,6 +825,12 @@ public:
     }
 
     void* Allocate(size_t size) {
+        if (allocation_test_control) {
+            ++allocation_test_control->fallback_attempts;
+            if (allocation_test_control->fail_fallback) {
+                return nullptr;
+            }
+        }
         auto* ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
         if (ptr == MAP_FAILED) {
             LOG_CRITICAL(HW_Memory, "Failed to allocate fallback buffer with size {:#x}, {}", size, strerror(errno));
@@ -1073,14 +1098,23 @@ private:
 #endif // ^^^ POSIX ^^^
 
 HostMemory::HostMemory(size_t backing_size_, size_t virtual_size_)
-    : backing_size(backing_size_)
-    , virtual_size(virtual_size_)
-    , num_granules(Common::DivCeil(backing_size_, size_t{1} << GranuleShift))
+    : backing_size(allocation_test_control ? allocation_test_control->backing_size : backing_size_)
+    , virtual_size(allocation_test_control ? allocation_test_control->virtual_size : virtual_size_)
+    , num_granules(Common::DivCeil(backing_size, size_t{1} << GranuleShift))
 {
     granules = std::make_unique<std::atomic<u8>[]>(num_granules);
 #if defined(__OPENORBIS__) || defined(__managarm__)
     LOG_WARNING(HW_Memory, "Platform doesn't support fastmem");
-    backing_base = static_cast<u8*>(mmap(nullptr, backing_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
+    if (allocation_test_control) {
+        ++allocation_test_control->fallback_attempts;
+    }
+    if (!allocation_test_control || !allocation_test_control->fail_fallback) {
+        backing_base = static_cast<u8*>(mmap(nullptr, backing_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
+        if (backing_base == MAP_FAILED) {
+            backing_base = nullptr;
+        }
+    }
+    fallback_buffer = true;
     virtual_base = nullptr;
 #else
     // Try to allocate a fastmem arena.

@@ -158,6 +158,19 @@ public:
     }
 
 private:
+    friend class HostMemoryTestAccess;
+    /// Test-only hook for the host_memory_failure suite: lets the test force the fastmem and
+    /// fallback allocation paths to fail and watch what the emulator does with that.
+    struct AllocationTestControl {
+        size_t backing_size;
+        size_t virtual_size;
+        bool fail_fastmem;
+        bool fail_fallback;
+        size_t fastmem_attempts{};
+        size_t fallback_attempts{};
+    };
+    static thread_local AllocationTestControl* allocation_test_control;
+
     size_t backing_size{};
     size_t virtual_size{};
 

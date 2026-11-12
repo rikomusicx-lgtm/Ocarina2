@@ -17,6 +17,11 @@
 #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
 #include "video_core/shader_environment.h"
 
+// Xlib.h (via the Vulkan XLIB platform headers) defines Status as int, which eats the
+// PipelineCacheMergeResult::Status enumerator used below. #undef Status mirrors the guard in
+// vk_pipeline_cache.cpp; the test never uses the X11 type.
+#undef Status
+
 namespace {
 
 constexpr std::array<char, 8> Magic{'y', 'u', 'z', 'u', 'c', 'a', 'c', 'h'};
