@@ -738,10 +738,14 @@ jobs:
           ${pgo_note}
           EOF
 
+          # Releases are named after the version the binaries were built from
+          # (dist/ocarina2_version.txt), e.g. "Ocarina2 v1.2". The tag stays build-N for the
+          # update checker. Read it from the git blob for this commit so the job needs no checkout.
+          version=$(gh api "repos/${GITHUB_REPOSITORY}/contents/dist/ocarina2_version.txt?ref=${GITHUB_SHA}" --jq '.content' | base64 -d | tr -d '[:space:]')
           gh release create "${tag}" dist/* \
             --repo "${GITHUB_REPOSITORY}" \
             --verify-tag \
-            --title "Ocarina2 ${GITHUB_REF_NAME} build ${GITHUB_RUN_NUMBER} (${GITHUB_SHA::7})" \
+            --title "Ocarina2 v${version}" \
             --notes-file notes.md
 
       # LICHII_BUILD_TAG is baked into every binary as build-<run number>, and the update checker
@@ -756,7 +760,8 @@ jobs:
           expected="build-${GITHUB_RUN_NUMBER}"
           published_tag=$(gh release view "$expected" --repo "${GITHUB_REPOSITORY}" --json tagName --jq '.tagName')
           published_title=$(gh release view "$expected" --repo "${GITHUB_REPOSITORY}" --json name --jq '.name')
-          if [ "$published_tag" != "$expected" ] || [[ "$published_title" != *" build ${GITHUB_RUN_NUMBER} ("* ]]; then
-            echo "Release is tagged '$published_tag' and titled '$published_title', expected tag $expected and a title naming build ${GITHUB_RUN_NUMBER}"
+          version=$(gh api "repos/${GITHUB_REPOSITORY}/contents/dist/ocarina2_version.txt?ref=${GITHUB_SHA}" --jq '.content' | base64 -d | tr -d '[:space:]')
+          if [ "$published_tag" != "$expected" ] || [ "$published_title" != "Ocarina2 v${version}" ]; then
+            echo "Release is tagged '$published_tag' and titled '$published_title', expected tag $expected and title 'Ocarina2 v${version}'"
             exit 1
           fi

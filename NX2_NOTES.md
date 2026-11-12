@@ -1069,3 +1069,22 @@ workflow_dispatch only, so push never waits on or fails on macOS anymore.
 Release status as of this note: nothing published yet. The auto-release trains (build-N tags,
 LIHCHII_BUILD_TAG) for the current tip will be the v1.0 per the owner's call; the release-binaries
 workflow skips pushes that only touch tests, so the test fixes don't re-trigger binary builds.
+
+## 2026-11-12 (evening) - updater asset naming fixed; CI test-step PATH fixed; tests segfault under investigation
+
+- Update checker build-N track was looking for assets named lichii-<platform>[-pgo].<ext> on
+  rikomusicx-lgtm/Ocarina2, but every release publishes ocarina2-* names. The checker would
+  never have found an update. net.cpp now builds ocarina2-<platform>[-pgo].<ext>. The Ocarina2
+  (Windows, Frizti/Lichii) track is untouched.
+- update_checker_tests: fixtures now use rikomusicx-lgtm/Ocarina2 + ocarina2-* assets, the HTTP
+  mock server expects User-Agent Ocarina2 (production net.cpp sends that), and every unchecked
+  GetPlatformAssets(...)[0] dereference is behind a REQUIRE so a naming mismatch fails the
+  test instead of segfaulting the binary.
+- build-check "Run tests" (Windows): ilammy/msvc-dev-cmd rebuilt PATH from the snapshot taken
+  before install-qt ran, dropping Qt's bin. compatibility_report (Qt Test, QT_QPA_PLATFORM=offscreen)
+  died on the missing Qt6Core.dll before printing anything (ctest reported Failed with no output).
+  Run tests now prepends $QT_ROOT_DIR/bin to PATH (Linux sets LD_LIBRARY_PATH).
+- config_tests: assertions expected the pre-v1.1 historical defaults; v1.1 baked the tuned
+  values into the linkage defaults, so existing profiles keep SgsrEdge/Low/Gpu/true/true.
+- Local repro of the `tests` segfault on D: (fresh build dir, LLVM 22.1.8 = CI-pinned version,
+  local Qt 6.11.1) in progress; cause TBD.

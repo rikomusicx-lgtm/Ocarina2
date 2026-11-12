@@ -4,6 +4,50 @@ All notable changes to Eglantine are documented here. Each release's notes are t
 `## [X.Y.Z]` section (release candidates use the section of the version they are a candidate for).
 New entries go under `## [Unreleased]`; `tools/ci/bump-version.sh` turns them into a version section.
 
+## [Ocarina2 v1.1] - 2026-11-12
+
+Made by rikomusicx-lgtm. The GUI update: a new home screen, a dock to drive the app, and the
+worst v1 paper cuts ironed out. The next build is Ocarina2 v1.2 (`dist/ocarina2_version.txt`).
+
+Added:
+- Hyrule home screen: hand-drawn twilight scene of Hyrule Castle drawn into the window; drop
+  `background.png`/`.jpg`/`.jpeg` (up to 16 MB) into the ocarina2 folder to use your own art.
+- Switch 2-style dock: Home, Games, Add games, Settings, What's new and More across the bottom
+  with the bubbly hover/focus bounce; classic menus behind More.
+- Top bar: triforce avatar, Home/Games switch, network glyphs and clock.
+- Games pane: controller-ready games list, single-shot navigation, A/Enter launches, B/Escape
+  (or Back) goes home.
+- What's new in-app: dock's What's new button or Help > What's New.
+
+Changed:
+- Buttons and controls work more fluid: the pad's A button ticks checkboxes and radio buttons
+  like Enter/Space; focus is never lost; navigation reacts to single presses everywhere.
+- Quick menu opens with F12 or L3+R3 (frame generation, settings) and saves what it changes.
+- OoT preset ships the global defaults (SGSR edge upscaling, FXAA, Optical Flow x4); per-game
+  overrides defer to the global profile instead of stamping over it on every boot.
+
+Fixed:
+- Back button lost after the game closes in single-window mode; the window now restores the
+  home screen or the games pane with Back visible.
+- Games list stacked over the home screen on boot (race between scan and restore); one coherent
+  state always wins now.
+- Games-pane navigation double-fired two rows per stick press.
+- Filter bar read "0 of 0 result(s)" on grid/carousel views; counter shows real visible/total
+  on every view.
+- Hero card drift at odd window sizes (anchor to the artwork slot); hero art and vignette
+  reworked.
+
+Known issues:
+- Intermittent white flash in combat-heavy scenes.
+- First-boot shader compile hitches until the cache is warm.
+
+
+# Changelog
+
+All notable changes to Eglantine are documented here. Each release's notes are taken from its
+`## [X.Y.Z]` section (release candidates use the section of the version they are a candidate for).
+New entries go under `## [Unreleased]`; `tools/ci/bump-version.sh` turns them into a version section.
+
 ## [Ocarina2 v1.0] - 2026-11-11
 
 First real release of Ocarina2 — our own fork of the Eglantine/Eden family, built on Frizti's
