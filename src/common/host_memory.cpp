@@ -143,15 +143,20 @@ bool ReserveGuestMemory() {
     return value == nullptr || value[0] != '0';
 }
 
-/// The views of a reserved section, for ReservedPageHandler.
+/// The views of the SEC_RESERVE sections, for ReservedPageHandler. Several sections can be
+/// reserved at once (the main memory and the shared region are created one after another), so
+/// the handler tracks all of them instead of the most recent one. A slot is claimed (0 -> 1),
+/// published (1 -> 2) once its fields are set, served (2) while the section is reserved and
+/// released (2 -> 0) when it is freed.
+constexpr size_t MaxReservedViews = 8;
 struct ReservedViews {
-    std::atomic<bool> active{};
+    std::atomic<u8> state{}; ///< 0 empty, 1 claimed, 2 active
     u8* backing_base{};
     size_t backing_size{};
     u8* virtual_base{};
     size_t virtual_size{};
 };
-ReservedViews g_reserved_views;
+ReservedViews g_reserved_views[MaxReservedViews];
 std::atomic<u64> g_committed_bytes{};  ///< Committed by HostMemory::Commit
 std::atomic<u64> g_net_commits{};      ///< Committed by ReservedPageHandler
 std::atomic<u64> g_first_net_offset{}; ///< Its first: backing offset, or virtual offset | 1 << 63
@@ -167,17 +172,30 @@ std::atomic<u64> g_first_net_offset{}; ///< Its first: backing offset, or virtua
 /// elsewhere) is passed on as before.
 LONG CALLBACK ReservedPageHandler(PEXCEPTION_POINTERS info) {
     const EXCEPTION_RECORD& record = *info->ExceptionRecord;
-    if (record.ExceptionCode != EXCEPTION_ACCESS_VIOLATION || record.NumberParameters < 2 ||
-        !g_reserved_views.active.load(std::memory_order_acquire)) {
+    if (record.ExceptionCode != EXCEPTION_ACCESS_VIOLATION || record.NumberParameters < 2) {
         return EXCEPTION_CONTINUE_SEARCH;
     }
-    const ReservedViews& views = g_reserved_views;
     u8* const address = reinterpret_cast<u8*>(record.ExceptionInformation[1]);
-    const bool in_backing =
-        address >= views.backing_base && address < views.backing_base + views.backing_size;
-    const bool in_virtual =
-        address >= views.virtual_base && address < views.virtual_base + views.virtual_size;
-    if (!in_backing && !in_virtual) {
+    size_t fault_offset{};
+    bool in_backing{};
+    bool matched{};
+    for (const auto& view : g_reserved_views) {
+        if (view.state.load(std::memory_order_acquire) != 2) {
+            continue;
+        }
+        if (address >= view.backing_base && address < view.backing_base + view.backing_size) {
+            fault_offset = static_cast<size_t>(address - view.backing_base);
+            in_backing = true;
+            matched = true;
+            break;
+        }
+        if (address >= view.virtual_base && address < view.virtual_base + view.virtual_size) {
+            fault_offset = static_cast<size_t>(address - view.virtual_base);
+            matched = true;
+            break;
+        }
+    }
+    if (!matched) {
         return EXCEPTION_CONTINUE_SEARCH;
     }
     MEMORY_BASIC_INFORMATION region{};
@@ -195,9 +213,7 @@ LONG CALLBACK ReservedPageHandler(PEXCEPTION_POINTERS info) {
         return EXCEPTION_CONTINUE_SEARCH;
     }
     if (g_net_commits.fetch_add(1, std::memory_order_relaxed) == 0) {
-        g_first_net_offset.store(in_backing ? static_cast<u64>(address - views.backing_base)
-                                            : static_cast<u64>(address - views.virtual_base) |
-                                                  (u64{1} << 63),
+        g_first_net_offset.store(in_backing ? fault_offset : fault_offset | (u64{1} << 63),
                                  std::memory_order_relaxed);
     }
     return EXCEPTION_CONTINUE_EXECUTION;
@@ -287,11 +303,24 @@ public:
             return false;
         }
         if (reserved) {
-            g_reserved_views.backing_base = backing_base;
-            g_reserved_views.backing_size = backing_size;
-            g_reserved_views.virtual_base = virtual_base;
-            g_reserved_views.virtual_size = virtual_size;
-            g_reserved_views.active.store(true, std::memory_order_release);
+            for (u32 i = 0; i < MaxReservedViews; ++i) {
+                u8 expected = 0;
+                if (g_reserved_views[i].state.compare_exchange_strong(expected, 1,
+                                                                      std::memory_order_acq_rel)) {
+                    reserved_index = i;
+                    g_reserved_views[i].backing_base = backing_base;
+                    g_reserved_views[i].backing_size = backing_size;
+                    g_reserved_views[i].virtual_base = virtual_base;
+                    g_reserved_views[i].virtual_size = virtual_size;
+                    g_reserved_views[i].state.store(2, std::memory_order_release);
+                    break;
+                }
+            }
+            if (reserved_index == MaxReservedViews) {
+                LOG_CRITICAL(HW_Memory,
+                             "EDEN_NX2_SEC_RESERVE: too many reserved sections, the fault net is not "
+                             "tracking one of them");
+            }
             static std::once_flag handler_added;
             std::call_once(handler_added, [] { AddVectoredExceptionHandler(1, ReservedPageHandler); });
             LOG_INFO(HW_Memory,
@@ -424,12 +453,13 @@ public:
     u8* backing_base{};
     u8* virtual_base{};
     bool reserved{}; ///< EDEN_NX2_SEC_RESERVE: the section was created with SEC_RESERVE
+    u32 reserved_index{MaxReservedViews}; ///< Slot in g_reserved_views, or MaxReservedViews if none
 
 private:
     /// Release all resources in the object
     void Release() {
-        if (reserved) {
-            g_reserved_views.active.store(false, std::memory_order_release);
+        if (reserved && reserved_index < MaxReservedViews) {
+            g_reserved_views[reserved_index].state.store(0, std::memory_order_release);
         }
         if (!placeholders.empty()) {
             for (const auto& placeholder : placeholders) {
@@ -1564,10 +1594,18 @@ void HostMemory::CommitAllBut(std::span<const std::pair<size_t, size_t>> lazy) {
 
 HostMemory::CommitStats HostMemory::GetCommitStats() {
 #ifdef _WIN32
+    bool any_reserved{};
+    size_t section_bytes{};
+    for (const auto& view : g_reserved_views) {
+        if (view.state.load(std::memory_order_relaxed) == 2) {
+            any_reserved = true;
+            section_bytes += view.backing_size;
+        }
+    }
     return CommitStats{
-        .reserved = g_reserved_views.active.load(std::memory_order_relaxed),
+        .reserved = any_reserved,
         .committed_bytes = g_committed_bytes.load(std::memory_order_relaxed),
-        .section_bytes = g_reserved_views.backing_size,
+        .section_bytes = section_bytes,
         .net_commits = g_net_commits.load(std::memory_order_relaxed),
         .first_net_offset = g_first_net_offset.load(std::memory_order_relaxed),
     };

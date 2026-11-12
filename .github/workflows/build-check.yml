@@ -135,7 +135,12 @@ jobs:
           ccache --show-stats
 
       - name: Run tests
-        run: ctest --test-dir build --output-on-failure --no-tests=error --parallel "$(nproc)"
+        # Linux binaries resolve Qt from their build-tree rpath, but be explicit: the Test
+        # module used by compatibility_report lives in $QT_ROOT_DIR/lib and ctest runs with a
+        # clean-ish environment.
+        run: |
+          export LD_LIBRARY_PATH="$QT_ROOT_DIR/lib:${LD_LIBRARY_PATH}"
+          ctest --test-dir build --output-on-failure --no-tests=error --parallel "$(nproc)"
 
       - name: Test debug adapter
         run: python3 tools/nx2/test_debug_mcp.py
@@ -255,7 +260,11 @@ jobs:
           ccache --show-stats -v
 
       - name: Run tests
-        run: ctest --test-dir build --output-on-failure --no-tests=error --parallel "$NUMBER_OF_PROCESSORS"
+        # The MSVC setup step rebuilt PATH from its pre-Qt snapshot, so Qt's bin directory is
+        # missing here; put it back for the dynamic loader (compatibility_report needs it).
+        run: |
+          export PATH="$QT_ROOT_DIR/bin:$PATH"
+          ctest --test-dir build --output-on-failure --no-tests=error --parallel "$NUMBER_OF_PROCESSORS"
 
       - name: Save dependencies and compiler objects
         if: always()

@@ -3,13 +3,44 @@ The "What's new" notes shown on first launch after an update (Help > What's New)
 public release notes here when cutting a build. The download instructions at the top are
 dropped automatically in the app.
 -->
+## Ocarina2 v1.2
+
+Made by rikomusicx-lgtm.
+
+The v1.2 update: the "Ocarina2 v1" scale of fixes, kept short on purpose.
+
+**What's different compared to v1.1**
+
+- **Enter/Space handling works on every platform.** The pad's A button now ticks checkboxes and
+  radio buttons properly on Linux and macOS too — the filter used to exist only on Windows.
+- **The window names the build correctly**: the app reports "Ocarina2 1.2" instead of the
+  internal build number used by the release tooling.
+- **Build and test-suite fixes** so the release builds are gated on the full test suite again
+  (frame pacing, host memory, pipeline cache and command-fetch tests were all stale against the
+  reworked engine and now pass on GCC and clang-cl).
+- **CI/release plumbing**: macOS builds are opt-in now (free arm64 runners were never getting
+  acquired and the runs sat queued forever), and releases are titled automatically after the
+  version the binaries were built from.
+
+No gameplay changes in this update; Ocarina of Time plays the same.
+
+**We know there are more bugs — we are fixing them.**
+
+This build is better than v1.1, but it is not finished. We know there are bugs left: the
+intermittent white flash in combat-heavy scenes, first-boot shader compile hitches while the
+cache warms up, and anything else you hit. We will keep shipping fixes. The fastest way to
+help: **Help > Export Log** and send us the file.
+
+Made by rikomusicx-lgtm. Built on Eglantine, Eden, Lichii and Frizti's Fritchii (5.8.4).
+Not affiliated with Nintendo. No games included.
+
 ## Ocarina2 v1.1
 
 Made by rikomusicx-lgtm.
 
-The big GUI update: a new home screen, a dock to drive the app, and a long list of paper cuts
-from v1 ironed out. This update changes how Ocarina2 looks and feels — it is not the same app
-with new paint.
+The big GUI update: a new home screen, a dock to drive the app, and the worst v1 paper cuts
+ironed out. This update changes how Ocarina2 looks and feels — it is not the same app with new
+paint.
 
 **The new GUI**
 
@@ -47,29 +78,35 @@ between Optical Flow and Lossless Scaling (right-click the FG button) both work 
 
 **Bug fixes**
 
-- **Back button lost after the game closes.** In single-window mode the home screen and dock
-  stayed hidden after the game exited, stranding you on the games list. The window now
-  restores exactly what you had: the home screen, or the games pane with Back visible.
-- **Games list sometimes stacked over the home screen on boot.** Whichever finished first won
-  the race; the window now always restores one coherent state every time.
-- **Games-pane navigation double-fired** (two rows per stick press) — fixed, navigation is
-  single-shot now.
-- **OoT was overriding your graphics preset at every boot**, forcing its own upscaling and
-  anti-aliasing on top of your settings. The OoT preset now ships the same values as the
-  global defaults (SGSR edge upscaling, FXAA, Optical Flow x4 frame generation), and your
-  per-game overrides defer to your global profile instead of stamping over it.
-- **Hero card drift** at odd window sizes — anchored now.
-- **Button input across the whole app** — checkboxes, radio buttons and focused dialogs now
-  respond to the pad's A button exactly like Enter/Space does on a keyboard.
+- **Back button lost after the game closes.** In single-window mode the home screen and the dock
+  stayed hidden after the game exited — you were stranded on the games list with no way home.
+  The window now restores exactly what you had: the home screen, or the games pane with the
+  Back button visible again.
+- **Games list stacked over the home screen on some boots.** Whichever of the two won the race
+  between the game-list scan and the home restore decided what showed; the window now always
+  restores one coherent state.
+- **Games-pane controller double-fire.** The stick/D-pad could jump two rows per press with the
+  games list and the filter bar focused; navigation is single-shot now.
+- **Filter bar reading "0 of 0 result(s)".** The grid/carousel views never reported their visible
+  counts and the flat-mode total was computed with tree semantics; the counter now shows the real
+  visible/total on every view.
+- **OoT reverting your graphics preset at boot.** The OoT performance preset pinned Area upscaling,
+  no anti-aliasing and 3x frame generation on top of your settings on every boot. It now applies
+  the same values the global preset bakes in (SGSR edge upscaling, FXAA, Optical Flow x4), and the
+  per-game overrides defer to the global profile.
+- **Hero card placement** is anchored to the artwork slot on every window size.
 
-**V1 performance defaults, now the default for new installs**
+**Performance and defaults**
 
-- Optical Flow (FSR3) frame generation x4, SGSR edge upscaling, FXAA, immediate vsync.
-- 8 GB emulated memory layout under 16 GB of system RAM (12 GB where it fits), handheld mode,
-  BC3 ASTC textures, conservative texture-cache VRAM for low-end PCs.
-- The built-in Dynamic FPS patch keeps Ocarina of Time at full game speed at low frame rates —
-  the game no longer slows to a crawl when FPS drops. If you can't hold 60, prefer 30 FPS mode
-  (status bar toggle) plus frame generation.
+- The v1 graphics preset is now the default for new installs: Optical Flow (FSR3) frame generation
+  x4, SGSR edge upscaling, FXAA, immediate vsync.
+- Built for low-end PCs: the 8 GB memory layout stays on machines under 16 GB of RAM (12 GB only
+  where it fits), handheld mode, BC3 ASTC textures and conservative VRAM for the texture cache —
+  8 GB cards should stay well under 4 GB of VRAM for this game.
+- The built-in Dynamic FPS patch keeps Ocarina of Time at full speed when the frame rate drops —
+  the game no longer slows to a crawl at low FPS. If your PC can't hold 60, prefer 30 FPS mode
+  (status bar toggle) and frame generation over the 60 FPS mode to avoid the hitching that comes
+  with it.
 
 **We know there are more bugs — we are fixing them.**
 

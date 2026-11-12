@@ -42,12 +42,19 @@ if (EXISTS "${OCARINA2_VERSION_FILE}")
     endif()
 endif()
 
-if (LICHII_BUILD_TAG MATCHES "^build-[0-9]+$")
+# The Ocarina2 version in dist/ocarina2_version.txt wins for the user-facing name, so release
+# builds read "Ocarina2 1.2", not "build-12". The LICHII_BUILD_TAG is still baked into the build
+# for the update checker (release tags are compared against it).
+if (OCARINA2_VERSION)
+    set(BUILD_VERSION "${OCARINA2_VERSION}")
+    if (LICHII_BUILD_TAG MATCHES "^build-[0-9]+$")
+        set(IS_DEV_BUILD false)
+    else()
+        set(IS_DEV_BUILD true)
+    endif()
+elseif (LICHII_BUILD_TAG MATCHES "^build-[0-9]+$")
     set(BUILD_VERSION "${LICHII_BUILD_TAG}")
     set(IS_DEV_BUILD false)
-elseif (OCARINA2_VERSION)
-    set(BUILD_VERSION "${OCARINA2_VERSION}")
-    set(IS_DEV_BUILD true)
 elseif (DEFINED GIT_RELEASE)
     set(BUILD_VERSION "${GIT_TAG}")
     set(GIT_REFSPEC "${GIT_RELEASE}")

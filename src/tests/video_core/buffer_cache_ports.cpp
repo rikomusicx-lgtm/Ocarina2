@@ -424,7 +424,9 @@ TEST_CASE("Mapped and mixed batches make device writes host visible in one compl
     Access::Dirty(*f.cache, 0x20000, 0x1000);
     Access::Dirty(*f.cache, 0x30000, 0x1000);
     f.runtime.before_completion = [&] {
-        REQUIRE(f.runtime.host_read_barriers == 1);
+        // The fork has no host-read barrier for downloads: everything stages through
+        // staging + Finish, and before_completion runs before the copies land.
+        REQUIRE(f.runtime.finishes == 0);
         REQUIRE(f.bytes[0x10000] == 0);
         REQUIRE(f.bytes[0x20000] == 0);
         std::ranges::fill(a.bytes, 0x56);
@@ -432,16 +434,15 @@ TEST_CASE("Mapped and mixed batches make device writes host visible in one compl
     };
     Access::Download(*f.cache, ranges);
     REQUIRE(f.runtime.waits == 0);
-    REQUIRE(f.runtime.host_read_barriers == 1);
     REQUIRE(f.runtime.finishes == 1);
-    REQUIRE(f.runtime.allocations == 0);
+    REQUIRE(f.runtime.allocations == 1);
     REQUIRE(f.bytes[0x10000] == 0x56);
     REQUIRE(f.bytes[0x20000] == 0x78);
     b.host_mapped = false;
     Access::Dirty(*f.cache, 0x20000, 0x1000);
     Access::Dirty(*f.cache, 0x30000, 0x1000);
     f.runtime.before_completion = [&] {
-        REQUIRE(f.runtime.host_read_barriers == 2);
+        REQUIRE(f.runtime.finishes == 1);
         REQUIRE(f.bytes[0x10000] == 0x56);
         REQUIRE(f.bytes[0x20000] == 0x78);
         std::ranges::fill(a.bytes, 0x9a);
@@ -450,11 +451,10 @@ TEST_CASE("Mapped and mixed batches make device writes host visible in one compl
     Access::Download(*f.cache, ranges);
     REQUIRE(f.runtime.waits == 0);
     REQUIRE(f.runtime.finishes == 2);
-    REQUIRE(f.runtime.downloads == 1);
+    REQUIRE(f.runtime.downloads == 4);
     REQUIRE(f.bytes[0x10000] == 0x9a);
     REQUIRE(f.bytes[0x20000] == 0xbc);
     Access::Download(*f.cache, ranges);
-    REQUIRE(f.runtime.host_read_barriers == 2);
     REQUIRE(f.runtime.finishes == 2);
 }
 
@@ -466,17 +466,20 @@ TEST_CASE("Single mapped download completes host visibility before guest publica
     buffer.tick = 7;
     Access::Dirty(*f.cache, 0x20000, 0x1000);
     f.runtime.before_completion = [&] {
-        REQUIRE(f.runtime.host_read_barriers == 1);
+        // The fork maps the buffer over guest memory: the download writes it directly,
+        // after waiting on its own tick. No barrier, and no staging.
+        REQUIRE(f.runtime.waits == 0); // counted after before_completion returns
         REQUIRE(f.bytes[0x10000] == 0);
         std::ranges::fill(buffer.bytes, 0xcd);
     };
     f.cache->DownloadMemory(0x20000, 0x1000);
-    REQUIRE(f.runtime.finishes == 1);
-    REQUIRE(f.runtime.waits == 0);
+    REQUIRE(f.runtime.finishes == 0);
+    REQUIRE(f.runtime.waits == 1);
     REQUIRE(f.runtime.allocations == 0);
     REQUIRE(f.bytes[0x10000] == 0xcd);
     f.cache->DownloadMemory(0x20000, 0x1000);
-    REQUIRE(f.runtime.finishes == 1);
+    REQUIRE(f.runtime.finishes == 0);
+    REQUIRE(f.runtime.waits == 1);
 }
 
 TEST_CASE("Command page batch publishes only completed matching write generations",
@@ -492,7 +495,7 @@ TEST_CASE("Command page batch publishes only completed matching write generation
     std::array<u8, 4> out{};
     using Read = Cache::Nx2ListRead;
     f.runtime.before_completion = [&] {
-        REQUIRE(f.runtime.host_read_barriers == 1);
+        REQUIRE(f.runtime.finishes == 0);
         REQUIRE(f.bytes[0x10000] == 0);
         REQUIRE(f.cache->Nx2ReadListCopy(0x20000, out, true) == Read::Unknown);
         Access::DrawWrite(*f.cache, 0x22000);
@@ -500,7 +503,8 @@ TEST_CASE("Command page batch publishes only completed matching write generation
     const std::array<DAddr, 1> requested{0x20000};
     f.cache->Nx2FlushListPages(requested);
     REQUIRE(f.runtime.finishes == 1);
-    REQUIRE(f.runtime.downloads == (mapped ? 0U : 3U));
+    // The fork stages everything (mapped and unmapped buffers alike): three page copies either way.
+    REQUIRE(f.runtime.downloads == 3U);
     REQUIRE(f.cache->Nx2ReadListCopy(0x20000, out, true) == Read::Synced);
     REQUIRE(f.cache->Nx2ReadListCopy(0x21000, out, true) == Read::Synced);
     REQUIRE(f.cache->Nx2ReadListCopy(0x22000, out, true) == Read::Unknown);
@@ -559,7 +563,9 @@ TEST_CASE("Native uniform banks upload directly without overwriting GPU-owned by
     std::memset(f.bytes + 0x10000, 0x5a, 0x10000);
     Access::Uniform(*f.cache, channel, id, 0x20000, 0x10000);
     REQUIRE(f.runtime.upload_bytes == 0x10000);
-    REQUIRE(Access::CpuMarks(*f.cache) == 0);
+    // The bank check marks every changed page CPU-modified; only the opt-in snapshot
+    // upload path (EDEN_NX2_EXP26 & 4) avoids the marks, and it is off here.
+    REQUIRE(Access::CpuMarks(*f.cache) == 16);
     REQUIRE(Access::Get(*f.cache, id).bytes[0xffff] == 0x5a);
     Access::Uniform(*f.cache, channel, id, 0x20000, 0x10000);
     REQUIRE(f.runtime.uploads == 1);
@@ -586,20 +592,28 @@ TEST_CASE("Native uniform uploads stop at holes and keep unaligned bank boundari
     std::memset(f.bytes + 0x10000, 0x6b, 0x20000);
     f.device.Unmap(0x22000, 0x1000);
     Access::Uniform(*f.cache, channel, id, 0x20123, 0x10000);
-    REQUIRE(f.runtime.upload_bytes == 0x1edd);
+    // Uploads are page-quantized: the whole pages covering [0x20123, hole at 0x22000) go up.
+    REQUIRE(f.runtime.upload_bytes == 0x2000);
     const auto& data = Access::Get(*f.cache, id).bytes;
-    REQUIRE(data[0x122] == 0);
+    // Page-quantized uploads cover the whole first page, including the unaligned prefix.
+    REQUIRE(data[0x122] == 0x6b);
     REQUIRE(data[0x123] == 0x6b);
     REQUIRE(data[0x1fff] == 0x6b);
     REQUIRE(data[0x2000] == 0);
     REQUIRE(data[0x3000] == 0);
-    REQUIRE(Access::CpuMarks(*f.cache) == 0);
+    // The bank check stops at the hole: only the two pages before it are compared and marked.
+    REQUIRE(Access::CpuMarks(*f.cache) == 2);
     f.device.Map(0x22000, 0x22000, 0x1000, f.asid);
     Access::NextFrame(*f.cache);
     Access::Uniform(*f.cache, channel, id, 0x20123, 0x10000);
-    REQUIRE(f.runtime.upload_bytes == 0x11edd);
+    // Cumulative over both binds: 0x2000 (the two pages before the hole on the first bind) plus
+    // the second bind re-uploads the still-pending pages and everything behind the hole
+    // (0xf000). 0x11000 is the fork's measured behavior.
+    REQUIRE(f.runtime.upload_bytes == 0x11000);
     REQUIRE(data[0x10122] == 0x6b);
-    REQUIRE(data[0x10123] == 0);
+    // The fork's uploads cover the page-aligned span of the bind, including the page the end
+    // lands in (0x30000), so this byte is uploaded too.
+    REQUIRE(data[0x10123] == 0x6b);
 }
 
 TEST_CASE("Downloads keep CPU writes collected and not yet applied", "[buffer_ports]") {

@@ -160,6 +160,12 @@ TEST_CASE("legacy output and renderer sinks preserve FIFO volume and repeated-fr
         REQUIRE(std::ranges::all_of(output, [](s16 value) { return value == -2000; }));
         REQUIRE(stream.GetQueueSize() == 0);
         stream.ProcessAudioOutAndRender(output, 240);
-        REQUIRE(std::ranges::all_of(output, [](s16 value) { return value == -2000; }));
+        // The fork silences the renderer sink on underruns (repeated DC there is an audible
+        // buzz); the audio-out stream repeats the last played frame.
+        if (type == AudioCore::Sink::StreamType::Out) {
+            REQUIRE(std::ranges::all_of(output, [](s16 value) { return value == -2000; }));
+        } else {
+            REQUIRE(std::ranges::all_of(output, [](s16 value) { return value == 0; }));
+        }
     }
 }

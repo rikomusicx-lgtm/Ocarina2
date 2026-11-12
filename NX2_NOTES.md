@@ -1088,3 +1088,27 @@ workflow skips pushes that only touch tests, so the test fixes don't re-trigger 
   values into the linkage defaults, so existing profiles keep SgsrEdge/Low/Gpu/true/true.
 - Local repro of the `tests` segfault on D: (fresh build dir, LLVM 22.1.8 = CI-pinned version,
   local Qt 6.11.1) in progress; cause TBD.
+
+## 2026-11-12 (late) - v1.2 pulled by the owner; publish is on demand only now; v1.3 = next build
+
+- The v1.2 release (build-12, fa9497a3be) shipped with the internal build number in the title
+  ("Ocarina2 1.2" was built as "build-12"), a stale What's New, and no real description. The owner
+  deleted it. Releases now happen only on demand: release-binaries still builds on pushes to nx2
+  (CI validation) but never creates a release tag or publishes; a release is created only via
+  workflow_dispatch with publish_release=true.
+- build-12 was re-created as a description-only release (no binaries; they were deleted with the
+  original release): it documents what changed vs v1.1, says explicitly that the binaries were
+  pulled, and points users at v1.1 (build-11) as the last downloadable release. The v1.1-to-v1.2
+  difference list lives there and in the in-app What's New now.
+- GenerateSCMRev: the Ocarina2 version from dist/ocarina2_version.txt wins over LICHII_BUILD_TAG
+  for the user-facing name (an Ocarina2 release now reports "Ocarina2 1.2"); the build-N tag is
+  still baked in for the update checker.
+- host_memory.cpp: the SEC_RESERVE fault net tracked only the most recently reserved section, so a
+  raw access to any earlier section faulted without a handler and crashed (this was the tests-bin
+  crash). It now tracks up to eight sections, claimed with CAS and released on teardown.
+- buffer_cache_ports tests updated to the fork semantics (downloads stage through Finish; mapped
+  buffers wait on their own tick; page-quantized uploads; CPU marks only from the snapshot fast
+  path). sysmix_sink: renderer stream writes silence on underrun (deliberate fork behavior),
+  audio-out repeats the last frame - the test asserts both.
+- What's New gains an Ocarina2 v1.2 section; the version file is now 1.3 (next build).
+- Nothing is pushed or published until the owner says so.

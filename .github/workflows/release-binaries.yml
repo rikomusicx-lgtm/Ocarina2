@@ -39,8 +39,9 @@ permissions:
 env:
   PGO_LLVM_VERSION: "23"
 
-# A running build is never cancelled: it finishes and publishes. A push meanwhile queues one build;
-# a later push replaces it, so the newest commit builds as soon as the running one is done.
+# A running build is never cancelled: it finishes. A push meanwhile queues one build; a later
+# push replaces it, so the newest commit builds as soon as the running one is done. Pushes never
+# publish; a release is created only on demand (workflow_dispatch, publish_release=true).
 concurrency:
   group: release-binaries-${{ github.ref }}
   cancel-in-progress: false
@@ -71,7 +72,9 @@ jobs:
           echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - name: Prepare release tag
-        if: (github.event_name == 'push' || inputs.publish_release) && steps.gate.outputs.skip != 'true'
+        # Releases happen only on demand (workflow_dispatch with publish_release=true), never on
+        # push. Push builds the binaries for CI but never creates a release tag.
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_release && steps.gate.outputs.skip != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -627,13 +630,13 @@ jobs:
           compression-level: 0
           retention-days: 7
 
-  # Publishes every binary as a GitHub pre-release once every platform built: on pushes to
-  # nx2, and on manual runs unless "Publish the binaries as a GitHub release" is
-  # unticked.
+  # Publishes the binaries as a GitHub release once every platform built, and only on demand
+  # (workflow_dispatch with "Publish the binaries as a GitHub release" toggled on). Pushes to nx2
+  # build the binaries for CI but never publish.
   release:
     name: Publish release
     needs: build
-    if: (github.event_name == 'push' || inputs.publish_release) && needs.build.result == 'success'
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_release && needs.build.result == 'success'
     runs-on: ubuntu-24.04
     permissions:
       contents: write

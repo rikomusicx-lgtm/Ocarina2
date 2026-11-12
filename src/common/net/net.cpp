@@ -76,7 +76,7 @@ std::vector<Asset> Release::GetPlatformAssets(std::string_view platform,
     for (const std::string_view variant : pgo ? std::vector<std::string_view>{"-pgo", ""}
                                               : std::vector<std::string_view>{""}) {
         for (const auto extension : extensions) {
-            const auto filename = fmt::format("lichii-{}{}{}", platform, variant, extension);
+            const auto filename = fmt::format("ocarina2-{}{}{}", platform, variant, extension);
             const auto url = host_url + path + filename;
             if (std::ranges::find(assets, url) == assets.end()) {
                 continue;
