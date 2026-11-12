@@ -1038,3 +1038,34 @@ switch actions now, both persisting.
   build-N against LIHCHII_BUILD_TAG), so only the title/notes of the release may be renamed,
   not the tag.
 - White flash: not touched; not reproducing in town scenes (Kokiri was the reproducer).
+
+## 2026-11-12 (early afternoon, cont.) - more compile fixes; release pipeline is in flight
+
+Follow-ups to the same theme (all caught by CI; each one is a real upstream-to-fork regression
+that only showed up on compilers nobody ran on our tree):
+
+- main_window.cpp: the "Enter = Space for QCheckBox/QRadioButton" filter class was inside the
+  #ifdef _WIN32 block, so Linux/macOS builds had no definition for it while the use at the call
+  site is unconditional. The class is pure Qt (no Windows APIs) - hoisted out of the _WIN32
+  block; Windows unchanged.
+- src/tests/video_core/command_fetch_order.cpp was saved as UTF-16-LE (BOM FF FE): both GCC
+  and clang-cl reject it outright ("stray \\377 in program" /
+  "UTF-16 (LE) byte order mark detected"). Rewritten as plain UTF-8; repo-wide scan shows no
+  other UTF-16/invalid-UTF-8 sources (only binary assets, unaffected).
+- src/tests/video_core/pipeline_cache_files.cpp: the merge-helper functions (Header, Record,
+  ReadRecordKey, Merge, WriteUsed, ReadUsed) were at global scope with no prior declarations
+  (GCC -Wmissing-declarations) and the file had an unbalanced closing
+  brace at the end ("expected declaration before }"). Declared the six helpers at file scope
+  and removed the stray brace; clang-cl's checks now see a valid TU too.
+- src/tests/video_core/* range-loop-constructs (maxwell_numeric, uniform_stream_reuse,
+  ampere_yoshi_title, ampere_logged_numeric, nx2_video_render, slot_vector) bound structured
+  bindings by value; GCC 13 -Werror=range-loop-construct flagged them. All take references
+  now.
+
+Windows-side PGO is green: the windows-x86_64 jobs finished OK with the committed
+ocarina2-windows.profdata (Check PGO profile passes). The macOS arm64 job is opt-in via
+workflow_dispatch only, so push never waits on or fails on macOS anymore.
+
+Release status as of this note: nothing published yet. The auto-release trains (build-N tags,
+LIHCHII_BUILD_TAG) for the current tip will be the v1.0 per the owner's call; the release-binaries
+workflow skips pushes that only touch tests, so the test fixes don't re-trigger binary builds.
