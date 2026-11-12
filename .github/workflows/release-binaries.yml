@@ -7,6 +7,10 @@ on:
         description: Publish the binaries as a GitHub release
         type: boolean
         default: true
+      build_macos:
+        description: Also build the macOS (Apple Silicon) binary. Hosted arm64 runners are scarce; leave off unless needed.
+        type: boolean
+        default: false
   push:
     branches:
       - nx2
@@ -87,7 +91,12 @@ jobs:
   build:
     name: ${{ matrix.platform }} binary
     needs: prepare-release
-    if: needs.prepare-release.outputs.skip != 'true'
+    # macOS hosted arm64 runners are capacity-starved: on push they never got acquired and the job
+    # ended up cancelled (or queued forever). Build macOS only on demand.
+    if: >-
+      needs.prepare-release.outputs.skip != 'true' &&
+      (matrix.platform != 'macos-arm64' ||
+       (github.event_name == 'workflow_dispatch' && inputs.build_macos))
     runs-on: ${{ matrix.runner }}
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
