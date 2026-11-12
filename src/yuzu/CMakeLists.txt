@@ -14,7 +14,10 @@ endif()
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
-if(YUZU_TESTS)
+# OCARINA2_SKIP_QTCOMPATIBILITY_TESTS=ON skips the Qt compatibility-report suite only. It needs
+# Qt6::Test (part of qtbase, but missing in some offline/CPM Qt mirrors); all other tests build
+# normally either way.
+if(YUZU_TESTS AND NOT OCARINA2_SKIP_QTCOMPATIBILITY_TESTS)
     add_subdirectory(../tests/qt_compatibility ${CMAKE_BINARY_DIR}/qt_compatibility_tests)
 endif()
 

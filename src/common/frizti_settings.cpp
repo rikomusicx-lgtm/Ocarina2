@@ -28,13 +28,13 @@ std::vector<BasicSetting*> TunedSettings(Values& values) {
         &values.gpu_accuracy,             // Low
         &values.dma_accuracy,             // Default
         &values.gpu_fence_behavior,       // Default
-        &values.vsync_mode,               // Mailbox: the host frame pacer times presents
+        &values.vsync_mode,               // Immediate: the host frame pacer times presents
         &values.async_presentation,       // On: the host frame pacer runs on the present thread
         &values.use_asynchronous_shaders, // On: unbuilt pipelines skip draws, no freeze
         &values.use_docked_mode,          // Docked
         &values.memory_layout_mode,       // 8 GB: Ocarina's own memory size
         &values.nvdec_emulation,          // GPU: Ocarina's cutscene videos
-        &values.scaling_filter,           // ScaleForce (newer Lichii builds seed FSR)
+        &values.scaling_filter,           // SgsrEdge (FXAA for edges on top)
         &values.resolution_setup,         // 1x: a higher scale left over from other games costs fps
         &values.anti_aliasing,            // None: OoT's own AA (or DLSS) already smooths edges
         &values.cpu_accuracy,             // Auto

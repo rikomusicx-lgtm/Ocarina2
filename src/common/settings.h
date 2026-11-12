@@ -356,7 +356,7 @@ struct Values {
     SwitchableSetting<ResolutionSetup> resolution_setup{linkage, ResolutionSetup::Res1X,
                                                         "resolution_setup", Category::Renderer};
 
-    // Mailbox: the host frame pacer (vk_host_pacer.h) times presents to the display itself.
+    // Immediate: the host frame pacer (vk_host_pacer.h) times presents to the display itself.
     SwitchableSetting<VSyncMode, true> vsync_mode{linkage,
                                                   VSyncMode::Immediate,
                                                   "use_vsync",
