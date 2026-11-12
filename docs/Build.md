@@ -71,14 +71,14 @@ Hit "Configure Project", then wait for CMake to finish configuring (may take a w
 >On Windows:
 >
 > - It's recommended to install **[Ninja](https://ninja-build.org/)**
-> - You must load **Visual C++ development environment**, this can be done by running our convenience script:
->   - `tools/windows/load-msvc-env.ps1` (for PowerShell 5+)
->   - `tools/windows/load-msvc-env.sh` (for MSYS2, Git Bash, etc)
+> - clang-cl is the only supported compiler. You must load the **Visual Studio 2022 development environment** (clang-cl compiles against its SDK; the compiler is clang), this can be done by running our convenience script:
+>   - `tools/windows/load-msvc-env.ps1` (for PowerShell 5+) provides the VS 2022 environment
+>   - `tools/windows/load-msvc-env.sh` (for MSYS2, Git Bash, etc) provides the VS 2022 environment
 
 Available `<GENERATOR>`:
 
-- MSYS2: `MSYS Makefiles`
-- MSVC: `Ninja` (preferred) or `Visual Studio 17 2022`
+- Windows (clang-cl): `Ninja` (preferred) or `Visual Studio 17 2022` with `-T ClangCL`
+- MSYS2: `MSYS Makefiles` (untested)
 - macOS: `Ninja` (preferred) or `Xcode`
 - Others: `Ninja` (preferred) or `UNIX Makefiles`
 
@@ -98,10 +98,10 @@ Also see the root CMakeLists.txt for more build options. Usually the default wil
 cmake -S . -B build -G "<GENERATOR>" -DCMAKE_BUILD_TYPE=<BUILD_TYPE> -DYUZU_TESTS=OFF
 ```
 
-If you are on Windows and prefer to use Clang:
+If you are on Windows:
 
 ```sh
-cmake -S . -B build -G "<GENERATOR>" -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
+cmake -S . -B build -G "<GENERATOR>" -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_BUILD_TYPE=<BUILD_TYPE> -DYUZU_TESTS=OFF
 ```
 
 </details>
@@ -168,7 +168,7 @@ Otherwise, feel free to ask for help in Stoat or Discord.
 
 ### Linker errors with the bundled Qt on Visual Studio 2022
 
-On MSVC, a prebuilt static Qt is downloaded by default (`YUZU_USE_BUNDLED_QT`). It is built with a newer MSVC toolset than the one in Visual Studio 2022, so with VS 2022 (MSVC 14.44) configuring succeeds but linking `lichii.exe` fails with unresolved symbols such as `__std_rotate` or `__std_unique_4`, ending in `LNK1120`.
+On Windows with clang-cl, a prebuilt static Qt is downloaded by default (`YUZU_USE_BUNDLED_QT`). It is built with a newer toolchain than the one in Visual Studio 2022, so with VS 2022 configuring succeeds but linking `Ocarina2.exe` fails with unresolved symbols such as `__std_rotate` or `__std_unique_4`, ending in `LNK1120`.
 
 Use the same Qt as CI instead of the bundled one:
 

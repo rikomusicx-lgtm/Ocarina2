@@ -4,13 +4,12 @@ To build Eden, you MUST have a C++ compiler.
 
 * On Linux, this is usually [GCC](https://gcc.gnu.org/) 11+ or [Clang](https://clang.llvm.org/) v14+
   * GCC 12 also requires Clang 14+
-* On Windows, we support:
-  * **[MSVC](https://visualstudio.microsoft.com/downloads/)** (default)
-    * It's STRONGLY RECOMMENDED to use the **Community** option and **Visual Studio 2022**
-    * You need to install: **[Desktop development with C++](https://learn.microsoft.com/en-us/cpp/build/vscpp-step-0-installation?view=msvc-170)**
+* On Windows, we only support:
   * **[clang-cl](https://learn.microsoft.com/en-us/cpp/build/clang-support-msbuild?view=msvc-180)**
-    * You need to install: **C++ Clang tools for Windows**
-  * **[MSYS2](https://www.msys2.org)**
+    * You need to install **Visual Studio 2022** (**Community** is fine) with **[Desktop development with C++](https://learn.microsoft.com/en-us/cpp/build/vscpp-step-0-installation?view=msvc-170)** including **C++ clang tools for Windows**
+    * clang-cl compiles against the MSVC headers, runtime and SDK that the VS 2022 install provides; the compiler is clang
+    * MSVC itself is not supported for building this project
+  * **[MSYS2](https://www.msys2.org)** (untested)
 * On macOS, this is Apple Clang
   * This can be installed with `xcode-select --install`
 
@@ -29,18 +28,13 @@ If you are on desktop and plan to use the Qt frontend, you *must* install Qt 6, 
 
 * On Linux, *BSD and macOS, this can be done by the package manager
   * If you wish to use Qt Creator, append `qtcreator` or `qt-creator` to the commands seen below.
-* MSVC/clang-cl users on Windows must install through the official [Qt](https://www.qt.io/download-qt-installer-oss) installer
+* clang-cl users on Windows must install through the official [Qt](https://www.qt.io/download-qt-installer-oss) installer
 * Linux and macOS users may choose to use the installer as well.
 * MSYS2 can also install Qt 6 via the package manager
 
 * For help setting up Qt Creator, run `./install.sh -h qtcreator`
 
-* If you're using clang-cl and want to still use MSVC
-  * Check the option to add "C++ clang compiler for Windows" on Visual Studio installer and uncheck "x64/x86 build tool for MSVC" while selecting "C++ desktop developement tools" and change Visual Studio to 2026, from 2022.
-  * At qt creator section generator tab change Visual Studio 17 2022 to 2026.
-  * Finally, to use clang-cl: `cmake -S . -B build -G "Visual Studio 17 2026" -T ClangCL`
-
-If you are on **Windows** and building with **MSVC** or **clang-cl**, you may go [back home](Build.md) and continue.
+If you are on **Windows**, you may go [back home](Build.md) and continue.
 
 ## Externals
 

@@ -115,7 +115,7 @@ jobs:
           # Kart World ran at about half the speed of the normal build, with eglantine.profdata at
           # about the same speed. Both Windows builds are clang-cl with ThinLTO; windows-x86_64-pgo
           # adds ocarina2-windows.profdata, an MSVC-ABI profile trained on Ocarina of Time (see
-          # docs/CI.md). MSVC still builds for development.
+          # docs/CI.md). The compiler is clang; the runner's VS 2022 toolchain provides the SDK.
           - platform: linux-x86_64-pgo
             runner: ubuntu-24.04
             pgo: true

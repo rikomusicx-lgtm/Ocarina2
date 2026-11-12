@@ -7,7 +7,7 @@ To change these options, add `-DOPTION_NAME=NEWVALUE` to the command line.
 Notes:
 
 - Defaults are marked per-platform.
-- "Non-UNIX" just means Windows/MSVC and Android (yes, macOS is UNIX
+- "Non-UNIX" just means Windows and Android (yes, macOS is UNIX
 - Android generally doesn't need to change anything; if you do, go to `src/android/app/build.gradle.kts`
 - To set a boolean variable to on, use `ON` for the value; to turn it off, use `OFF`
 - If a variable is mentioned as being e.g. "ON" for a specific platform(s), that means it is defaulted to OFF on others
