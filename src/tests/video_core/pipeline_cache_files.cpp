@@ -85,6 +85,16 @@ public:
 
 } // Anonymous namespace
 
+std::string Header(u32 version);
+std::string Record(u32 key, std::string_view body);
+std::optional<std::string> ReadRecordKey(std::ifstream& file, std::streamoff end);
+VideoCommon::PipelineCacheMergeResult Merge(const std::filesystem::path& source,
+                                            const std::filesystem::path& destination,
+                                            std::optional<VideoCommon::PipelineKeySet>& keys);
+void WriteUsed(const std::filesystem::path& file, u32 magic,
+               const std::vector<std::pair<u64, u8>>& entries, u32 count);
+std::unordered_map<u64, u8> ReadUsed(const std::filesystem::path& file);
+
 TEST_CASE("Task and mesh disk environments roundtrip all translation state and record boundaries",
           "[pipeline_cache_files][mesh_serialization]") {
     TempDir temp;

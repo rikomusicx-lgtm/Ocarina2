@@ -109,7 +109,7 @@ TEST_CASE("NX2 video interleaves planar chroma and copies complete odd NV12 rows
     Nx2VideoDecoder decoder{"video/avc"};
     REQUIRE(decoder.IsOpen());
     for (const AVPixelFormat format : {AV_PIX_FMT_YUV420P, AV_PIX_FMT_NV12}) {
-        for (const auto [width, height] : std::array{std::array{4U, 2U}, std::array{3U, 3U}}) {
+        for (const auto& [width, height] : std::array{std::array{4U, 2U}, std::array{3U, 3U}}) {
             const auto picture = Picture(width, height, format);
             REQUIRE(picture.frame->GetStride(0) > static_cast<int>(width));
             constexpr u32 pitch = 8;
@@ -144,7 +144,7 @@ TEST_CASE("NX2 video rejects insufficient NV12 pitch and storage before writing"
     REQUIRE(decoder.IsOpen());
     for (const AVPixelFormat format : {AV_PIX_FMT_YUV420P, AV_PIX_FMT_NV12}) {
         const auto picture = Picture(3, 3, format);
-        for (const auto [width, height, pitch, offset, size] : std::array{
+        for (const auto& [width, height, pitch, offset, size] : std::array{
                  std::array{3U, 3U, 3U, 9U, 15U},
                  std::array{3U, 3U, 2U, 6U, 10U},
                  std::array{3U, 3U, 4U, 12U, 19U},

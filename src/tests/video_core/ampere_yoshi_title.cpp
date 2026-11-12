@@ -61,7 +61,7 @@ TEST_CASE("Yoshi UPOPC preserves inverted sources and reserves uniform registers
         REQUIRE(lowered.instructions.front() ==
                 (0x5c08000000070000ULL | 218 | (u64{219} << 20) | (u64{invert} << 40)));
     }
-    for (const auto [bit, count, value] : std::array{
+    for (const auto& [bit, count, value] : std::array{
              std::array{16U, 8U, 63U}, std::array{40U, 8U, 1U},
              std::array{12U, 4U, 0U}, std::array{64U, 1U, 1U}}) {
         auto invalid = Popcount;
@@ -94,7 +94,7 @@ TEST_CASE("Yoshi global atomics preserve operations and signed address offsets",
                      (u64{1} << 48) | (u64{operation} << 52)));
         }
     }
-    for (const auto [bit, count, value] : std::array{
+    for (const auto& [bit, count, value] : std::array{
              std::array{87U, 4U, 9U}, std::array{24U, 8U, 3U},
              std::array{40U, 24U, 0x80000U}, std::array{73U, 1U, 1U}}) {
         Instruction invalid{{0x020473a8, 6, 0x001ee100, 0}};
@@ -164,7 +164,7 @@ TEST_CASE("Yoshi surface atomics match Maxwell bound U32 operation fields",
                      (u64{operation} << 29) | (u64{dimension} << 33) | (u64{0x10} << 36)));
         }
     }
-    for (const auto [bit, count, value] : std::array{
+    for (const auto& [bit, count, value] : std::array{
              std::array{87U, 4U, 9U}, std::array{61U, 3U, 2U},
              std::array{54U, 5U, 18U}, std::array{40U, 14U, 0x2000U},
              std::array{59U, 1U, 1U}, std::array{73U, 1U, 1U},
@@ -261,7 +261,7 @@ TEST_CASE("Yoshi uniform array gathers preserve coordinates handles and packed o
 
 TEST_CASE("Yoshi uniform array gathers reject reserved spans and unsupported payloads",
           "[video_core][ampere][yoshi]") {
-    for (const auto [bit, count, value] : std::array{
+    for (const auto& [bit, count, value] : std::array{
              std::array{16U, 8U, 215U}, std::array{24U, 8U, 215U},
              std::array{32U, 8U, 216U}, std::array{64U, 8U, 215U},
              std::array{64U, 8U, 9U}, std::array{60U, 1U, 0U},

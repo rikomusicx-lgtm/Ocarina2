@@ -689,7 +689,7 @@ TEST_CASE("Ocarina static sweep shadowed floating arithmetic preserves values",
         INFO(lowered.error);
         REQUIRE(lowered);
         std::vector<u64> code{0x0100000000070000ULL | (15ULL << 12) | (0x40000000ULL << 20)};
-        for (const auto [bank, reg] : fixture.sources) {
+        for (const auto& [bank, reg] : fixture.sources) {
             code.push_back(Shader::Ampere::NativeRegisterCopy(bank, reg, 0, 0));
         }
         code.insert(code.end(), lowered.instructions.begin(), lowered.instructions.end() - 1);

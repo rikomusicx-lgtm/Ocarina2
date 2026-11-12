@@ -43,7 +43,7 @@ TEST_CASE("SlotVector sparse iteration matches a live-entry model", "[common]") 
             }
         }
         auto expected = live.begin();
-        for (const auto [id, value] : slots) {
+        for (const auto& [id, value] : slots) {
             REQUIRE(expected != live.end());
             REQUIRE(id.Value() == expected->first);
             REQUIRE(*value == expected->second);
