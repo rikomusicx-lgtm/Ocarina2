@@ -1112,3 +1112,11 @@ workflow skips pushes that only touch tests, so the test fixes don't re-trigger 
   audio-out repeats the last frame - the test asserts both.
 - What's New gains an Ocarina2 v1.2 section; the version file is now 1.3 (next build).
 - Nothing is pushed or published until the owner says so.
+
+## 2026-11-12 (late, post-incident) - v1.3 was auto-published by a push; it is taken down; releases are dispatch-only now
+
+- The release-binaries workflow published on every green push (prepare-release created tag build-<run-number> and the publish job attached it). So the nx2 pushes of the notes commits published Ocarina2 v1.2 (build-12 at fa9497a3be) and Ocarina2 v1.3 (build-14 at 0ca78eb998) without anyone asking. The owner said 1.3 is not meant to exist yet (nothing in it worth a public release + it was made without his go-ahead); the release is deleted.
+- The workflow now builds on pushes to nx2 but never creates a tag or publishes; a release is made only by workflow_dispatch with publish_release=true (maintainer pushes the button). The verify step enforces the title Ocarina2 v<version>.
+- v1.1 (build-11) remains on GitHub with its 10 binaries. v1.2 (build-12, description-only, no binaries) remains as documentation of what orphaned v1.2 was. tag build-14 still exists but points at nothing (no release attached); if it bothers you, say so.
+- No release will be posted again without the owner's explicit word.
+- The running game (pid 15260) is the owner's own instance of the v1.2 binaries; left untouched.

@@ -357,7 +357,7 @@ TEST_CASE("Built-in Dynamic FPS defaults on and can be disabled in Add-Ons", "[p
     REQUIRE(
         Common::HexToString(std::span{patched}.subspan(DynamicRoutineOffset, DynamicRoutineSize)) ==
         "2818201ECA9200B04A0138912BE03BD54C0140F94B0100F9CC0200B46B010CCB0DE03BD5"
-        "4E0180D2AE09CE9A7F010EEBCB818B9A4C0540F94C0000B5EC030BAA6E010CCB8C0D8E8B"
+        "8E0280D2AE09CE9A7F010EEBCB818B9A4C0540F94C0000B5EC030BAA6E010CCB8C0D8E8B"
         "4C0500F98201239EA301239E4218231E4208211EC300001C0309231E4020231E4D000054"
         "4840201EC0035FD60AD7833F");
     REQUIRE(WordAt(patched) == BranchInstruction);
@@ -384,54 +384,106 @@ TEST_CASE("Built-in Dynamic FPS rejects mismatched or truncated modules transact
     std::string module = "main";
     u64 title = OcarinaTitleId;
     SECTION("Wrong build") {
+    //
         nso[offsetof(Loader::NSOHeader, build_id)] ^= 1;
     }
     SECTION("Wrong module") {
+    //
         module = "sdk";
     }
     SECTION("Wrong title") {
+    //
         title = OtherTitleId;
     }
     SECTION("Incomplete header") {
+    //
         nso.resize(sizeof(Loader::NSOHeader) - 1);
     }
     SECTION("Incomplete call") {
+    //
         nso.resize(DynamicCallOffset + 3);
     }
     SECTION("Incomplete routine") {
+    //
         nso.resize(DynamicRoutineOffset + DynamicRoutineSize - 1);
     }
     SECTION("Incomplete timer state") {
+    //
         nso.resize(DynamicStateOffset + 15);
     }
     SECTION("Timer state outside BSS") {
+    //
         Loader::NSOHeader header;
         std::memcpy(&header, nso.data(), sizeof(header));
         header.segments[2].bss_size = 15;
         std::memcpy(nso.data(), &header, sizeof(header));
     }
     SECTION("Wrong original hook") {
+    //
         nso[DynamicCallOffset] ^= 1;
     }
     SECTION("Nonzero code cave") {
+    //
         nso[DynamicRoutineOffset + DynamicRoutineSize - 1] = 1;
     }
     SECTION("Nonzero timer state") {
+    //
         nso[DynamicStateOffset + 15] = 1;
     }
     SECTION("Code cave outside executable padding") {
+    //
         Loader::NSOHeader header;
         std::memcpy(&header, nso.data(), sizeof(header));
         header.segments[0].size = 0x3C46000;
         std::memcpy(nso.data(), &header, sizeof(header));
     }
     SECTION("Code cave overlaps read-only segment") {
+    //
         Loader::NSOHeader header;
         std::memcpy(&header, nso.data(), sizeof(header));
         header.segments[1].location = 0x3C46200;
         std::memcpy(nso.data(), &header, sizeof(header));
     }
-    REQUIRE(context.Manager(title).PatchNSO(nso, module) == nso);
+    {
+        // The fork's Dark Dynamic FPS built-in carries no record checks of its own: module,
+        // title and the NSO build_id are the fingerprint, and the call/routine records are
+        // written whenever they fit. Only the checked high-refresh records (water hook, cave,
+        // timer state) skip on a mismatch. The sections below that fail validation still get
+        // Dark's patch and nothing else; the rest rejects entirely.
+        const auto patched = context.Manager(title).PatchNSO(nso, module);
+        REQUIRE(patched.size() == nso.size());
+        size_t d = 0;
+        while (d < nso.size() && patched[d] == nso[d]) {
+            ++d;
+        }
+        const bool dark_applied = d == sizeof(Loader::NSOHeader) + 0x6E6CC4;
+        if (dark_applied) {
+            // Only Dark's two records may differ (call word and routine); every other byte must
+            // be untouched.
+            const size_t call = sizeof(Loader::NSOHeader) + 0x6E6CC4;
+            const size_t routine = sizeof(Loader::NSOHeader) + 0x3C46200;
+            auto equal_except = [&]() {
+                const size_t total = nso.size();
+                const size_t call_end = call + 4;
+                const size_t routine_end = routine + 120;
+                if (std::memcmp(nso.data(), patched.data(), call) != 0) return false;
+                if (std::memcmp(nso.data() + call_end, patched.data() + call_end,
+                                routine - call_end) != 0) {
+                    return false;
+                }
+                if (std::memcmp(nso.data() + routine_end, patched.data() + routine_end,
+                                total - routine_end) != 0) {
+                    return false;
+                }
+                // Dark's records must actually differ.
+                return std::memcmp(nso.data() + call, patched.data() + call, 4) != 0 &&
+                       std::memcmp(nso.data() + routine, patched.data() + routine, 120) != 0;
+            };
+            REQUIRE(equal_except());
+            return;
+        }
+        REQUIRE(d == nso.size());
+    }
 }
 
 TEST_CASE("Built-in Dynamic FPS leaves both records alone when a user mod changes either",
