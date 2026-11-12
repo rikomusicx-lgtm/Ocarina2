@@ -28,12 +28,18 @@ in this section has been published; 1.3 ships only when it is done and the owner
 
 - The SPIR-V global-memory helpers are emitted inlined again by default (measured faster),
   with DontInline available via `EDEN_NX2_SPIRV_INLINE_GLOBALS=0` for those who want it.
+- **Large GPUs (driver budget of 10 GiB or more) no longer clamp the texture and buffer
+  caches at 3.8 GB.** That clamp was made for smaller cards and was cutting off the cache's
+  ability to follow the driver's budget: Ocarina of Time's textures were rebuilt constantly
+  in Kokiri Forest. Cards below that budget keep the 3.8 GB cap, as do OpenGL builds.
 
 **Not done yet (work in progress, does not ship until verified)**
 
-- VRAM / texture-cache pressure in the big town scenes (the cache thrashes at its ceiling on
-  some cards and re-loads the same textures); the white flash in combat-heavy scenes; shader
-  warm-up for Ocarina of Time's first boot.
+- The intermittent white flash in combat-heavy scenes: the lead candidate is identified
+  (fence-flagged query reports can be read before the fence runs; `EDEN_NX2_EXP33=1` is the
+  experiment to A/B it in one session). Not enabled by default until it is measured.
+- Shader warm-up for a fresh first boot of Ocarina of Time (the recipe is built from your own
+  game dump via the precompile tool; "Prepare Shaders" in the game list works today).
 
 Made by rikomusicx-lgtm. Built on Eglantine, Eden, Lichii and Frizti's Fritchii (5.8.4).
 Not affiliated with Nintendo. No games included.

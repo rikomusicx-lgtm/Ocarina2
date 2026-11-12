@@ -1154,3 +1154,72 @@ stability fixes that landed today (the address-space map crash, the memory-owner
 Windows fallback reclaim, the inline-by-default SPIR-V helpers) and marking VRAM/texture
 thrash, the white flash and the shader warm-up as in progress. It ships only when the owner
 says 1.3 is cut; nothing about 1.3 has been posted anywhere.
+
+## 2026-11-12 (late, optimization pass) - vram ceiling un-clamped for big cards; white flash and shader preload analyzed, nothing shipped blind
+
+### VRAM/ASTC (done, in tree)
+- The 2026-11-10 "vram: hard cap texture and buffer caches at 3.8 GB" commit clamped all
+  caches' critical memory at 3.8 GB
+  regardless of the card. That clamp also silently nulled three mechanisms the fork built for
+  Kokiri Forest on Switch 2: the native-tiling floor in TickFrame (critical = device_local
+  - 256 MiB), the driver-budget follower (critical follows the budget with pressure/block-slack
+  margins, the correct answer when the card is 12-16 GB), and the Frizti 7680 MiB built-in
+  ceiling (EDEN_NX2_TC_CEILING_MIB=7680 in nx2_switches.h, owner-tuned 2026-11-10 on the
+  16 GB card: VRAM 10 -> ~6 GB, no new stutter, 58.8 fps over 30 min). On the RX 9070 XT
+  machine every aggressive GC pass was evicting Kokiri's CostlyLoad ASTC textures because of
+  the clamp, not the budget.
+- Fix: the 3.8 GB cap (both caches) now applies only when the driver budget is reported and
+  below 10 GiB (the 6 GB 3050 class it was for) or not reported (OpenGL). Cards at 10 GiB and
+  up (the 12/16 GB class) follow the budget follower, the commit-room/HostCriticalMemory
+  limit and the 7680 MiB Frizti ceiling instead - the exact configuration of the 2026-11-10
+  playtest. Cards with smaller budgets (and OpenGL) are byte-for-byte what they were.
+- No blind changes on the other axis: the Kokiri ASTC textures already decode on-GPU to BC3
+  (opaque to BC1), the >1 GiB ASTC arrays keep trimmed mip levels, sparse residency handles
+  unwritten terrain, SEC_RESERVE is default-on, and the hard cap stays for the 3050 class
+  since the 06-11 paging regression was observed on that card.
+- Measured on the 9070 XT the change keeps ~7.5 GB of texture cache (Frizti ceiling); on the
+  3050 nothing changes. Not measured here (no game running); the owner A/B on his machine.
+
+### Texture-cache thrash - analysis outcome
+- At the 3.8 GB cap the aggressive GC evicts Kokiri's CostlyLoad ASTC (a 6144x6144 5x5 one is
+  31 MiB); the comment in texture_cache.h has the numbers (24 ms re-creation stall every
+  ~128 frames). On <=8 GB budgets that is the price of the cap, deliberately chosen by the
+  owner after the Windows-paging observation. No safe blind change exists inside the cap:
+  evicting cheaper textures first does not reach the cap without touching Kokiri's big
+  textures, and trimming big ASTC mip levels changes what close-up surfaces look like.
+  The Kokiri textures are already decoded on-GPU (no CPU decode stalls), ASTC-native when the
+  driver reports optimal ASTC, and opaque ones are BC1.
+- What can be set without a build: EDEN_NX2_TC_CEILING_MIB can only LOWER the threshold.
+  On the 9070 XT the built-in 7680 now applies after the clamp fix; on the 3050 nothing to
+  raise it to.
+
+### White flash - analysis outcome (candidate, needs owner A/B)
+- The residual "white flash in combat-heavy scenes" points at the fence-flagged query report
+  race the fork already knows: at default fence behavior below accurate parts, a fence-flagged
+  report can be read after the fence is skipped as empty (fence_manager.h, #337). The fork's
+  fix for exactly this symptom is EXP33 (is_synced fence reports stay registered until the
+  fence runs + the fence is made and waited even when empty). It is off by default, marked
+  "off by default, not measured yet" in nx2_debug_control.h.
+- Not flipped here on purpose: flipping it needs the owner's A/B in a combat-heavy session
+  (EDEN_NX2_EXP33=1 live, or =0 to undo) while watching the flash watch and the fence zones
+  in the GPU profile. If the flash stops and fps holds (async/sprite-heavy scenes), it should
+  ship as the 1.3 default and replace the current known-flashing state.
+- Already shipped defaults that address the same symptom class: the uniform-bank per-bind
+  check (stale host contents, exp9=3), render-target relocation (exp43=3) and pooled target
+  images (exp42=1), async read-back for chased paths (exp49=1), empty-submit elision
+  (exp61=1), the Splatoon-Raiders fence-side reports handling (#215, FlushQueryResults).
+
+### Shader preload - analysis outcome (already on, nothing to flip)
+- EDEN_NX2_PRECOMPILE (off by default up to 2026-11-09, built-in = 1 since then by owner's
+  call): boot looks for the title's precompiled file or a recipe, assembles the recipe with
+  the game's own files, and builds the file's pipelines on idle-priority threads. OoT cold
+  boot freezes 700-850 ms -> 40-70 ms, 35 -> 43 fps (owner, the "Preparing shaders" screen).
+  Without a recipe it only logs one line at boot and does nothing - safe to keep on.
+- The recipe itself is not in the repo (correctly: it is derived from the game; the fork's
+  own gate in nx2_recipe.cpp refuses a recipe that holds game code). To get it for OoT,
+  the owner runs tools/nx2-precompile against his dump (README: extract ~30 s finds all
+  42,848 programs), then drops the .nx2recipe into the title's shader folder
+  (<data>/shader/0400486024DEC000/) or <exe dir>/recipes/, and the next boot "Preparing
+  shaders" builds everything; EDEN_NX2_PRECOMPILED_FAST=1 also keeps SPIR-V for instant draws.
+- "Prepare Shaders" (game list) + the NVIDIA cache tip remain the in-app path for users
+  without a recipe. The v1.2 whats-new already mentions both.
