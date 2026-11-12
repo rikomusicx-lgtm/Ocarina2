@@ -101,6 +101,17 @@ TEST_CASE("Draws that differ only in cleared state share a canonical key",
     CHECK(a.Hash() != b.Hash());
     a.CanonicalizeNative(0b1111);
     b.CanonicalizeNative(0b1111);
+    if (!(a == b)) {
+        // CI-only diagnosis (Linux GCC build): report the first differing byte.
+        const auto* pa = reinterpret_cast<const unsigned char*>(&a);
+        const auto* pb = reinterpret_cast<const unsigned char*>(&b);
+        for (size_t i = 0; i < sizeof(a); ++i) {
+            if (pa[i] != pb[i]) {
+                UNSCOPED_INFO("byte " << i << " differs: a=" << int(pa[i]) << " b=" << int(pb[i]));
+            }
+        }
+        FAIL("states differ after canonicalization");
+    }
     CHECK(a == b);
     CHECK(a.Hash() == b.Hash());
 }
