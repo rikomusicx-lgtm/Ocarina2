@@ -1223,3 +1223,30 @@ says 1.3 is cut; nothing about 1.3 has been posted anywhere.
   shaders" builds everything; EDEN_NX2_PRECOMPILED_FAST=1 also keeps SPIR-V for instant draws.
 - "Prepare Shaders" (game list) + the NVIDIA cache tip remain the in-app path for users
   without a recipe. The v1.2 whats-new already mentions both.
+
+## 2026-11-12 (night) - OoT shader recipe built and audited on this machine; 1.3 notes updated
+
+Recipe pipeline (tools/nx2-precompile) ran against the game dump (.nup, 25 GB, read
+26.2 GB, 186,587 files scanned) with the recorded caches (learn v56, tested v57; both from
+this machine):
+- 42,848 programs: 15,851 vertex, 22,352 pixel, 4,125 compute, 500 mesh, 20 task;
+  0 errors. 33,253 vertex/pixel pair combinations; priors 70 direct + 23 indirect;
+  oracle accuracy ~99.9% (only 6/3 compute SPIR-Vs differ).
+- precompiled.fork-v57.nx2prep: 135,406 records (126,009 predicted graphics pipelines,
+  2,639 from recordings, 2,696 predicted mesh, 4,060 compute), 45,319 environments,
+  1.13 GB. replay failures 0 (step `check`).
+- game.nx2recipe: 1,211,408 bytes; 41,234 programs, 1,660 render states; ZERO environments
+  withheld as game data. audit: "42848 programs checked: 0 pieces of their code in the
+  recipe" - round trip verified: recipe -> nx2-precompile assemble produced a byte-identical
+  precompiled file (135,406 records, 0 dropped, 0 withheld) and `check` reported 0 replay
+  failures and 0 mismatched keys.
+- Installed for this machine at %APPDATA%\ocarina2\shader\0400486024DEC000\game.nx2recipe
+  (title shader folder; the next boot with EDEN_NX2_PRECOMPILE=1 (default) assembles the
+  precompiled file from it and builds the pipelines on background threads). Undo: delete
+  that one 1.2 MB file; the assembled precompiled.fork-v57.nx2prep that boot writes can be
+  deleted too.
+- What this does NOT prove: the in-game effect on this machine's next session (first new
+  area ~700-850 ms -> ~40-70 ms compile stalls expected from the owner's A/B on 2026-11-09,
+  but nobody has watched it), nor does it say anything about the 1.3 release assets (the
+  recipe going out with a 1.3 release is a distribution decision for the owner; by
+  construction the recipe carries no game code).
