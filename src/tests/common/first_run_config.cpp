@@ -93,11 +93,14 @@ void CheckFreshProfile() {
 
 void CheckLegacyProfile() {
     const auto& values = Settings::values;
-    CHECK(values.scaling_filter.GetValue() == Settings::ScalingFilter::ScaleForce);
-    CHECK(values.gpu_accuracy.GetValue() == Settings::GpuAccuracy::High);
-    CHECK(values.nvdec_emulation.GetValue() == Settings::NvdecEmulation::Cpu);
-    CHECK_FALSE(values.async_presentation.GetValue());
-    CHECK_FALSE(values.use_asynchronous_shaders.GetValue());
+    // v1.1 baked the tuned defaults into the linkage itself: existing profiles keep the
+    // same baked numbers the fresh ones get (the one exception is scaling_filter: fresh
+    // desktop configs are seeded with Fsr3, the rest keep the linkage SgsrEdge).
+    CHECK(values.scaling_filter.GetValue() == Settings::ScalingFilter::SgsrEdge);
+    CHECK(values.gpu_accuracy.GetValue() == Settings::GpuAccuracy::Low);
+    CHECK(values.nvdec_emulation.GetValue() == Settings::NvdecEmulation::Gpu);
+    CHECK(values.async_presentation.GetValue());
+    CHECK(values.use_asynchronous_shaders.GetValue());
 }
 
 void CheckUnchangedProfile() {
