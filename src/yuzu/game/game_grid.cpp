@@ -40,6 +40,7 @@ void GameGrid::SetModel(GameListModel* model) {
 
 void GameGrid::ApplyFilter(const QString& edit_filter_text, GameListModel* model) {
     int row_count = model->rowCount();
+    int visible = 0;
 
     for (int i = 0; i < row_count; ++i) {
         QStandardItem* item = model->item(i, 0);
@@ -48,10 +49,12 @@ void GameGrid::ApplyFilter(const QString& edit_filter_text, GameListModel* model
 
         if (Yuzu::FilterMatches(edit_filter_text, item)) {
             setRowHidden(i, false);
+            ++visible;
         } else {
             setRowHidden(i, true);
         }
     }
+    emit FilterResultReady(visible, row_count);
 }
 
 void GameGrid::UpdateIconSize() {

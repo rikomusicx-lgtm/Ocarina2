@@ -88,9 +88,13 @@ GameList::GameList(FileSys::VirtualFilesystem vfs_, FileSys::ManualContentProvid
     connect(item_model, &GameListModel::SaveConfig, this, &GameList::SaveConfig);
     connect(item_model, &GameListModel::PopulatingStarted, this, &GameList::OnPopulate);
 
-    // TODO: impl on grid/carousel
-    connect(tree_view, &GameTree::FilterResultReady, search_field,
-            [this](int visible, int total) { search_field->setFilterResult(visible, total); });
+    // Filter counts come from whichever view is active; all three report the same way.
+    const auto report_filter_result = [this](int visible, int total) {
+        search_field->setFilterResult(visible, total);
+    };
+    connect(tree_view, &GameTree::FilterResultReady, search_field, report_filter_result);
+    connect(grid_view, &GameGrid::FilterResultReady, search_field, report_filter_result);
+    connect(carousel_view, &GameCarousel::FilterResultReady, search_field, report_filter_result);
 
     qRegisterMetaType<QList<QStandardItem*>>("QList<QStandardItem*>");
 
@@ -337,8 +341,13 @@ void GameList::OnPopulatingCompleted(const QStringList& watch_list) {
     m_currentView->setEnabled(true);
 
     int children_total = 0;
-    for (int i = 1; i < item_model->rowCount() - 1; ++i) {
-        children_total += item_model->item(i, 0)->rowCount();
+    if (m_isTreeMode) {
+        for (int i = 1; i < item_model->rowCount() - 1; ++i) {
+            children_total += item_model->item(i, 0)->rowCount();
+        }
+    } else {
+        // Flat views (Grid/Carousel): every top-level row is a game card.
+        children_total = item_model->rowCount();
     }
 
     search_field->setFilterResult(children_total, children_total);

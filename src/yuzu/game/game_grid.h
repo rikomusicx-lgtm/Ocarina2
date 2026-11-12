@@ -21,6 +21,9 @@ public:
 
     QModelIndex indexAt(const QPoint& point) const override;
 
+signals:
+    void FilterResultReady(int visible, int total);
+
 private:
     GameCard* m_gameCard = nullptr;
 };
