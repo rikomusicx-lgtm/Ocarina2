@@ -974,3 +974,67 @@ Verified live on this PC (owner closed the game for the test; backup of the prof
 Default for fresh downloads stays frame_gen_type=Fsr3 (Optical Flow, zero deps, works for
 everyone); LSFG owners get one-click/self-installing LSFG. FG button right-click menu has both
 switch actions now, both persisting.
+
+## 2026-11-12 (midday) - CI un-stranded; Hyrule Castle Town measured; macOS on demand only
+
+### CI (all root-caused from job logs, all fix commits on nx2)
+- Release Linux (x86_64 GCC, aarch64, clang PGO) failed on `yuzu/ocarina2/home.h:89` -
+  `QToolButton` used in members but never declared; Linux Qt headers don't leak it (Windows'
+  do, which is why local builds looked clean). Fixed with a plain forward declaration.
+- Linux aarch64 link failed: `undefined reference to Common::GetProcessorCount()` - the
+  definition was inside `#ifdef ARCHITECTURE_x86_64` in cpu_features.cpp. Moved it out of the
+  guard; the portable fallback body was already there.
+- build-check Linux GCC + Windows clang-cl failed on the stale test
+  `src/tests/video_core/buffer_cache_ports.cpp` - BufferCache no longer has
+  native_indirect_uniforms_this_frame (native banks compare pages on every bind now), the mocked
+  Runtime now takes (u64, u64 = 0) for WaitSubmittedTick and `span<const BufferCopy>` for
+  CanReorderUpload. And on `storage_buffer_pointer_tracking.cpp` - GCC's
+  -Werror=missing-declarations wanted a prior declaration for EmitTableLoop (file-scope).
+- windows-x86_64-pgo always died at "Check PGO profile": ocarina2-windows.profdata was never in
+  the repo (.gitignore ignores *.profdata; only eglantine.profdata was force-added before).
+  The OoT-trained profile from D:\Ocarina2-pgo\profraw was merged with LLVM 22.1.8 (the exact
+  LLVM tools/windows/install-llvm.ps1 pins for CI); MSVC-ABI names verified (?-prefixed), 24 MB,
+  committed as ocarina2-windows.profdata. Local clang-cl 22 reads it cleanly (hash warnings
+  only, exit 0). eglantine.profdata untouched.
+- macOS "cancelled": hosted arm64 runners never got acquired (capacity-starved), jobs sat
+  queued forever on Nov 11. macOS is out of the push matrix now and builds only on
+  workflow_dispatch (build_macos=true) as its own job.
+- A workflow edit initially broke GitHub's validation outright: `matrix` isn't available in a
+  job-level `if:`, and the release job referenced needs.prepare-release it doesn't need. Both
+  fixed; actionlint is clean.
+- Windows "Install LLVM" failed in one run with a connection timeout (network, not a bug) -
+  unrelated to the code; it has to pass on retry.
+- Stale queued runs from Nov 11 (2/3/39/40/41) can just be cancelled from the Actions tab
+  (the browser here was NOT logged into GitHub, so I didn't cancel them).
+
+### Performance (Ocarina2 1.1, this PC, RTX 3050 class, EDEN_NX2_GPU_PROFILE=1)
+- Hyrule Castle Town (night square): ~15.4 FPS native, mean 64.9-67.0 ms, p50 ~64 ms,
+  p90 ~72-76 ms, p99 ~77-87 ms, 0 stutters. Hyrule Castle plaza exterior (night, castle wall
+  view): ~14.9 FPS. Town entrance, walking: ~17.2 FPS. Everything runs vsync bucket 4+ at
+  120 Hz; FG x4 keeps the displayed rate ~60.
+- Texture cache line: "Aggressive GC engaged: used 4825 MiB >= critical 3800 MiB" - the 3.8 GB
+  hard cap (deliberate; Windows paging above ~4 GB commit) fires in the square; ASTC panels and
+  render targets get evicted and re-created. No visible stutter, just log spam. Lowering it
+  further would thrash the ASTC decodes (this is the trade-off the cap already makes).
+- GPU thread per second (in 10 s reports): method ~246 ms, macro ~121 ms, push ~104 ms,
+  bind stage buffers ~66 ms, update buffers ~63 ms, list GPU wait ~125 ms,
+  read handles ~26 ms, fill image views ~24 ms, pipeline lookup ~25 ms,
+  dynamic state ~21 ms, draw ~31 ms, fence ~30 ms, flush work ~26 ms,
+  texture upload ~13 ms, compute sync ~12 ms, host CPU busy ~864 ms/s. The heavy cost is the
+  MME/Method interpreter path plus uniform-buffer compare traffic (105K unchanged / 60K changed
+  compares per second). Inherent to this emulation approach; nothing safe to hack blind.
+- Zone loads in town (town <-> plaza): ~8-15 s, dominated by file reads and code recompilation
+  counters; cold paths are still slow, in-cache reads dominate.
+
+### Disk
+- C: has ~19 GB free after moving the stale build-low-end tree to D:\Ocarina2-old-builds\ (1 GB).
+  LLVM 22.1.8 lives in D:\Ocarina2-llvm22 (checksum-verified download used only for the PGO
+  merge). Local CPM cache (~0.9 GB) and .git (~0.3 GB) stay put.
+
+### Open / unfinished
+- v1.0 release NOT published yet. CI must go green first (build-check + release-binaries);
+  v1.0 = nx2 tip per the owner's call, then v1.1 follows. The auto-release publishes tag
+  build-N; renaming the TAG would break the in-app update checker (it compares tags
+  build-N against LIHCHII_BUILD_TAG), so only the title/notes of the release may be renamed,
+  not the tag.
+- White flash: not touched; not reproducing in town scenes (Kokiri was the reproducer).
