@@ -301,8 +301,6 @@ std::unordered_map<u64, u8> ReadUsed(const std::filesystem::path& file) {
 
 constexpr u32 UsedMagic = 0x31505545;
 
-} // Anonymous namespace
-
 TEST_CASE("A newer cache's pipelines are appended once, its source untouched",
           "[pipeline_cache_files]") {
     TempDir temp;
