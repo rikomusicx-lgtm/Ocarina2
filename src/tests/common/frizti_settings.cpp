@@ -25,13 +25,13 @@ void CheckFriztiValues(const Settings::Values& values) {
     CHECK(values.gpu_accuracy.GetValue() == Settings::GpuAccuracy::Low);
     CHECK(values.dma_accuracy.GetValue() == Settings::DmaAccuracy::Default);
     CHECK(values.gpu_fence_behavior.GetValue() == Settings::GpuFenceBehavior::Default);
-    CHECK(values.vsync_mode.GetValue() == Settings::VSyncMode::Mailbox);
+    CHECK(values.vsync_mode.GetValue() == Settings::VSyncMode::Immediate);
     CHECK(values.async_presentation.GetValue());
     CHECK(values.use_asynchronous_shaders.GetValue());
     CHECK(values.use_docked_mode.GetValue() == Settings::ConsoleMode::Docked);
     CHECK(values.memory_layout_mode.GetValue() == Settings::MemoryLayout::Memory_8Gb);
     CHECK(values.nvdec_emulation.GetValue() == Settings::NvdecEmulation::Gpu);
-    CHECK(values.scaling_filter.GetValue() == Settings::ScalingFilter::ScaleForce);
+    CHECK(values.scaling_filter.GetValue() == Settings::ScalingFilter::SgsrEdge);
 }
 } // namespace
 
@@ -43,12 +43,15 @@ TEST_CASE("Frizti's values are the tuned settings' defaults", "[frizti_settings]
     }
 }
 
-TEST_CASE("A new revision sets every tuned setting", "[frizti_settings]") {
+TEST_CASE("A new revision restores every tuned setting the other build touched",
+          "[frizti_settings]") {
     auto values = std::make_unique<Settings::Values>();
     SetOtherBuildValues(*values);
     const auto tuned = Frizti::TunedSettings(*values);
     const auto changes = Frizti::ReconcileGlobal(tuned, {}, true);
-    CHECK(changes.size() == tuned.size());
+    // Since v1.1 Frizti's tuned values are the linkage defaults, so only the ten settings
+    // SetOtherBuildValues moved are reported as changes.
+    CHECK(changes.size() == 10);
     CheckFriztiValues(*values);
     CHECK(Frizti::ReconcileGlobal(tuned, {}, true).empty());
 }
@@ -68,10 +71,10 @@ TEST_CASE("Between revisions only another build's changes are undone", "[frizti_
     const auto changes = Frizti::ReconcileGlobal(tuned, record, false);
     REQUIRE(changes.size() == 2);
     CHECK(values->gpu_accuracy.GetValue() == Settings::GpuAccuracy::High);
-    CHECK(values->vsync_mode.GetValue() == Settings::VSyncMode::Mailbox);
-    CHECK(values->scaling_filter.GetValue() == Settings::ScalingFilter::ScaleForce);
+    CHECK(values->vsync_mode.GetValue() == Settings::VSyncMode::Immediate);
+    CHECK(values->scaling_filter.GetValue() == Settings::ScalingFilter::SgsrEdge);
     CHECK(Frizti::FormatChanges(changes) ==
-          "use_vsync: Fifo -> Mailbox, scaling_filter: Fsr3 -> ScaleForce");
+          "use_vsync: Fifo -> Immediate, scaling_filter: Fsr3 -> SgsrEdge");
 }
 
 TEST_CASE("Ocarina's per-game overrides go back to global", "[frizti_settings]") {

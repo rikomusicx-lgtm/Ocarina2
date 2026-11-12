@@ -59,8 +59,10 @@ TEST_CASE("OOT 60 FPS preset restores Max Resolution and enables frame generatio
         *settings, Settings::OcarinaOfTimeProgramId, true, true));
     CHECK(settings->frame_gen.GetValue());
     CHECK(settings->frame_gen_type.GetValue() == Settings::FrameGenType::Fsr3);
-    CHECK(settings->frame_gen_multiplier.GetValue() == 3);
-    CHECK(settings->frame_gen_target_rate.GetValue() == 60);
+    CHECK(settings->frame_gen_multiplier.GetValue() == 4);
+    // v1.1: no fixed target rate; Target_Auto pacing and a multiplier decide (60 Hz cap before,
+    // but the gate-rate got dropped with the frame gen re-bake).
+    CHECK(settings->frame_gen_target_rate.GetValue() == 0);
     CHECK(settings->oot_dynamic_fps_preset_enabled);
     CHECK(settings->oot_preflush_preset_enabled);
     CHECK(settings->oot_max_resolution_preset_enabled);
@@ -112,10 +114,10 @@ TEST_CASE("OOT 60 FPS preset does not change unrelated games", "[game_presets]")
     CHECK_FALSE(settings->frame_gen.GetValue());
 }
 
-TEST_CASE("Display filter defaults use ScaleForce and no extra AA", "[game_presets]") {
+TEST_CASE("Display filter defaults use SGSR edge upscaling and FXAA", "[game_presets]") {
     auto settings = std::make_unique<Settings::Values>();
-    CHECK(settings->scaling_filter.GetDefault() == Settings::ScalingFilter::ScaleForce);
-    CHECK(settings->anti_aliasing.GetDefault() == Settings::AntiAliasing::None);
+    CHECK(settings->scaling_filter.GetDefault() == Settings::ScalingFilter::SgsrEdge);
+    CHECK(settings->anti_aliasing.GetDefault() == Settings::AntiAliasing::Fxaa);
 }
 
 TEST_CASE("Accepted MKW settings replace visible global preferences", "[game_presets]") {

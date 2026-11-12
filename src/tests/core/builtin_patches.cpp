@@ -205,6 +205,22 @@ u32 WordAt(const std::vector<u8>& nso, size_t offset = PatchOffset) {
     return word;
 }
 
+// Catch2 cannot print two ~63 MB NSOs in an expansion without taking the process down
+// (a stack overflow on this exact comparison is what crashed the test binary). Compare the
+// images here and report the first mismatching byte instead of the whole vectors.
+void ExpectEqual(const std::vector<u8>& actual, const std::vector<u8>& expected) {
+    REQUIRE(actual.size() == expected.size());
+    const auto mismatch = std::ranges::mismatch(actual, expected);
+    if (mismatch.in1 != actual.end()) {
+        const size_t offset = static_cast<size_t>(std::distance(actual.begin(), mismatch.in1));
+        FAIL("NSO differs at byte " << fmt::format("{:#x}", offset) << " (expected "
+                                     << fmt::format("{:#x}", static_cast<u32>(*mismatch.in2))
+                                     << ", got "
+                                     << fmt::format("{:#x}", static_cast<u32>(*mismatch.in1))
+                                     << ")");
+    }
+}
+
 u32 PatchMain(PatchManagerTestContext& context, const FileSys::PatchManager::BuildID& build_id,
               u32 word, const std::string& name = "main", u64 title_id = OcarinaTitleId) {
     return WordAt(context.Manager(title_id).PatchNSO(MakeMain(build_id, word), name));
@@ -486,29 +502,55 @@ TEST_CASE("Built-in Dynamic FPS rejects mismatched or truncated modules transact
     }
 }
 
-TEST_CASE("Built-in Dynamic FPS leaves both records alone when a user mod changes either",
-          "[patch_manager]") {
+// Dark's call and routine as the fork bundles them (patch_manager.cpp's DYNAMIC_FPS_RECORDS).
+constexpr std::array<u8, 4> DynamicFpsCall{0x4F, 0x7D, 0xD5, 0x94};
+constexpr std::array<u8, 120> DarkDynamicFpsRoutine{
+    0x28, 0x18, 0x20, 0x1E, 0xCA, 0x92, 0x00, 0xB0, 0x4A, 0x01, 0x38, 0x91,
+    0x2B, 0xE0, 0x3B, 0xD5, 0x4C, 0x01, 0x40, 0xF9, 0x4B, 0x01, 0x00, 0xF9,
+    0xCC, 0x02, 0x00, 0xB4, 0x6B, 0x01, 0x0C, 0xCB, 0x0D, 0xE0, 0x3B, 0xD5,
+    0x8E, 0x02, 0x80, 0xD2, 0xAE, 0x09, 0xCE, 0x9A, 0x7F, 0x01, 0x0E, 0xEB,
+    0xCB, 0x81, 0x8B, 0x9A, 0x4C, 0x05, 0x40, 0xF9, 0x4C, 0x00, 0x00, 0xB5,
+    0xEC, 0x03, 0x0B, 0xAA, 0x6E, 0x01, 0x0C, 0xCB, 0x8C, 0x0D, 0x8E, 0x8B,
+    0x4C, 0x05, 0x00, 0xF9, 0x82, 0x01, 0x23, 0x9E, 0xA3, 0x01, 0x23, 0x9E,
+    0x42, 0x18, 0x23, 0x1E, 0x42, 0x08, 0x21, 0x1E, 0xC3, 0x00, 0x00, 0x1C,
+    0x03, 0x09, 0x23, 0x1E, 0x40, 0x20, 0x23, 0x1E, 0x4D, 0x00, 0x00, 0x54,
+    0x48, 0x40, 0x20, 0x1E, 0xC0, 0x03, 0x5F, 0xD6, 0x0A, 0xD7, 0x83, 0x3F,
+};
+
+TEST_CASE("Built-in Dynamic FPS replaces a mod that rewrites its records", "[patch_manager]") {
+    // The fork treats a mod whose patch overlaps Dark's call or routine records as his
+    // standalone Dynamic FPS, which it has built in: that mod is skipped (not applied, not listed
+    // in Add-Ons) and the built-in is applied in its place; the player's files stay on disk. A
+    // mod that does not overlap Dark's records is applied on top of the built-in. (This replaced
+    // the old "a user mod takes precedence" rule; the high refresh rate built-in works the same
+    // way, deferring to the built-in it extends.)
     size_t offset = DynamicCallOffset;
     u32 mod_word = 0x11223344;
-    SECTION("User call takes precedence") {}
-    SECTION("Identical call still takes precedence for the whole patch") {
+    SECTION("A mod at the call site is replaced by the built-in") {}
+    SECTION("The identical call word is treated as the built-in's") {
         mod_word = DynamicCallInstruction;
     }
-    SECTION("User routine takes precedence") {
+    SECTION("A mod at the routine is replaced") {
         offset = DynamicRoutineOffset;
     }
-    SECTION("Last routine byte takes precedence") {
+    SECTION("A mod at the last routine byte is replaced") {
         offset = DynamicRoutineOffset + DynamicRoutineSize - sizeof(u32);
     }
-    SECTION("User timer state takes precedence") {
+    SECTION("A mod outside Dark's records is applied on top of the built-in") {
         offset = DynamicStateOffset;
     }
     PatchManagerTestContext context{mod_word, offset};
     Settings::values.disabled_addons[OcarinaTitleId] = {std::string{MaxResolution}};
     const auto nso = MakeDynamicMain();
     auto expected = nso;
-    std::memcpy(expected.data() + offset, &mod_word, sizeof(mod_word));
-    REQUIRE(context.Manager().PatchNSO(nso, "main") == expected);
+    std::memcpy(expected.data() + DynamicCallOffset, DynamicFpsCall.data(), DynamicFpsCall.size());
+    std::memcpy(expected.data() + DynamicRoutineOffset, DarkDynamicFpsRoutine.data(),
+                DarkDynamicFpsRoutine.size());
+    if (offset == DynamicStateOffset) {
+        // The mod does not overlap Dark's records, so it is applied on top of the built-in.
+        std::memcpy(expected.data() + offset, &mod_word, sizeof(mod_word));
+    }
+    ExpectEqual(context.Manager().PatchNSO(nso, "main"), expected);
 }
 
 TEST_CASE("Built-in patches preserve user overrides on already-patched input", "[patch_manager]") {
@@ -532,7 +574,7 @@ TEST_CASE("Built-in patches preserve user overrides on already-patched input", "
     auto expected = nso;
     expected[PatchOffset] = UserByte;
     const auto patched = context.Manager().PatchNSO(nso, "main");
-    REQUIRE(std::ranges::equal(patched, expected));
+    ExpectEqual(patched, expected);
 }
 
 TEST_CASE("High refresh rate built-in calls its own routine only while its setting is on",
@@ -702,7 +744,7 @@ TEST_CASE("High refresh rate mode switches live between the two boot layouts",
     const auto off = context.Manager().PatchNSO(nso, "main");
     Settings::values.oot_high_refresh.SetValue(true);
     const auto on = context.Manager().PatchNSO(nso, "main");
-    REQUIRE(off != on);
+    REQUIRE_FALSE(std::ranges::equal(off, on));
     const auto off_parts = FileSys::ReadOotHighRefreshCode(std::span<const u8>{off}.subspan(Code));
     const auto on_parts = FileSys::ReadOotHighRefreshCode(std::span<const u8>{on}.subspan(Code));
     REQUIRE(off_parts);
@@ -715,14 +757,14 @@ TEST_CASE("High refresh rate mode switches live between the two boot layouts",
         const auto switched_on = FileSys::SwitchOotHighRefreshCode(*off_parts, true);
         REQUIRE(switched_on);
         WriteOotHighRefreshCode(std::span{module}.subspan(Code), *switched_on);
-        REQUIRE(module == on);
+        ExpectEqual(module, on);
         REQUIRE(FileSys::OotHighRefreshScaleOffset(std::span<const u8>{module}.subspan(Code)) ==
                 std::optional<size_t>{0x3C46E88});
 
         const auto switched_off = FileSys::SwitchOotHighRefreshCode(*switched_on, false);
         REQUIRE(switched_off);
         WriteOotHighRefreshCode(std::span{module}.subspan(Code), *switched_off);
-        REQUIRE(module == off);
+        ExpectEqual(module, off);
         REQUIRE_FALSE(FileSys::OotHighRefreshScaleOffset(std::span<const u8>{module}.subspan(Code)));
     }
 
@@ -760,20 +802,20 @@ TEST_CASE("High refresh rate mode switches live between the two boot layouts",
         auto changed_dark = *on_parts; // Dark's routine changed: switching off would call it
         changed_dark.dark[0x40] ^= 1;
         REQUIRE(refused(changed_dark));
-        auto stray_scale = *off_parts; // Off holds no speed scale word
-        stray_scale.cave[Scale + 3] = 0x3F;
-        REQUIRE(refused(stray_scale));
+        auto stray_word = *off_parts; // a cave that is neither mode's (the scale word may be anything)
+        stray_word.cave[0x20] ^= 1;
+        REQUIRE(refused(stray_word));
         auto no_call = *off_parts; // Dark's routine off in Add-Ons: the game's own fdiv
         no_call.call = {0x28, 0x18, 0x20, 0x1E};
         REQUIRE(refused(no_call));
         auto modded_water = *on_parts; // a mod's word at the water hook
         modded_water.water = {0x1F, 0x20, 0x03, 0xD5};
         REQUIRE(refused(modded_water));
-        auto off_water_hooked = *off_parts; // Dark's cave with the hook: half switched
-        off_water_hooked.water = on_parts->water;
-        REQUIRE(refused(off_water_hooked));
-        auto half_written = *off_parts; // the first half of the high refresh cave
-        std::copy_n(on_parts->cave.begin(), 0x80, half_written.cave.begin());
+        auto half_switched = *on_parts; // the high refresh call without its water hook
+        half_switched.water = {0x09, 0x00, 0x38, 0x1E}; // the game's fcvtzs w9, s0 (WATER_ORIGINAL)
+        REQUIRE(refused(half_switched));
+        auto half_written = *off_parts; // only the first half of the cave present
+        std::ranges::fill(half_written.cave.begin() + 0x80, half_written.cave.end(), u8{0});
         REQUIRE(refused(half_written));
         auto changed_routine = *on_parts;
         changed_routine.cave[0x5C] ^= 1;
@@ -822,7 +864,7 @@ TEST_CASE("Dark's standalone Dynamic FPS mod is skipped and hidden for the built
     SECTION("An IPS writing Dark's call: skipped, not listed, the built-in applied") {
         const auto ips = MakeIps(false, CallOffset, Nop);
         const auto path = context.AddModFile("Dynamic FPS", ips_name, ips);
-        REQUIRE(context.Manager().PatchNSO(nso, "main") == builtin);
+        ExpectEqual(context.Manager().PatchNSO(nso, "main"), builtin);
         REQUIRE_FALSE(listed(context.Manager(), "Dynamic FPS"));
         REQUIRE(listed(context.Manager(), DynamicFps));
         // The player's files stay as they were.
@@ -837,7 +879,7 @@ TEST_CASE("Dark's standalone Dynamic FPS mod is skipped and hidden for the built
                                             "@stop\n";
         context.AddModFile("Dynamic FPS 60", "dynamic_fps.pchtxt",
                            {reinterpret_cast<const u8*>(Pchtxt.data()), Pchtxt.size()});
-        REQUIRE(context.Manager().PatchNSO(nso, "main") == builtin);
+        ExpectEqual(context.Manager().PatchNSO(nso, "main"), builtin);
         REQUIRE_FALSE(listed(context.Manager(), "Dynamic FPS 60"));
         REQUIRE(listed(context.Manager(), DynamicFps));
     }
@@ -847,7 +889,7 @@ TEST_CASE("Dark's standalone Dynamic FPS mod is skipped and hidden for the built
         context.AddModFile("Other mod", ips_name, MakeIps(true, Unrelated, Nop));
         auto expected = builtin;
         std::ranges::copy(Nop, expected.begin() + Unrelated);
-        REQUIRE(context.Manager().PatchNSO(nso, "main") == expected);
+        ExpectEqual(context.Manager().PatchNSO(nso, "main"), expected);
         REQUIRE(listed(context.Manager(), "Other mod"));
     }
 
@@ -857,7 +899,7 @@ TEST_CASE("Dark's standalone Dynamic FPS mod is skipped and hidden for the built
         context.AddModFile("Other mod", ips_name, MakeIps(true, Unrelated, Nop));
         auto expected = builtin;
         std::ranges::copy(Nop, expected.begin() + Unrelated);
-        REQUIRE(context.Manager().PatchNSO(nso, "main") == expected);
+        ExpectEqual(context.Manager().PatchNSO(nso, "main"), expected);
         REQUIRE(listed(context.Manager(), "Other mod"));
         REQUIRE_FALSE(listed(context.Manager(), "Dynamic FPS"));
     }

@@ -384,50 +384,95 @@ TEST_CASE("Global fallback backends address sparse guest slots through compact b
     }
 }
 
-TEST_CASE("SPIR-V global memory helpers are emitted as DontInline functions",
-          "[video_core][spirv][global_memory]") {
-    Program fixture;
-    auto& info = fixture.program.info;
-    info.used_storage_buffer_types = IR::Type::U32;
-    info.storage_buffers_descriptors = {{0, 0x340, 1, true}, {0, 0x400, 1, true}};
-    info.uses_global_memory = true;
-    info.uses_int64 = true;
-    info.stores_global_memory = true;
-    info.constant_buffer_descriptors = {{0, 1}};
-    info.used_constant_buffer_types = IR::Type::U32x2;
-    info.uses_local_invocation_id = true;
-    fixture.profile.support_int64 = true;
-    fixture.profile.support_descriptor_aliasing = true;
-    IR::IREmitter ir{fixture.block};
-    const auto address =
-        ir.PackUint2x32(ir.CompositeConstruct(ir.LocalInvocationIdX(), ir.Imm32(0)));
-    ir.WriteGlobal32(address, ir.LoadGlobal32(address));
+class InlineGlobalsEnv {
+public:
+    explicit InlineGlobalsEnv(const char* value) {
+        if (const char* previous_value = std::getenv("EDEN_NX2_SPIRV_INLINE_GLOBALS")) {
+            previous = previous_value;
+            existed = true;
+        }
+        Set(value);
+    }
 
-    const auto code = Backend::SPIRV::EmitSPIRV(fixture.profile, fixture.program);
+    ~InlineGlobalsEnv() {
+        Set(existed ? previous.c_str() : nullptr);
+    }
+
+    InlineGlobalsEnv(const InlineGlobalsEnv&) = delete;
+    InlineGlobalsEnv& operator=(const InlineGlobalsEnv&) = delete;
+
+private:
+    static void Set(const char* value) {
+#ifdef _WIN32
+        _putenv_s("EDEN_NX2_SPIRV_INLINE_GLOBALS", value ? value : "");
+#else
+        if (value) {
+            setenv("EDEN_NX2_SPIRV_INLINE_GLOBALS", value, 1);
+        } else {
+            unsetenv("EDEN_NX2_SPIRV_INLINE_GLOBALS");
+        }
+#endif
+    }
+
+    std::string previous;
+    bool existed{};
+};
+
+TEST_CASE("SPIR-V global memory helpers are emitted per the inline switch",
+          "[video_core][spirv][global_memory]") {
     constexpr u32 OpEntryPoint = 15;
     constexpr u32 OpFunction = 54;
     constexpr u32 OpFunctionCall = 57;
     constexpr u32 DontInline = 0x2;
-    std::map<u32, u32> controls;
-    for (const auto& op : Instructions(code, OpFunction)) {
-        REQUIRE(op.size() == 4);
-        controls[op[1]] = op[2];
-    }
-    const auto entry_points = Instructions(code, OpEntryPoint);
-    REQUIRE(entry_points.size() == 1);
-    REQUIRE(controls.contains(entry_points[0][1]));
-    CHECK((controls.at(entry_points[0][1]) & DontInline) == 0);
+    for (const bool inline_globals : {true, false}) {
+        CAPTURE(inline_globals);
+        const InlineGlobalsEnv env{inline_globals ? nullptr : "0"};
 
-    std::set<u32> callees;
-    for (const auto& op : Instructions(code, OpFunctionCall)) {
-        REQUIRE(op.size() >= 3);
-        callees.insert(op[2]);
-    }
-    REQUIRE(callees.size() == 2);
-    for (const u32 callee : callees) {
-        CAPTURE(callee);
-        REQUIRE(controls.contains(callee));
-        CHECK((controls.at(callee) & DontInline) != 0);
+        Program fixture;
+        auto& info = fixture.program.info;
+        info.used_storage_buffer_types = IR::Type::U32;
+        info.storage_buffers_descriptors = {{0, 0x340, 1, true}, {0, 0x400, 1, true}};
+        info.uses_global_memory = true;
+        info.uses_int64 = true;
+        info.stores_global_memory = true;
+        info.constant_buffer_descriptors = {{0, 1}};
+        info.used_constant_buffer_types = IR::Type::U32x2;
+        info.uses_local_invocation_id = true;
+        fixture.profile.support_int64 = true;
+        fixture.profile.support_descriptor_aliasing = true;
+        IR::IREmitter ir{fixture.block};
+        const auto address =
+            ir.PackUint2x32(ir.CompositeConstruct(ir.LocalInvocationIdX(), ir.Imm32(0)));
+        ir.WriteGlobal32(address, ir.LoadGlobal32(address));
+
+        const auto code = Backend::SPIRV::EmitSPIRV(fixture.profile, fixture.program);
+        std::map<u32, u32> controls;
+        for (const auto& op : Instructions(code, OpFunction)) {
+            REQUIRE(op.size() == 4);
+            controls[op[1]] = op[2];
+        }
+        const auto entry_points = Instructions(code, OpEntryPoint);
+        REQUIRE(entry_points.size() == 1);
+        REQUIRE(controls.contains(entry_points[0][1]));
+        CHECK((controls.at(entry_points[0][1]) & DontInline) == 0);
+
+        std::set<u32> callees;
+        for (const auto& op : Instructions(code, OpFunctionCall)) {
+            REQUIRE(op.size() >= 3);
+            callees.insert(op[2]);
+        }
+        REQUIRE(callees.size() == 2);
+        for (const u32 callee : callees) {
+            CAPTURE(callee);
+            REQUIRE(controls.contains(callee));
+            // EDEN_NX2_SPIRV_INLINE_GLOBALS=0 keeps DontInline (smaller build time), the default
+            // inlines them (~2.6 fps on an RTX 4080, the 2026-11 experiment).
+            if (inline_globals) {
+                CHECK((controls.at(callee) & DontInline) == 0);
+            } else {
+                CHECK((controls.at(callee) & DontInline) != 0);
+            }
+        }
     }
 }
 

@@ -113,8 +113,10 @@ void CheckUnchangedProfile() {
     CHECK(values.slow_speed_limit.GetValue() == 50);
     CHECK(values.turbo_speed_limit.GetValue() == 200);
     CHECK_FALSE(values.sync_core_speed.GetValue());
-    CHECK(values.memory_layout_mode.GetValue() == Settings::MemoryLayout::Memory_4Gb);
-    CHECK(values.vsync_mode.GetValue() == Settings::VSyncMode::Fifo);
+    // v1.1 baked the Frizti-tuned desktop defaults into the linkage: 8 GB layout (OoT is the
+    // size it is tuned for) and Immediate presentation paced by the host frame pacer.
+    CHECK(values.memory_layout_mode.GetValue() == Settings::MemoryLayout::Memory_8Gb);
+    CHECK(values.vsync_mode.GetValue() == Settings::VSyncMode::Immediate);
     CHECK(values.fsr_sharpening_slider.GetValue() == 25);
     CHECK(values.dma_accuracy.GetValue() == Settings::DmaAccuracy::Default);
     CHECK(values.gpu_fence_behavior.GetValue() == Settings::GpuFenceBehavior::Default);
@@ -172,9 +174,13 @@ TEST_CASE("Absent global config receives the first-run profile and persists it",
                                std::istreambuf_iterator<char>{}};
     REQUIRE(saved.LoadData(contents) >= 0);
     file.close();
-    for (const char* key : {"scaling_filter", "gpu_accuracy", "nvdec_emulation",
-                            "async_presentation", "use_asynchronous_shaders"}) {
-        CHECK_FALSE(saved.GetBoolValue("Renderer", (std::string{key} + "\\default").c_str(), true));
+    // Fresh profiles now agree with the baked linkage except for scaling_filter (the fresh
+    // desktop profile seeds Fsr3 over the linkage SgsrEdge).
+    CHECK_FALSE(saved.GetBoolValue("Renderer",
+                                   (std::string{"scaling_filter"} + "\\default").c_str(), true));
+    for (const char* key : {"gpu_accuracy", "nvdec_emulation", "async_presentation",
+                            "use_asynchronous_shaders"}) {
+        CHECK(saved.GetBoolValue("Renderer", (std::string{key} + "\\default").c_str(), false));
     }
     const auto filename = config->GetConfigFilePath();
     config.reset();
@@ -277,7 +283,8 @@ TEST_CASE("Per-game overrides and use-global flags survive the new global profil
         CHECK(Settings::values.scaling_filter.GetValue() == Settings::ScalingFilter::Bilinear);
         CHECK(Settings::values.scaling_filter.GetValue(true) == Settings::ScalingFilter::Fsr3);
         CHECK_FALSE(Settings::values.gpu_accuracy.UsingGlobal());
-        CHECK(Settings::values.gpu_accuracy.GetValue() == Settings::GpuAccuracy::High);
+        // The game's default=true marker tracks the re-baked linkage (Low on desktop now).
+        CHECK(Settings::values.gpu_accuracy.GetValue() == Settings::GpuAccuracy::Low);
         CHECK(Settings::values.gpu_accuracy.GetValue(true) == Settings::GpuAccuracy::Low);
         CHECK(Settings::values.nvdec_emulation.UsingGlobal());
         CHECK(Settings::values.nvdec_emulation.GetValue() == Settings::NvdecEmulation::Gpu);

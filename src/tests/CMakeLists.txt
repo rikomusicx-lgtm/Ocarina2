@@ -215,6 +215,13 @@ endif()
 target_compile_definitions(tests PRIVATE
     LICHII_NX_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/core/nx_fixtures")
 
+# The default 1 MB stack reserve is too small for this suite's biggest test graphs (shader
+# translation walks deep native/lowered trees); full-suite runs exhaust it and die with
+# 0xC00000FD at a random point. Ask the linker for a large reserve (has no runtime cost).
+if (WIN32)
+    target_link_options(tests PRIVATE /STACK:67108864)
+endif()
+
 add_test(NAME tests COMMAND tests)
 
 if (TARGET SDL3::SDL3)
