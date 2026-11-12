@@ -96,7 +96,7 @@ jobs:
     if: >-
       needs.prepare-release.outputs.skip != 'true' &&
       (matrix.platform != 'macos-arm64' ||
-       (github.event_name == 'workflow_dispatch' && inputs.build_macos))
+       (github.event_name == 'workflow_dispatch' && github.event.inputs.build_macos == true))
     runs-on: ${{ matrix.runner }}
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
