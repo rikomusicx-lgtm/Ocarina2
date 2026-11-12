@@ -91,12 +91,10 @@ jobs:
   build:
     name: ${{ matrix.platform }} binary
     needs: prepare-release
-    # macOS hosted arm64 runners are capacity-starved: on push they never got acquired and the job
-    # ended up cancelled (or queued forever). Build macOS only on demand.
-    if: >-
-      needs.prepare-release.outputs.skip != 'true' &&
-      (matrix.platform != 'macos-arm64' ||
-       (github.event_name == 'workflow_dispatch' && github.event.inputs.build_macos == true))
+    # macOS is not in the push matrix: hosted arm64 runners are capacity-starved (jobs never got
+    # acquired and the run ended up cancelled/queued forever). macOS builds on demand, see the
+    # build-macos job.
+    if: needs.prepare-release.outputs.skip != 'true'
     runs-on: ${{ matrix.runner }}
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
@@ -130,8 +128,6 @@ jobs:
           - platform: linux-aarch64-pgo
             runner: ubuntu-24.04-arm
             pgo: true
-          - platform: macos-arm64
-            runner: macos-15
 
     steps:
       - name: Check out source
@@ -153,18 +149,6 @@ jobs:
             libopus-dev libasound2-dev ccache \
             libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
             libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1
-
-      # The packages docs/Deps.md lists for macOS, plus ccache.
-      - name: Install macOS dependencies
-        if: startsWith(matrix.platform, 'macos')
-        shell: bash
-        env:
-          HOMEBREW_NO_INSTALL_CLEANUP: 1
-          HOMEBREW_NO_AUTO_UPDATE: 1
-        run: |
-          brew install autoconf automake boost ffmpeg fmt glslang hidapi libtool libusb lz4 ninja \
-            nlohmann-json openssl pkg-config qt@6 sdl3 speexdsp zlib zstd cmake catch2 molten-vk \
-            vulkan-loader spirv-tools vulkan-utility-libraries ccache
 
       - name: Install Qt on Linux x86_64
         if: startsWith(matrix.platform, 'linux') && runner.arch != 'ARM64'
@@ -358,30 +342,6 @@ jobs:
             "-DCMAKE_C_FLAGS=$flags" \
             "-DCMAKE_CXX_FLAGS=-EHsc $flags"
 
-      - name: Configure macOS
-        if: startsWith(matrix.platform, 'macos')
-        shell: bash
-        run: |
-          set -euo pipefail
-          cmake -S . -B build/release -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_TESTING=OFF \
-            -DYUZU_TESTS=OFF \
-            -DYUZU_CMD=ON \
-            -DYUZU_ROOM=OFF \
-            -DYUZU_ROOM_STANDALONE=OFF \
-            -DYUZU_USE_BUNDLED_QT=OFF \
-            -DENABLE_QT_TRANSLATION=ON \
-            "-DCMAKE_PREFIX_PATH=$(brew --prefix qt@6);$(brew --prefix zlib)" \
-            "-DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" \
-            -DVulkanHeaders_FORCE_BUNDLED=ON \
-            -DVulkanUtilityLibraries_FORCE_BUNDLED=ON \
-            -DENABLE_UPDATE_CHECKER=ON \
-            -DLICHII_BUILD_TAG=build-${{ github.run_number }} \
-            -DLICHII_BUILD_PLATFORM=${{ matrix.platform }} \
-            -DUSE_DISCORD_PRESENCE=OFF \
-            -DUSE_CCACHE=ON
-
       - name: Save CPM downloads
         if: steps.cpm-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
@@ -480,12 +440,126 @@ jobs:
           }
           windeployqt --release --no-translations build/release/bin/Ocarina2.exe
 
+      # The artifact is the bin folder itself: GitHub zips artifacts on download, and uploading a
+      # zip gave a zip inside a zip. The release job zips it once for the release.
+      - name: Upload Windows binary
+        if: startsWith(matrix.platform, 'windows')
+        uses: actions/upload-artifact@v7
+        with:
+          name: ocarina2-${{ matrix.platform }}-${{ github.sha }}
+          path: build/release/bin/
+          if-no-files-found: error
+          retention-days: 7
+
+      # Both Linux files go in one artifact: the tar.gz and the AppImage.
+      - name: Upload Linux binary
+        if: startsWith(matrix.platform, 'linux')
+        uses: actions/upload-artifact@v7
+        with:
+          name: ocarina2-${{ matrix.platform }}-${{ github.sha }}
+          path: |
+            ocarina2-${{ github.sha }}-${{ matrix.platform }}.tar.gz
+            ocarina2-${{ github.sha }}-${{ matrix.platform }}.AppImage
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  # Hosted arm64 macOS runners are capacity-starved: on push they never got acquired and the run
+  # ended up cancelled or queued forever. macOS is built only on demand
+  # (workflow_dispatch with build_macos=true); tags/packages follow the same layout.
+  macos-arm64:
+    name: macos-arm64 binary
+    needs: prepare-release
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.build_macos && needs.prepare-release.outputs.skip != 'true'
+    runs-on: macos-15
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 3000M
+      CCACHE_COMPILERCHECK: content
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      # The packages docs/Deps.md lists for macOS, plus ccache.
+      - name: Install macOS dependencies
+        shell: bash
+        env:
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+          HOMEBREW_NO_AUTO_UPDATE: 1
+        run: |
+          brew install autoconf automake boost ffmpeg fmt glslang hidapi libtool libusb lz4 ninja \
+            nlohmann-json openssl pkg-config qt@6 sdl3 speexdsp zlib zstd cmake catch2 molten-vk \
+            vulkan-loader spirv-tools vulkan-utility-libraries ccache
+
+      - name: Restore CPM downloads
+        id: cpm-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: .cache/cpm
+          key: cpm-macos-arm64-v2-${{ hashFiles('cpmfile.json', 'CMakeLists.txt', 'CMakeModules/CPM*.cmake', 'externals/**/CMakeLists.txt', 'src/**/CMakeLists.txt') }}
+          restore-keys: |
+            cpm-macos-arm64-v2-
+            cpm-macos-
+
+      - name: Restore compiler objects
+        id: compiler-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: .ccache
+          key: objects-macos-arm64-v2-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            objects-macos-arm64-v2-${{ github.sha }}-
+            objects-macos-arm64-v2-
+
+      - name: Configure macOS
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/release -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=OFF \
+            -DYUZU_TESTS=OFF \
+            -DYUZU_CMD=ON \
+            -DYUZU_ROOM=OFF \
+            -DYUZU_ROOM_STANDALONE=OFF \
+            -DYUZU_USE_BUNDLED_QT=OFF \
+            -DENABLE_QT_TRANSLATION=ON \
+            "-DCMAKE_PREFIX_PATH=$(brew --prefix qt@6);$(brew --prefix zlib)" \
+            "-DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" \
+            -DVulkanHeaders_FORCE_BUNDLED=ON \
+            -DVulkanUtilityLibraries_FORCE_BUNDLED=ON \
+            -DENABLE_UPDATE_CHECKER=ON \
+            -DLICHII_BUILD_TAG=build-${{ github.run_number }} \
+            -DLICHII_BUILD_PLATFORM=macos-arm64 \
+            -DUSE_DISCORD_PRESENCE=OFF \
+            -DUSE_CCACHE=ON
+
+      - name: Save CPM downloads
+        if: steps.cpm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: .cache/cpm
+          key: ${{ steps.cpm-cache.outputs.cache-primary-key }}
+
+      - name: Build
+        shell: bash
+        run: |
+          ccache --zero-stats
+          cmake --build build/release --target yuzu yuzu-cmd --parallel
+          ccache --show-stats
+
+      - name: Save compiler objects
+        if: always() && steps.compiler-cache.outcome == 'success'
+        uses: actions/cache/save@v5
+        with:
+          path: .ccache
+          key: ${{ steps.compiler-cache.outputs.cache-primary-key }}
+
       # A self-contained app bundle: macdeployqt copies Qt and every other Homebrew library both
       # programs load into the bundle, then the leftover Homebrew and build-tree search paths are
       # removed so a machine with Homebrew still uses the bundled copies. Ad-hoc signed, not
       # notarized.
       - name: Package macOS app
-        if: startsWith(matrix.platform, 'macos')
         shell: bash
         run: |
           set -euo pipefail
@@ -531,49 +605,24 @@ jobs:
             codesign --force --sign - --entitlements dist/eglantine.entitlements "$app"
           fi
           codesign --verify --deep --strict "$app"
-          ditto -c -k --keepParent "$app" "ocarina2-${GITHUB_SHA}-${{ matrix.platform }}.zip"
-          ls -la "ocarina2-${GITHUB_SHA}-${{ matrix.platform }}.zip"
+          ditto -c -k --keepParent "$app" "ocarina2-${GITHUB_SHA}-macos-arm64.zip"
+          ls -la "ocarina2-${GITHUB_SHA}-macos-arm64.zip"
           # Also ship a .dmg (drag Ocarina2.app onto Applications).
           dmgdir=$(mktemp -d)
           ditto "$app" "$dmgdir/Ocarina2.app"
           ln -s /Applications "$dmgdir/Applications"
           hdiutil create -volname "Ocarina2" -srcfolder "$dmgdir" -ov -format UDZO \
-            "ocarina2-${GITHUB_SHA}-${{ matrix.platform }}.dmg"
-          ls -la "ocarina2-${GITHUB_SHA}-${{ matrix.platform }}.dmg"
-
-      # The artifact is the bin folder itself: GitHub zips artifacts on download, and uploading a
-      # zip gave a zip inside a zip. The release job zips it once for the release.
-      - name: Upload Windows binary
-        if: startsWith(matrix.platform, 'windows')
-        uses: actions/upload-artifact@v7
-        with:
-          name: ocarina2-${{ matrix.platform }}-${{ github.sha }}
-          path: build/release/bin/
-          if-no-files-found: error
-          retention-days: 7
-
-      # Both Linux files go in one artifact: the tar.gz and the AppImage.
-      - name: Upload Linux binary
-        if: startsWith(matrix.platform, 'linux')
-        uses: actions/upload-artifact@v7
-        with:
-          name: ocarina2-${{ matrix.platform }}-${{ github.sha }}
-          path: |
-            ocarina2-${{ github.sha }}-${{ matrix.platform }}.tar.gz
-            ocarina2-${{ github.sha }}-${{ matrix.platform }}.AppImage
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 7
+            "ocarina2-${GITHUB_SHA}-macos-arm64.dmg"
+          ls -la "ocarina2-${GITHUB_SHA}-macos-arm64.dmg"
 
       # Zipped with ditto beforehand: the bundle's framework symlinks don't survive artifact zipping.
       - name: Upload macOS app
-        if: startsWith(matrix.platform, 'macos')
         uses: actions/upload-artifact@v7
         with:
-          name: ocarina2-${{ matrix.platform }}-${{ github.sha }}
+          name: ocarina2-macos-arm64-${{ github.sha }}
           path: |
-            ocarina2-${{ github.sha }}-${{ matrix.platform }}.zip
-            ocarina2-${{ github.sha }}-${{ matrix.platform }}.dmg
+            ocarina2-${{ github.sha }}-macos-arm64.zip
+            ocarina2-${{ github.sha }}-macos-arm64.dmg
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
@@ -584,7 +633,7 @@ jobs:
   release:
     name: Publish release
     needs: build
-    if: (github.event_name == 'push' || inputs.publish_release) && needs.prepare-release.outputs.skip != 'true'
+    if: (github.event_name == 'push' || inputs.publish_release) && needs.build.result == 'success'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
