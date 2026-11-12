@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <cstddef>
 #include <cstring>
 
 #include <catch2/catch_test_macros.hpp>
@@ -110,6 +111,13 @@ TEST_CASE("Draws that differ only in cleared state share a canonical key",
                 UNSCOPED_INFO("byte " << i << " differs: a=" << int(pa[i]) << " b=" << int(pb[i]));
             }
         }
+        UNSCOPED_INFO("color_formats a: " << int(a.color_formats[0]) << ", " << int(a.color_formats[1])
+                      << " b: " << int(b.color_formats[0]) << ", " << int(b.color_formats[1]));
+        UNSCOPED_INFO("attachment1 a: raw=" << a.attachments[1].raw << " b: raw="
+                      << b.attachments[1].raw);
+        UNSCOPED_INFO("sizeof(FixedPipelineState)=" << sizeof(Vulkan::FixedPipelineState)
+                      << " offsetof(attributes)=" << offsetof(Vulkan::FixedPipelineState, attributes)
+                      << " offsetof(attachments)=" << offsetof(Vulkan::FixedPipelineState, attachments));
         FAIL("states differ after canonicalization");
     }
     CHECK(a == b);
