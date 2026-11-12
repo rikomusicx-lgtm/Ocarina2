@@ -5805,6 +5805,16 @@ void MainWindow::OpenQuickMenu() {
         QtCommon::system->ApplySettings();
         config->SaveAllValues();
     };
+    static const std::map<Settings::VSyncMode, QString> vsync_mode_texts_map = {
+        {Settings::VSyncMode::Immediate, QStringLiteral("IMMEDIATE")},
+        {Settings::VSyncMode::Mailbox, QStringLiteral("MAILBOX")},
+        {Settings::VSyncMode::Fifo, QStringLiteral("FIFO")},
+        {Settings::VSyncMode::FifoRelaxed, QStringLiteral("FIFO RELAXED")},
+    };
+    static const std::map<Settings::VramUsageMode, QString> vram_usage_texts_map = {
+        {Settings::VramUsageMode::Conservative, QStringLiteral("CONSERVATIVE")},
+        {Settings::VramUsageMode::Aggressive, QStringLiteral("AGGRESSIVE")},
+    };
     const auto map_text = [](const auto& texts, const auto& value) {
         const auto it = texts.find(value);
         return it == texts.end() ? QStringLiteral("?") : it->second.toUpper();
@@ -5896,6 +5906,48 @@ void MainWindow::OpenQuickMenu() {
                                             : Settings::FrameGenType::Lsfg;
                       Settings::values.frame_gen_type.SetValue(next);
                       Settings::values.frame_gen.SetValue(true);
+                      apply_live();
+                  },
+                  .vsync_text = [map_text] {
+                      return map_text(vsync_mode_texts_map, Settings::values.vsync_mode.GetValue());
+                  },
+                  .cycle_vsync = [cycle_in_map, apply_live](int direction) {
+                      const auto next = cycle_in_map(Settings::values.vsync_mode.GetValue(),
+                                                     direction, vsync_mode_texts_map);
+                      Settings::values.vsync_mode.SetValue(next);
+                      apply_live();
+                  },
+                  .vram_usage_text = [map_text] {
+                      return map_text(vram_usage_texts_map,
+                                      Settings::values.vram_usage_mode.GetValue());
+                  },
+                  .cycle_vram_usage = [cycle_in_map, apply_live](int direction) {
+                      const auto next = cycle_in_map(Settings::values.vram_usage_mode.GetValue(),
+                                                     direction, vram_usage_texts_map);
+                      Settings::values.vram_usage_mode.SetValue(next);
+                      apply_live();
+                  },
+                  .frame_gen_multiplier_text = [] {
+                      return QStringLiteral("x%1").arg(Settings::values.frame_gen_multiplier.GetValue());
+                  },
+                  .cycle_frame_gen_multiplier = [apply_live](int direction) {
+                      u32 multiplier = Settings::values.frame_gen_multiplier.GetValue();
+                      multiplier = direction >= 0
+                                       ? (multiplier % Settings::MAX_FRAME_GEN_MULTIPLIER) + 1
+                                       : (multiplier <= 1 ? Settings::MAX_FRAME_GEN_MULTIPLIER
+                                                           : multiplier - 1);
+                      Settings::values.frame_gen_multiplier.SetValue(multiplier);
+                      Settings::values.frame_gen.SetValue(true);
+                      apply_live();
+                  },
+                  .shader_cache_text = [] {
+                      return Settings::values.use_disk_shader_cache.GetValue()
+                                 ? QStringLiteral("ON")
+                                 : QStringLiteral("OFF");
+                  },
+                  .cycle_shader_cache = [apply_live](int) {
+                      Settings::values.use_disk_shader_cache.SetValue(
+                          !Settings::values.use_disk_shader_cache.GetValue());
                       apply_live();
                   },
               });

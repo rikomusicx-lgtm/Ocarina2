@@ -15,26 +15,49 @@ QMenuBar::item:selected { background: #221d33; }
 
 QMenu {
     background: #1d1930;
-    border: 1px solid #332e4d;
+    border: 1px solid #3b355a;
     border-radius: 14px;
     padding: 7px;
 }
-QMenu::item { padding: 8px 32px 8px 16px; border-radius: 8px; }
-QMenu::item:selected { background: #322a52; color: #ececf1; }
+QMenu::item {
+    padding: 8px 32px 8px 16px;
+    border-radius: 9px;
+}
+QMenu::item:selected {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #342c54, stop: 1 #2c2648);
+    color: #ececf1;
+}
 QMenu::item:disabled { color: #55555f; }
 QMenu::separator { height: 1px; background: #332e4d; margin: 6px 10px; }
 QMenu::indicator { width: 15px; height: 15px; left: 7px; }
 
 QPushButton {
-    background: #221d33;
-    border: 1px solid #332e4d;
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #2a2538, stop: 1 #221d33);
+    border: 1px solid #39354d;
     border-radius: 12px;
     padding: 9px 20px;
 }
-QPushButton:hover { background: #2a2540; border-color: #4b4269; }
-QPushButton:pressed { background: #322a52; }
-QPushButton:default { background: #9a7cf5; color: #1c1433; border: 1px solid #9a7cf5; }
-QPushButton:default:hover { background: #b49cf8; }
+QPushButton:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #332e4b, stop: 1 #292442);
+    border-color: #4f4770;
+}
+QPushButton:pressed {
+    background: #1e1a2d;
+    border-color: #332e4d;
+}
+QPushButton:default {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #b49cf8, stop: 0.45 #9a7cf5, stop: 1 #8b5cf6);
+    color: #1c1433;
+    border: 1px solid #c4b5fd;
+}
+QPushButton:default:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #c7b1fb, stop: 0.45 #ab8ef8, stop: 1 #9b6df8);
+}
 QPushButton:disabled { color: #55555f; background: #181622; }
 
 QLineEdit, QComboBox, QPlainTextEdit, QTextEdit {
@@ -152,6 +175,21 @@ QPushButton#OotFpsStatusBarButton:hover, QPushButton#GPUStatusBarButton:hover,
 QPushButton#RendererStatusBarButton:hover, QPushButton#RefreshButton:hover {
     background: #221d33;
     color: #ececf1;
+    border: none;
+}
+QPushButton#TogglableStatusBarButton:checked, QPushButton#DockingStatusBarButton:checked,
+QPushButton#GPUStatusBarButton:checked, QPushButton#RendererStatusBarButton:checked,
+QPushButton#OotFpsStatusBarButton:checked {
+    background: #322a52;
+    color: #c9b8fc;
+    border: none;
+}
+QPushButton#TogglableStatusBarButton:checked:hover, QPushButton#DockingStatusBarButton:checked:hover,
+QPushButton#GPUStatusBarButton:checked:hover, QPushButton#RendererStatusBarButton:checked:hover,
+QPushButton#OotFpsStatusBarButton:checked:hover {
+    background: #3a3360;
+    color: #dcd0ff;
+    border: none;
 }
 QPushButton#OotFpsStatusBarButton { color: #b49cf8; }
 
@@ -184,25 +222,32 @@ QWidget#Ocarina2Dock {
     border: 1px solid rgba(255, 255, 255, 0.09);
     border-radius: 30px;
 }
-QWidget#Ocarina2DockCell { background: transparent; }
 QToolButton#Ocarina2DockButton {
-    background: #1b1a26;
-    border: 1px solid #2b2940;
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #262433, stop: 1 #1b1a26);
+    border: 1px solid #332f47;
     border-radius: 42px;
     color: #cfccd9;
     padding: 0;
 }
+QWidget#Ocarina2DockCell { background: transparent; }
 QLabel#Ocarina2DockLabel {
-    color: #9896ab;
+    color: #a6a4b8;
     background: transparent;
     font-size: 11px;
     font-weight: 600;
     padding: 0;
 }
-QToolButton#Ocarina2DockButton:hover { background: #242333; color: #ffffff; }
-QToolButton#Ocarina2DockButton:pressed { background: #2a2836; }
+QToolButton#Ocarina2DockButton:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #2f2c40, stop: 1 #232233);
+    border-color: #4b4269;
+    color: #ffffff;
+}
+QToolButton#Ocarina2DockButton:pressed { background: #1b1a28; border-color: #565070; }
 QWidget#Ocarina2Home {
-    background: #1d1a29;
+    background: qradialgradient(cx: 0.5, cy: 0.32, radius: 1.15, fx: 0.5, fy: 0.22,
+        stop: 0 #28233e, stop: 0.45 #1d1a29, stop: 0.8 #151022, stop: 1 #100d18);
 }
 QWidget#Ocarina2TopBar {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
@@ -247,15 +292,21 @@ QToolButton#Ocarina2Hero {
     color: #ffffff;
 }
 QPushButton#Ocarina2BackButton {
-    background: rgba(11, 11, 18, 0.78);
-    border: 1px solid #2b2940;
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 rgba(19, 19, 28, 0.86), stop: 1 rgba(11, 11, 18, 0.82));
+    border: 1px solid #332f47;
     border-radius: 19px;
     color: #e4e2ee;
     padding: 0 10px;
     font-weight: 700;
     font-size: 13px;
 }
-QPushButton#Ocarina2BackButton:hover { background: rgba(22, 21, 34, 0.92); }
+QPushButton#Ocarina2BackButton:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 rgba(30, 30, 46, 0.95), stop: 1 rgba(21, 21, 34, 0.92));
+    border-color: #4b4269;
+    color: #ffffff;
+}
 QPushButton#Ocarina2BackButton:focus {
     border: 2px solid #3fd8ff;
     background: rgba(16, 18, 28, 0.85);
@@ -264,12 +315,17 @@ QPushButton#Ocarina2BackButton:focus {
 /* Gamepad/keyboard focus rings (Switch 2 aqua) */
 QToolButton#Ocarina2DockButton:focus {
     border: 2px solid #3fd8ff;
-    background: #1d2029;
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #262b3a, stop: 1 #1d2029);
     color: #ffffff;
 }
 QToolButton#Ocarina2Hero:focus {
     border: 3px solid #3fd8ff;
     background: rgba(63, 216, 255, 0.08);
+}
+QToolButton#Ocarina2Hero:hover {
+    border: 3px solid rgba(167, 139, 250, 0.35);
+    background: rgba(167, 139, 250, 0.06);
 }
 QToolButton#Ocarina2Avatar:focus {
     border: 2px solid #3fd8ff;
@@ -279,9 +335,9 @@ QToolButton#Ocarina2Avatar:focus {
 QDialog#Ocarina2QuickMenu { background: rgba(7, 7, 13, 150); }
 QWidget#Ocarina2QuickMenuPanel {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-        stop: 0 #191725, stop: 1 #131120);
-    border: 1px solid #2b2940;
-    border-radius: 22px;
+        stop: 0 #1d1a2e, stop: 1 #141221);
+    border: 1px solid #35324d;
+    border-radius: 24px;
 }
 QLabel#Ocarina2QuickMenuEyebrow { color: #3fd8ff; font-size: 11px; font-weight: 800; }
 QLabel#Ocarina2QuickMenuTitle {
@@ -298,8 +354,11 @@ QPushButton#Ocarina2QuickMenuItem {
     padding: 11px 14px;
     text-align: left;
 }
-QPushButton#Ocarina2QuickMenuItem:hover { background: #201e2e; }
-QPushButton#Ocarina2QuickMenuItem:pressed { background: #272436; }
+QPushButton#Ocarina2QuickMenuItem:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #242033, stop: 1 #1e1c2b);
+}
+QPushButton#Ocarina2QuickMenuItem:pressed { background: #1b1826; }
 QPushButton#Ocarina2QuickMenuItem:focus { border: 2px solid #3fd8ff; background: #1d2029; }
 QPushButton#Ocarina2QuickMenuItem:disabled { color: #54525f; }
 QPushButton#Ocarina2QuickMenuItemDanger {
@@ -317,8 +376,8 @@ QPushButton#Ocarina2QuickMenuItemDanger:focus { border: 2px solid #ff8a80; backg
 QPushButton#Ocarina2QuickMenuItemDanger:disabled { color: #54525f; }
 QPushButton#Ocarina2QuickMenuResume {
     background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
-        stop: 0 #8b5cf6, stop: 1 #a78bfa);
-    border: 2px solid transparent;
+        stop: 0 #9b6df8, stop: 0.5 #a78bfa, stop: 1 #c4b5fd);
+    border: 1px solid #d8cbff;
     border-radius: 15px;
     color: #ffffff;
     font-size: 16px;
@@ -326,7 +385,7 @@ QPushButton#Ocarina2QuickMenuResume {
     padding: 12px;
 }
 QPushButton#Ocarina2QuickMenuResume:hover { background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
-    stop: 0 #9b6df8, stop: 1 #b59efb); }
+    stop: 0 #ab7efa, stop: 0.5 #bb9dfb, stop: 1 #d2c4ff); }
 QPushButton#Ocarina2QuickMenuResume:focus { border: 2px solid #3fd8ff; }
 
 /* Bubbly settings (ocarina2: configure dialog + per-game configure dialog) */
@@ -470,11 +529,12 @@ QDialog#ConfigureDialog QDialogButtonBox QPushButton, QDialog#ConfigurePerGame Q
     padding: 10px 22px;
 }
 
-/* The Saves button in the home top bar: a quiet dark pill. */
+/* The Saves button in the home top bar: a subtle dark pill with real depth. */
 QPushButton#Ocarina2Link {
-    background: #1b1b1f;
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #212129, stop: 1 #1b1a20);
     color: #ececf1;
-    border: none;
+    border: 1px solid #2c2938;
     border-radius: 17px;
     min-height: 34px;
     max-height: 34px;
@@ -482,5 +542,10 @@ QPushButton#Ocarina2Link {
     font-size: 14px;
     font-weight: 500;
 }
-QPushButton#Ocarina2Link:hover { background: #26222f; }
-QPushButton#Ocarina2Link:pressed { background: #1f1b2e; }
+QPushButton#Ocarina2Link:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #292734, stop: 1 #221f28);
+    border-color: #3d3648;
+    color: #ffffff;
+}
+QPushButton#Ocarina2Link:pressed { background: #181720; border-color: #26222e; }

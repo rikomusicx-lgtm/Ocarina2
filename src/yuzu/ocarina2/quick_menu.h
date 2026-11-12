@@ -51,6 +51,14 @@ struct QuickMenuHooks {
     std::function<void(int direction)> cycle_anti_aliasing;
     std::function<QString()> frame_gen_text;       ///< e.g. LSFG / OPTICAL FLOW
     std::function<void(int direction)> cycle_frame_gen;
+    std::function<QString()> vsync_text;           ///< e.g. FIFO RELAXED / IMMEDIATE
+    std::function<void(int direction)> cycle_vsync;
+    std::function<QString()> vram_usage_text;      ///< CONSERVATIVE / AGGRESSIVE
+    std::function<void(int direction)> cycle_vram_usage;
+    std::function<QString()> frame_gen_multiplier_text;  ///< e.g. x3
+    std::function<void(int direction)> cycle_frame_gen_multiplier;
+    std::function<QString()> shader_cache_text;    ///< ON / OFF
+    std::function<void(int direction)> cycle_shader_cache;
 };
 
 class QuickMenu : public QDialog {
@@ -60,6 +68,7 @@ public:
     explicit QuickMenu(QWidget* parent, QuickMenuHooks hooks);
 
 protected:
+    void showEvent(QShowEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;

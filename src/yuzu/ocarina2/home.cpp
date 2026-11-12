@@ -30,6 +30,8 @@
 #include <QStandardItemModel>
 #include <QTimer>
 #include <QToolButton>
+#include <QPropertyAnimation>
+#include <QEasingCurve>
 #include <QVariant>
 
 #include "common/fs/fs.h"
@@ -44,6 +46,28 @@ namespace Ocarina2Ui {
 namespace {
 
 constexpr u64 OcarinaOfTime = 0x0400486024DEC000ULL;
+
+/// A dock button whose icon swells with an OutBack bounce on hover and shrinks back the
+/// same way when the pointer leaves - the "bubbly" feedback every Switch 2 button has.
+class BounceToolButton : public QToolButton {
+public:
+    using QToolButton::QToolButton;
+
+protected:
+    bool event(QEvent* event) override {
+        if (event->type() == QEvent::Enter || event->type() == QEvent::Leave) {
+            auto* bounce = new QPropertyAnimation(this, "iconSize", this);
+            bounce->setDuration(240);
+            bounce->setEasingCurve(QEasingCurve::OutBack);
+            bounce->setStartValue(iconSize());
+            bounce->setEndValue(event->type() == QEvent::Enter ? QSize(40, 40)
+                                                               : QSize(32, 32));
+            bounce->start(QAbstractAnimation::DeleteWhenStopped);
+            return true;
+        }
+        return QToolButton::event(event);
+    }
+};
 
 struct Game {
     QString title;
@@ -231,7 +255,7 @@ QWidget* Home::MakeRail() {
         cell_layout->setSpacing(4);
         cell_layout->setAlignment(Qt::AlignHCenter);
 
-        auto* button = new QToolButton(cell);
+        auto* button = new BounceToolButton(cell);
         button->setObjectName(QStringLiteral("Ocarina2DockButton"));
         button->setProperty("band", 3);
         button->setFixedSize(84, 84);
@@ -241,6 +265,11 @@ QWidget* Home::MakeRail() {
         button->setToolTip(tip);
         button->setCursor(Qt::PointingHandCursor);
         button->setFocusPolicy(Qt::StrongFocus);
+        auto* shadow = new QGraphicsDropShadowEffect(button);
+        shadow->setBlurRadius(20);
+        shadow->setOffset(0, 3);
+        shadow->setColor(QColor(0, 0, 0, 140));
+        button->setGraphicsEffect(shadow);
         cell_layout->addWidget(button, 0, Qt::AlignHCenter);
 
         auto* label = new QLabel(cell);
@@ -337,8 +366,6 @@ QWidget* Home::MakePage() {
         return label;
     };
     topb->addWidget(makeTopIcon(QStringLiteral("wifi"), tr("Wi-Fi connected")), 0,
-                    Qt::AlignVCenter);
-    topb->addWidget(makeTopIcon(QStringLiteral("battery"), tr("Battery charged")), 0,
                     Qt::AlignVCenter);
     topb->addWidget(makeTopIcon(QStringLiteral("gamepad"), tr("Pro Controller")), 0,
                     Qt::AlignVCenter);

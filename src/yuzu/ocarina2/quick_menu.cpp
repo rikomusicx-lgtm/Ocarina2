@@ -9,10 +9,13 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMouseEvent>
+#include <QPropertyAnimation>
+#include <QEasingCurve>
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QShowEvent>
 
 #include "common/logging.h"
 #include "hid_core/hid_types.h"
@@ -132,6 +135,14 @@ QuickMenu::QuickMenu(QWidget* parent, QuickMenuHooks hooks_) : QDialog(parent), 
                    hooks.scaling_filter_text, hooks.cycle_scaling_filter);
     addSettingsRow(settings_layout, QStringLiteral("droplet"), tr("Anti-aliasing"),
                    hooks.anti_aliasing_text, hooks.cycle_anti_aliasing);
+    addSettingsRow(settings_layout, QStringLiteral("pause"), tr("VSync"),
+                   hooks.vsync_text, hooks.cycle_vsync);
+    addSettingsRow(settings_layout, QStringLiteral("battery"), tr("VRAM usage"),
+                   hooks.vram_usage_text, hooks.cycle_vram_usage);
+    addSettingsRow(settings_layout, QStringLiteral("plus"), tr("FG multiplier"),
+                   hooks.frame_gen_multiplier_text, hooks.cycle_frame_gen_multiplier);
+    addSettingsRow(settings_layout, QStringLiteral("check"), tr("Shader cache"),
+                   hooks.shader_cache_text, hooks.cycle_shader_cache);
     addSettingsRow(settings_layout, QStringLiteral("triforce"), tr("Frame generation"),
                    hooks.frame_gen_text, hooks.cycle_frame_gen);
 
@@ -172,6 +183,26 @@ QuickMenu::QuickMenu(QWidget* parent, QuickMenuHooks hooks_) : QDialog(parent), 
         connect(controller_timer, &QTimer::timeout, this, &QuickMenu::PollController);
         controller_timer->start();
     }
+}
+
+void QuickMenu::showEvent(QShowEvent* event) {
+    QDialog::showEvent(event);
+    // Console-style pop: fade in with a bit of overshoot, like the Switch 2's own pause menu.
+    const QRect target = geometry();
+    setWindowOpacity(0.0);
+    setGeometry(target.adjusted(target.width() / 16, target.height() / 16,
+                                -target.width() / 16, -target.height() / 16));
+    auto* fade = new QPropertyAnimation(this, "windowOpacity", this);
+    fade->setDuration(150);
+    fade->setStartValue(0.0);
+    fade->setEndValue(1.0);
+    auto* zoom = new QPropertyAnimation(this, "geometry", this);
+    zoom->setDuration(260);
+    zoom->setStartValue(geometry());
+    zoom->setEndValue(target);
+    zoom->setEasingCurve(QEasingCurve::OutBack);
+    fade->start(QAbstractAnimation::DeleteWhenStopped);
+    zoom->start(QAbstractAnimation::DeleteWhenStopped);
 }
 
 QPushButton* QuickMenu::addSettingsRow(QVBoxLayout* layout, const QString& icon,
