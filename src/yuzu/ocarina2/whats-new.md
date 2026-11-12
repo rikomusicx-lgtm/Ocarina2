@@ -16,6 +16,7 @@ The GUI release: Ocarina2 looks like the console it imitates, boot to games list
 
 **Bug fixes**
 - **Back button lost after the game closes.** In single-window mode the home screen and the dock stayed hidden after the game exited — you were stranded on the games list with no way home. The window now restores exactly what you had: the home screen, or the games pane with the Back button visible again.
+- **Game list stacked over the home screen on some boots.** Whether the games list won or lost the race between the game-list scan finishing and the home screen restoring decided which of the two showed; the window now always restores one coherent state.
 - **Games-pane controller double-fire.** The stick/D-pad could jump two rows per press with the games list and the filter bar focused; navigation is single-shot now.
 - **Filter bar reading "0 of 0 result(s)".** The grid/carousel views never reported their visible counts and the flat-mode total was computed with tree semantics; the counter now shows the real visible/total on every view.
 - **OoT reverting your graphics preset at boot.** The OoT performance preset pinned Area upscaling, no anti-aliasing and 3x frame generation on top of your settings on every boot. It now applies the same values the global preset bakes in (SGSR edge upscaling, FXAA, Optical Flow x4), and the per-game overrides defer to the global profile.

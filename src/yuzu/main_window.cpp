@@ -3454,6 +3454,14 @@ void MainWindow::OnGameListAddDirectory() {
 void MainWindow::OnGameListShowList(bool show) {
     if (emulation_running && ui->action_Single_Window_Mode->isChecked())
         return;
+    if (ocarina2_home) {
+        // Ocarina2's window owns the games pane's visibility: showing/hiding the classic list
+        // behind our back can stack the list above the home screen at boot (the population
+        // completes after the home screen restores, depending on thread timing). Restore the
+        // Ocarina2 state instead, whatever it is.
+        ocarina2_home->Restore();
+        return;
+    }
     game_list->setVisible(show);
     game_list_placeholder->setVisible(!show);
 };
