@@ -3,6 +3,7 @@
 #include "yuzu/ocarina2/home.h"
 
 #include <algorithm>
+#include <cmath>
 #include <iomanip>
 #include <limits>
 #include <set>
@@ -41,6 +42,8 @@
 #include "yuzu/ocarina2/ocarina2_ui.h"
 #include "yuzu/ocarina2/saves_window.h"
 #include "yuzu/ocarina2/whats_new.h"
+#include <QStyle>
+#include <QStyleOption>
 
 namespace Ocarina2Ui {
 namespace {
@@ -192,6 +195,122 @@ std::vector<Game> CollectGames(QStandardItemModel* model, const QPixmap& fallbac
 
 } // namespace
 
+/// A background page that paints the ring of black-outlined green vines behind the home
+/// content. The vines never get mouse events (children answer clicks), so they can never
+/// get in the way.
+class Ocarina2HomePage : public QWidget {
+public:
+    using QWidget::QWidget;
+
+protected:
+    void paintEvent(QPaintEvent* event) override {
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        QStyleOption option{};
+        option.initFrom(this);
+        style()->drawPrimitive(QStyle::PE_Widget, &option, &painter);
+        DrawVines(painter, rect());
+    }
+
+private:
+    static constexpr double kPi = 3.14159265358979323846;
+
+    static QPainterPath Leaf(double length, double width) {
+        QPainterPath leaf;
+        leaf.moveTo(0, 0);
+        leaf.quadTo(width * 0.5, -length * 0.42, 0, -length);
+        leaf.quadTo(-width * 0.5, -length * 0.42, 0, 0);
+        leaf.closeSubpath();
+        return leaf;
+    }
+
+    static void DrawLeaf(QPainter& p, const QPointF& pos, double angle, double length,
+                         double width, const QColor& fill) {
+        p.save();
+        p.translate(pos);
+        p.rotate(angle);
+        const QPainterPath leaf = Leaf(length, width);
+        p.fillPath(leaf, QBrush(fill));
+        p.setPen(QPen(QColor("#0d0d0d"), 2.3, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.strokePath(leaf, p.pen());
+        p.drawLine(QPointF(0, -2), QPointF(0, -length + 3));
+        p.restore();
+    }
+
+    static double Wobble(double degrees) {
+        return std::sin(degrees * 4.0 * kPi / 180.0) * 6.0 +
+               std::sin(degrees * 9.0 * kPi / 180.0 + 1.3) * 2.5;
+    }
+
+    static void DrawVines(QPainter& p, const QRect& area) {
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setRenderHint(QPainter::SmoothPixmapTransform);
+
+        const double cx = area.center().x();
+        const double cy = area.top() + area.height() * 0.34;
+        const double radius =
+            std::min(static_cast<double>(area.width()), static_cast<double>(area.height())) * 0.23;
+
+        // The vine ring around the hero.
+        QPainterPath ring;
+        for (double deg = 0; deg <= 360.0; deg += 6.0) {
+            const double a = deg * kPi / 180.0;
+            const double rr = radius + Wobble(deg);
+            const QPointF pt{cx + rr * std::cos(a), cy + rr * std::sin(a)};
+            deg == 0.0 ? ring.moveTo(pt) : ring.lineTo(pt);
+        }
+        ring.closeSubpath();
+        const QPen outline(QColor("#0d0d0d"), 7.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+        const QPen vine(QColor("#2f7a2f"), 3.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+        const QPen vine_hi(QColor("#57a157"), 1.1, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+        p.strokePath(ring, outline);
+        p.strokePath(ring, vine);
+        p.strokePath(ring, vine_hi);
+
+        // Leaves on the ring, alternating in and out.
+        for (double deg = 10; deg < 360; deg += 26) {
+            const double a = deg * kPi / 180.0;
+            const double rr = radius + Wobble(deg);
+            const QPointF pos(cx + rr * std::cos(a), cy + rr * std::sin(a));
+            const bool outer = static_cast<int>(deg / 26) % 2 == 0;
+            const double radial = std::atan2(pos.y() - cy, pos.x() - cx) * 180.0 / kPi;
+            DrawLeaf(p, pos, radial + (outer ? 90 : -90), 17, 9,
+                     outer ? QColor("#3f8f3f") : QColor("#57a157"));
+        }
+
+        // Tendrils crawling outward from the ring.
+        struct Tendril {
+            double deg;
+            double curl;
+            double length;
+        };
+        const std::vector<Tendril> tendrils{{-90, 70, 125}, {-35, -85, 150}, {30, 75, 140},
+                                            {75, -65, 120}, {155, 95, 155}, {205, -75, 135},
+                                            {245, 60, 145}, {290, -55, 120}, {325, 65, 140}};
+        for (const Tendril& t : tendrils) {
+            const double a = t.deg * kPi / 180.0;
+            const QPointF dir_out{std::cos(a), std::sin(a)};
+            const QPointF dir_curl{-std::sin(a), std::cos(a)};
+            const QPointF start{cx + radius * std::cos(a), cy + radius * std::sin(a)};
+            const QPointF c1 = start + dir_out * (t.length * 0.42) + dir_curl * (t.curl * 0.35);
+            const QPointF c2 = start + dir_out * (t.length * 0.75) - dir_curl * (t.curl * 0.55);
+            const QPointF end = start + dir_out * t.length + dir_curl * (t.curl * 0.5);
+            QPainterPath tp;
+            tp.moveTo(start);
+            tp.cubicTo(c1, c2, end);
+            p.strokePath(tp, QPen(QColor("#0d0d0d"), 6.0, Qt::SolidLine, Qt::RoundCap,
+                                  Qt::RoundJoin));
+            p.strokePath(tp, vine);
+            p.strokePath(tp, vine_hi);
+            for (const double f : {0.3, 0.62, 0.92}) {
+                const QPointF pt = tp.pointAtPercent(f);
+                const double tangent = tp.angleAtPercent(f);
+                DrawLeaf(p, pt, tangent - 90.0, 13, 7.5, QColor("#3f8f3f"));
+            }
+        }
+    }
+};
+
 Home::Home(QMainWindow* window_, QBoxLayout* central, QWidget* game_list_, QWidget* placeholder_,
            HomeHooks hooks_)
     : QObject(window_), window{window_}, game_list{game_list_}, placeholder{placeholder_},
@@ -317,7 +436,7 @@ QWidget* Home::MakeRail() {
 }
 
 QWidget* Home::MakePage() {
-    page = new QWidget;
+    page = new Ocarina2HomePage;
     page->setObjectName(QStringLiteral("Ocarina2Home"));
     page->setAttribute(Qt::WA_StyledBackground);
     page->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -332,6 +451,7 @@ QWidget* Home::MakePage() {
     // The Switch 2 top bar: player avatar, Home/Games switch, network glyphs and the clock.
     topbar = new QWidget(page);
     topbar->setObjectName(QStringLiteral("Ocarina2TopBar"));
+    topbar->setAttribute(Qt::WA_StyledBackground);
     auto* topb = new QHBoxLayout(topbar);
     topb->setContentsMargins(40, 0, 40, 0);
     topb->setSpacing(14);

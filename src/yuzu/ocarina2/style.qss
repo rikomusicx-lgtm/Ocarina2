@@ -250,8 +250,8 @@ QWidget#Ocarina2Home {
         stop: 0 #28233e, stop: 0.45 #1d1a29, stop: 0.8 #151022, stop: 1 #100d18);
 }
 QWidget#Ocarina2TopBar {
-    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-        stop: 0 rgba(255, 255, 255, 5), stop: 1 rgba(255, 255, 255, 0));
+    background: #0d0b16;
+    border-bottom: 1px solid #241f2e;
 }
 QToolButton#Ocarina2Avatar {
     background: #12101c;
