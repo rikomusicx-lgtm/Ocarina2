@@ -7,7 +7,7 @@ New entries go under `## [Unreleased]`; `tools/ci/bump-version.sh` turns them in
 ## [Ocarina2 v1.1] - 2026-11-12
 
 Made by rikomusicx-lgtm. The GUI update: a new home screen, a dock to drive the app, and the
-worst v1 paper cuts ironed out. The next build is Ocarina2 v1.2 (`dist/ocarina2_version.txt`).
+worst v1 paper cuts ironed out. The next build is Ocarina2 v1.3 (`dist/ocarina2_version.txt`).
 
 Added:
 - Hyrule home screen: hand-drawn twilight scene of Hyrule Castle drawn into the window; drop
