@@ -15,6 +15,7 @@ class QMenu;
 class QPushButton;
 class QStandardItemModel;
 class QTimer;
+class QToolButton;
 
 namespace Ocarina2Ui {
 

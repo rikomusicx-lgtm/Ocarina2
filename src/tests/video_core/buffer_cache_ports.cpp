@@ -73,8 +73,8 @@ struct Runtime {
     bool IsFree(u64) const {
         return true;
     }
-    void WaitSubmittedTick(u64) {}
-    bool CanReorderUpload(const Buffer&, std::span<VideoCommon::BufferCopy>) const {
+    void WaitSubmittedTick(u64, u64 = 0) {}
+    bool CanReorderUpload(const Buffer&, std::span<const VideoCommon::BufferCopy>) const {
         return false;
     }
     Staging DownloadStagingBuffer(u64 size, bool = false) {
@@ -229,9 +229,9 @@ struct BufferCacheTestAccess {
         channel.uniform_buffers[0][0] = {.device_addr = address, .size = size, .buffer_id = id};
         cache.BindHostGraphicsUniformBuffer(0, 0, 0, true);
     }
-    static void NextFrame(Cache& cache) {
-        cache.native_indirect_uniforms_this_frame.clear();
-    }
+    // No per-frame state left to reset: the native bank check compares pages on every bind. This
+    // stays so tests can mark the frame boundary where it mattered.
+    static void NextFrame(Cache&) {}
     static u32 CpuMarks(Cache& cache) {
         return cache.memory_tracker.cpu_marks;
     }
