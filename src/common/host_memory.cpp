@@ -1171,20 +1171,60 @@ HostMemory::HostMemory(size_t backing_size_, size_t virtual_size_)
 }
 
 HostMemory::~HostMemory() {
+    Release();
+}
+
+void HostMemory::Release() noexcept {
 #ifdef _WIN32
+    // Windows requires dwSize == 0 with MEM_RELEASE.
     if (fallback_buffer) {
-        VirtualFree(backing_base, backing_size, MEM_RELEASE);
+        VirtualFree(backing_base, 0, MEM_RELEASE);
     }
 #else
     if (fallback_buffer) {
         munmap(backing_base, backing_size);
     }
 #endif
+    // The fastmem path owns its mappings through Impl; resetting it runs the same teardown
+    // the destructor would run. The raw members come with it.
+    fallback_buffer = false;
+    commit_on_use = false;
+    backing_base = nullptr;
+    virtual_base = nullptr;
+    virtual_base_offset = 0;
+    impl.reset();
+    granules.reset();
+    num_granules = 0;
 }
 
-HostMemory::HostMemory(HostMemory&&) noexcept = default;
+void HostMemory::Swap(HostMemory& other) noexcept {
+    using std::swap;
+    swap(backing_size, other.backing_size);
+    swap(virtual_size, other.virtual_size);
+    swap(impl, other.impl);
+    swap(backing_base, other.backing_base);
+    swap(virtual_base, other.virtual_base);
+    swap(virtual_base_offset, other.virtual_base_offset);
+    swap(granules, other.granules);
+    swap(num_granules, other.num_granules);
+    swap(fallback_buffer, other.fallback_buffer);
+    swap(commit_on_use, other.commit_on_use);
+}
 
-HostMemory& HostMemory::operator=(HostMemory&&) noexcept = default;
+HostMemory::HostMemory(HostMemory&& other) noexcept {
+    Swap(other);
+}
+
+HostMemory& HostMemory::operator=(HostMemory&& other) noexcept {
+    if (this == &other) {
+        // Self-move must leave the object intact.
+        return *this;
+    }
+    // Take over other's resources; the previous ones are released here.
+    Release();
+    Swap(other);
+    return *this;
+}
 
 void HostMemory::Map(size_t virtual_offset, size_t host_offset, size_t length, MemoryPermission perms, bool separate_heap) {
 #if !(defined(__OPENORBIS__) || defined(__managarm__))

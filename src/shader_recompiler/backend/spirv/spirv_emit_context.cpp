@@ -981,7 +981,9 @@ void EmitContext::DefineGlobalMemoryFunctions(const IR::Program& program) {
     // DontInline only with EDEN_NX2_SPIRV_INLINE_GLOBALS=0: it builds those shaders faster, but
     // cost ~2.6 fps walking through Hyrule Field on an RTX 4080 (fresh launches, 55.2/55.3 vs
     // 57.9/57.8 inlined), and a shader is built once before the driver's cache has it.
-    static const spv::FunctionControlMask function_control = [] {
+    // Read the environment live, like the rest of the fork's env switches (tests flip it between
+    // the two emissions): static caching made the DontInline choice untestable in one process.
+    const auto function_control = [] {
         const char* value = std::getenv("EDEN_NX2_SPIRV_INLINE_GLOBALS");
         return value != nullptr && value[0] == '0' ? spv::FunctionControlMask::DontInline
                                                    : spv::FunctionControlMask::MaskNone;

@@ -171,6 +171,11 @@ private:
     };
     static thread_local AllocationTestControl* allocation_test_control;
 
+    /// Releases everything this object owns, exactly like the destructor would (the fallback
+    /// buffer, or the fastmem Impl), and resets the members to a moved-from state.
+    void Release() noexcept;
+    void Swap(HostMemory& other) noexcept;
+
     size_t backing_size{};
     size_t virtual_size{};
 
