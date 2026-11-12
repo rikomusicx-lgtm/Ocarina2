@@ -271,6 +271,30 @@ static FileSys::VirtualFile VfsDirectoryCreateFileWrapper(const FileSys::Virtual
 
 #include "qt_common/gamemode.h"
 
+// Ocarina2: the console's A button is Enter everywhere in this app, and QCheckBox/QRadioButton
+// do nothing with Enter — so A can't tick settings anywhere. Translate it to Space for those
+// two widget types, only, everywhere.
+class CheckboxEnterFilter : public QObject {
+public:
+    explicit CheckboxEnterFilter(QObject* parent) : QObject(parent) {}
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (event->type() == QEvent::KeyPress) {
+            auto* key = static_cast<QKeyEvent*>(event);
+            if (key->key() != Qt::Key_Return && key->key() != Qt::Key_Enter) {
+                return QObject::eventFilter(watched, event);
+            }
+            QWidget* focused = QApplication::focusWidget();
+            if (focused && (qobject_cast<QCheckBox*>(focused) ||
+                            qobject_cast<QRadioButton*>(focused))) {
+                auto* space = new QKeyEvent(QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier);
+                QCoreApplication::postEvent(focused, space);
+                return true;  // swallow the Enter so nothing else double-handles it
+            }
+        }
+        return QObject::eventFilter(watched, event);
+    }
+};
+
 #ifdef _WIN32
 #include "common/windows/timer_resolution.h"
 #include "core/core_timing.h"
@@ -332,29 +356,7 @@ struct TitlebarFilter final : QObject {
     }
 };
 
-// Ocarina2: the console's A button is Enter everywhere in this app, and QCheckBox/QRadioButton
-// do nothing with Enter — so A can't tick settings anywhere. Translate it to Space for those
-// two widget types, only, everywhere.
-class CheckboxEnterFilter : public QObject {
-public:
-    explicit CheckboxEnterFilter(QObject* parent) : QObject(parent) {}
-    bool eventFilter(QObject* watched, QEvent* event) override {
-        if (event->type() == QEvent::KeyPress) {
-            auto* key = static_cast<QKeyEvent*>(event);
-            if (key->key() != Qt::Key_Return && key->key() != Qt::Key_Enter) {
-                return QObject::eventFilter(watched, event);
-            }
-            QWidget* focused = QApplication::focusWidget();
-            if (focused && (qobject_cast<QCheckBox*>(focused) ||
-                            qobject_cast<QRadioButton*>(focused))) {
-                auto* space = new QKeyEvent(QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier);
-                QCoreApplication::postEvent(focused, space);
-                return true;  // swallow the Enter so nothing else double-handles it
-            }
-        }
-        return QObject::eventFilter(watched, event);
-    }
-};
+
 
 static TitlebarFilter* g_filter = nullptr;
 static QMetaObject::Connection g_focusConn;
