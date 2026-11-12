@@ -1120,3 +1120,29 @@ workflow skips pushes that only touch tests, so the test fixes don't re-trigger 
 - v1.1 (build-11) remains on GitHub with its 10 binaries. v1.2 (build-12, description-only, no binaries) remains as documentation of what orphaned v1.2 was. tag build-14 still exists but points at nothing (no release attached); if it bothers you, say so.
 - No release will be posted again without the owner's explicit word.
 - The running game (pid 15260) is the owner's own instance of the v1.2 binaries; left untouched.
+
+## 2026-11-12 (late) - CI green push: three real bugs the test suite caught
+
+- `MemoryManager::PageTableOp` (video_core/memory_manager.cpp): unlike BigPageTableOp and the
+  read/write paths, a map outside the 40-bit address space was not rejected - it walked the
+  page-table vectors out of bounds (caught by "A 40-bit address space maps Switch 2 VA past
+  128 GiB", src/tests/video_core/memory_manager_runs.cpp). That is the crash that made the
+  `tests` binary segfault in CI at a random point (the order is randomized per run) and is
+  why the crash moved between runs locally.
+- `HostMemory` move constructor/assignment (common/host_memory.cpp) were `= default` while the
+  destructor owned the fallback buffer: moving leaked it, and the source dtor freed a buffer
+  the moved-to object still pointed at (double free, heap corruption). Moves are now
+  swap-based and assignment releases the replaced buffer. Also on Windows, `VirtualFree` was
+  given a non-zero size with MEM_RELEASE - it must be dwSize=0, or the call fails with
+  ERROR_INVALID_PARAMETER and the fallback buffer stays committed forever.
+- Test suite mechanics: the builtin_patches tests compared ~63-83 MB NSO images with Catch2's
+  full-operand expansion, taking the test process down with a stack overflow on any mismatch
+  (now compared fail-safely, first mismatching byte reported); tests.exe reserves 64 MB of
+  stack; the SPIR-V global-memory helper test now covers both the default (inlined, -~2.6 fps
+  tradeoff measured on an RTX 4080) and EDEN_NX2_SPIRV_INLINE_GLOBALS=0 (DontInline), with the
+  env switch read live instead of cached per process; stale expectations were re-aligned with
+  the deliberately re-baked v1.1 linkage defaults (FG x4 + Target_Auto pacing, SGSR edge +
+  FXAA, Immediate vsync - the v1.1 commits made those the defaults; Frizti's values ARE the
+  linkage defaults since v1.1).
+- Local suite green end to end with the release-gate in place: tests (1052 cases, ~70.8M
+  assertions), config_tests (426), all green. Nothing published; pushes still cannot publish.
