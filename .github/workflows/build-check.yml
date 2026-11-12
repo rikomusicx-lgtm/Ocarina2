@@ -32,6 +32,16 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
         run: |
           build=true
+          # Skip superseded pushes: this run is for a commit an older run was already waiting on.
+          # The build would run for hours only to be discarded; exit fast instead.
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            tip=$(gh api "repos/$GITHUB_REPOSITORY/commits?sha=$GITHUB_REF_NAME&per_page=1" --jq '.[0].sha')
+            if [ "$tip" != "$GITHUB_SHA" ]; then
+              echo "Push superseded by tip $tip; skipping"
+              echo "build=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
           if [ -n "$PR" ]; then
             files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename')
             if ! printf '%s\n' "$files" | grep -qvE '^(docs/.*|.*\.md)$'; then

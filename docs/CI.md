@@ -1,4 +1,4 @@
-# Eglantine CI and release guide
+﻿# Eglantine CI and release guide
 
 This document describes the split GitHub Actions pipeline added with this change. It is not yet a live workflow until the files have been merged to the required branches and the repository settings below have been applied.
 
@@ -8,10 +8,10 @@ This document describes the split GitHub Actions pipeline added with this change
 | ------------------------------------------------------ | --------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | Push to `nx2` that changes `VERSION` or `CHANGELOG.md` | Stable release or release candidate, based on the suffix in `VERSION` | Yes, unless the exact tag already exists or the changelog section is empty |
 | Scheduled run at 03:00 UTC daily                       | Latest `nx2` commit                                                   | Yes; skipped when the latest daily already points at that commit           |
-| Actions → `ci` → Run workflow, `kind: branch`          | The selected branch                                                   | Yes by default; can be disabled                                            |
-| Actions → `ci` → Run workflow, `kind: daily`           | `nx2` only, even if another branch is selected the run is rejected    | Yes by default; can be disabled                                            |
+| Actions â†’ `ci` â†’ Run workflow, `kind: branch`          | The selected branch                                                   | Yes by default; can be disabled                                            |
+| Actions â†’ `ci` â†’ Run workflow, `kind: daily`           | `nx2` only, even if another branch is selected the run is rejected    | Yes by default; can be disabled                                            |
 | Same-repository PR with label `ci:build`               | PR head commit; rebuilt on synchronize/reopen                         | Yes, as a rolling branch pre-release                                       |
-| Fork PR                                                | No build from the base repository                                     | No; see “Forks” below                                                      |
+| Fork PR                                                | No build from the base repository                                     | No; see â€œForksâ€ below                                                      |
 
 **Important behavior change:** the previous `release-binaries.yml` built on selected source/build-file pushes to `nx2` and `nx2-experimental`. This design instead runs the release pipeline on `VERSION` or `CHANGELOG.md` changes, scheduled daily, manual requests, or explicitly labelled same-repository PRs. Ordinary source pushes do not trigger this release pipeline. A changelog-only push retries a previously blocked version release; once its tag exists, the duplicate check skips it. The `nx2-experimental` branch is not included in the new release triggers.
 
@@ -35,12 +35,12 @@ Add changes to the top `## [Unreleased]` section in `CHANGELOG.md`. When a new c
 ### Creating a release
 
 1. For the initial `0.1.0-rc1`, add the real candidate notes under `## [0.1.0]`; after the first stable release, add new notes under `## [Unreleased]` and commit them to `nx2`.
-2. Open Actions → `bump-version` → Run workflow. Choose one of:
-   - `patch`: `0.1.0` → `0.1.1-rc1`.
-   - `minor`: `0.1.0` → `0.2.0-rc1`.
-   - `major`: `0.1.0` → `1.0.0-rc1`.
-   - `rc`: `0.2.0-rc1` → `0.2.0-rc2`.
-   - `release`: `0.2.0-rcN` → `0.2.0`.
+2. Open Actions â†’ `bump-version` â†’ Run workflow. Choose one of:
+   - `patch`: `0.1.0` â†’ `0.1.1-rc1`.
+   - `minor`: `0.1.0` â†’ `0.2.0-rc1`.
+   - `major`: `0.1.0` â†’ `1.0.0-rc1`.
+   - `rc`: `0.2.0-rc1` â†’ `0.2.0-rc2`.
+   - `release`: `0.2.0-rcN` â†’ `0.2.0`.
 3. The workflow commits the changed `VERSION` and `CHANGELOG.md` to `release/vX.Y.Z[-rcN]` and opens (or updates) a PR into `nx2`.
 4. Review and merge the PR. The merge push changes `VERSION`, which starts `ci`.
 5. Test the RC binaries before selecting `release` to promote that candidate to stable.
@@ -51,7 +51,7 @@ The CI duplicate check refuses to publish a tag that already exists. It does **n
 
 ## Running a build manually
 
-Open Actions → `ci` → Run workflow. Select the branch to build and choose:
+Open Actions â†’ `ci` â†’ Run workflow. Select the branch to build and choose:
 
 - **kind**: `branch` for a test build, or `daily` for a forced daily build of `nx2` only.
 - **platforms**: `all`, `linux`, `windows`, or `macos`. A single-platform run produces a partial release with only that platform's assets.
@@ -89,7 +89,7 @@ Build artifacts are retained for seven days. Published GitHub Release assets rem
 
 ## Windows PGO profile
 
-`windows-x86_64-pgo` is the `windows-x86_64` build plus `-fprofile-use=lichii-windows.profdata`. The profile is an LLVM indexed IR profile from clang-cl, so its function names use the MSVC ABI. Linux's `eglantine.profdata` uses Itanium names, and clang-cl cannot use it. The committed profile comes from about six minutes of Ocarina of Time gameplay. Code that run never reached gets no profile data, so other games gain less.
+`windows-x86_64-pgo` is the `windows-x86_64` build plus `-fprofile-use=ocarina2-windows.profdata`. The profile is an LLVM indexed IR profile from clang-cl, so its function names use the MSVC ABI. Linux's `eglantine.profdata` uses Itanium names, and clang-cl cannot use it. The committed profile comes from about six minutes of Ocarina of Time gameplay. Code that run never reached gets no profile data, so other games gain less.
 
 A profile older than the source only produces warnings. Functions whose code changed since training lose their profile data and are compiled as in the ThinLTO build. Retrain when those warnings cover code that matters, or when the LLVM version changes. clang-cl reads only the indexed format its own LLVM writes, so use the version that `tools/windows/install-llvm.ps1` installs.
 
@@ -97,8 +97,8 @@ To retrain:
 
 1. Configure a Release build as the `windows-x86_64` job does, adding `-fprofile-generate=<dir> -fprofile-update=atomic` to `CMAKE_C_FLAGS` and `CMAKE_CXX_FLAGS`, and build `yuzu`.
 2. Run `lichii.exe` with `LLVM_PROFILE_FILE=<dir>/lichii-%m-%p.profraw`, play the scenes the profile should cover, and exit normally. Counters are written only at exit.
-3. Merge with that LLVM: `llvm-profdata merge -o lichii-windows.profdata <dir>/*.profraw`.
-4. Check that `llvm-profdata show --all-functions lichii-windows.profdata` lists names starting with `?`, then replace the file in the repository root.
+3. Merge with that LLVM: `llvm-profdata merge -o ocarina2-windows.profdata <dir>/*.profraw`.
+4. Check that `llvm-profdata show --all-functions ocarina2-windows.profdata` lists names starting with `?`, then replace the file in the repository root.
 
 ## Release naming
 
@@ -123,6 +123,7 @@ Stable and RC builds get `GIT-RELEASE`, so CMake marks them as release builds. D
 - **Scheduled builds never appear:** confirm `ci.yml` is on the default branch, scheduled Actions are enabled, and the run has not been disabled after 60 days of public-repository inactivity. Schedule times can also be delayed by Actions load.
 - **The version push is skipped:** check the `VERSION` syntax and whether `vX.Y.Z[-rcN]` already exists as a tag/release. A duplicate is skipped, not rebuilt.
 - **Release notes step fails:** ensure the matching `## [X.Y.Z]` section in `CHANGELOG.md` contains at least one non-blank entry.
-- **Bump workflow cannot create a PR:** enable “Allow GitHub Actions to create and approve pull requests”, or create the release PR manually.
+- **Bump workflow cannot create a PR:** enable â€œAllow GitHub Actions to create and approve pull requestsâ€, or create the release PR manually.
 - **Mac app fails on an older OS:** check the effective minimum OS of Homebrew dylibs. The project's CMake deployment target is 15.0, but dependencies built on a newer runner can raise the effective runtime requirement.
-- **A branch pre-release remains after cleanup:** run Actions → `cleanup-branch` → Run workflow to sweep orphaned branch releases.
+- **A branch pre-release remains after cleanup:** run Actions â†’ `cleanup-branch` â†’ Run workflow to sweep orphaned branch releases.
+

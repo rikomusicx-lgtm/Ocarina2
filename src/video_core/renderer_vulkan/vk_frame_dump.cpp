@@ -290,7 +290,8 @@ bool FrameDump::RequestNow(u64 id, const std::filesystem::path& dir, bool buffer
     // Arm refuses while a capture runs and tells the caller; the Capturing() check covers the
     // usual case, and Arm's error path (busy) would already have told the server.
     host_copies = host;
-    Arm(std::move(dir), buffers, buffers, id);
+    // Arm takes the directory by value; `dir` is a const reference, so std::move would only copy.
+    Arm(dir, buffers, buffers, id);
     return true;
 }
 
