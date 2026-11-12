@@ -1146,3 +1146,11 @@ workflow skips pushes that only touch tests, so the test fixes don't re-trigger 
   linkage defaults since v1.1).
 - Local suite green end to end with the release-gate in place: tests (1052 cases, ~70.8M
   assertions), config_tests (426), all green. Nothing published; pushes still cannot publish.
+
+## 2026-11-12 (late) - 1.3 notes drafted, nothing posted
+
+whats-new.md gained a "Ocarina2 v1.3 (in development, not released)" section listing the
+stability fixes that landed today (the address-space map crash, the memory-owner moves,
+Windows fallback reclaim, the inline-by-default SPIR-V helpers) and marking VRAM/texture
+thrash, the white flash and the shader warm-up as in progress. It ships only when the owner
+says 1.3 is cut; nothing about 1.3 has been posted anywhere.

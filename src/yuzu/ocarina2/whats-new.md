@@ -3,6 +3,41 @@ The "What's new" notes shown on first launch after an update (Help > What's New)
 public release notes here when cutting a build. The download instructions at the top are
 dropped automatically in the app.
 -->
+## Ocarina2 v1.3 (in development, not released)
+
+Made by rikomusicx-lgtm.
+
+This section is the running 1.3 work list, kept here while the build is in progress. Nothing
+in this section has been published; 1.3 ships only when it is done and the owner asks for it.
+
+**Stability fixes in this build**
+
+- **A crash when the emulator maps GPU memory at the far edge of the address space is fixed.**
+  The small-page map path never rejected ranges outside the 40-bit GPU address space and walked
+  its own page tables out of bounds. Now such a map is refused like everywhere else, and the
+  table stays intact.
+- **Moving guest memory between owners no longer corrupts it.** The memory pool's move
+  constructor/assignment leaked the old backing allocation and double-freed it later (crashes
+  at random points, heap corruption). Windows also never reclaimed its fallback allocation at
+  all, because of an invalid free call. Both fixed; the fallback path now releases properly.
+- **Shaders build identically across runs again.** The built-in pipeline descriptors were
+  re-aligned with what the fork actually emits, and the test suite that guards the whole
+  graphics path runs green again.
+
+**Graphics**
+
+- The SPIR-V global-memory helpers are emitted inlined again by default (measured faster),
+  with DontInline available via `EDEN_NX2_SPIRV_INLINE_GLOBALS=0` for those who want it.
+
+**Not done yet (work in progress, does not ship until verified)**
+
+- VRAM / texture-cache pressure in the big town scenes (the cache thrashes at its ceiling on
+  some cards and re-loads the same textures); the white flash in combat-heavy scenes; shader
+  warm-up for Ocarina of Time's first boot.
+
+Made by rikomusicx-lgtm. Built on Eglantine, Eden, Lichii and Frizti's Fritchii (5.8.4).
+Not affiliated with Nintendo. No games included.
+
 ## Ocarina2 v1.2
 
 Made by rikomusicx-lgtm.
