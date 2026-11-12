@@ -14,6 +14,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <deque>
+#include <limits>
 #include <memory>
 #include <numeric>
 #include <stdexcept>
@@ -74,9 +75,18 @@ BufferCache<P>::BufferCache(Tegra::MaxwellDeviceMemoryManager& device_memory_, R
     critical_memory = static_cast<u64>(
         (std::max)((std::min)(device_local_memory - min_vacancy_critical, min_spacing_critical),
                  DEFAULT_CRITICAL_MEMORY));
-    // Hard cap regardless of the budget: keep VRAM at 3.8 GB on this class of card, full stop.
-    critical_memory = (std::min)(critical_memory, u64{3800_MiB});
-    minimum_memory = (std::min)(minimum_memory, u64{3800_MiB - 1_GiB});
+    // Hard cap for smaller cards: keep VRAM at 3.8 GB on this class of card, full stop (Windows
+    // started paging when the process crossed 4 GB). Cards with a driver budget of 10 GiB or
+    // more (RX 9070 XT-class) are not capped here: the budget-following collector and the
+    // commit-room/host critical limit (and the Frizti 7680 MiB built-in ceiling) bound them.
+    u64 cap = u64{3800_MiB};
+    if constexpr (requires { runtime.GetDeviceMemoryBudget(); }) {
+        if (runtime.GetDeviceMemoryBudget() >= (u64{10} << 30)) {
+            cap = std::numeric_limits<u64>::max();
+        }
+    }
+    critical_memory = (std::min)(critical_memory, cap);
+    minimum_memory = (std::min)(minimum_memory, cap - u64{1_GiB});
 }
 
 template <class P>

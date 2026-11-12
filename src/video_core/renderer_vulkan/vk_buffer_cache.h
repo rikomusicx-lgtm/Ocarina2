@@ -150,6 +150,9 @@ public:
 
     bool CanReportMemoryUsage() const;
 
+    /// The device's memory budget, when the driver reports it (Vulkan only here; OpenGL returns nothing).
+    u64 GetDeviceMemoryBudget() const;
+
     u32 GetUniformBufferAlignment() const;
 
     u32 GetStorageBufferAlignment() const;

@@ -364,8 +364,9 @@ void TextureCache<P>::ApplyThresholdOverrides(bool log) {
     // 5/8 of the budget only passes 5 GiB above an 8 GiB budget, so cards up to 8 GB (and
     // integrated GPUs, whose budget is capped at 4-6 GiB) keep the 5 GiB cap.
     u64 max_critical = MaxCriticalMemory;
+    u64 budget = 0;
     if constexpr (requires { runtime.GetDeviceMemoryBudget(); }) {
-        const u64 budget = runtime.GetDeviceMemoryBudget();
+        budget = runtime.GetDeviceMemoryBudget();
         max_critical = (std::max)(max_critical, budget / 8 * 5);
         // Cards with 10 GiB or more of budget: 5/8 left ~7.3 GiB on a 12 GB RX 6700 XT, under what
         // Ocarina's Kokiri Forest keeps alive, so every aggressive pass evicted its CostlyLoad ASTC
@@ -375,9 +376,13 @@ void TextureCache<P>::ApplyThresholdOverrides(bool log) {
             max_critical = (std::max)(max_critical, budget - 2560_MiB);
         }
     }
-    // Hard cap regardless of the driver's budget: keep VRAM at 3.8 GB on this class of card,
-    // full stop (Windows started paging when the process crossed 4 GB).
-    max_critical = (std::min)(max_critical, u64{3800_MiB});
+    // Hard cap for smaller cards: on this class of card Windows started paging when the process
+    // crossed 4 GB of used VRAM (on a 6 GB card). Cards with a driver budget of 10 GiB or more
+    // are not capped here; they follow the budget-following code in TickFrame (and the
+    // commit-room/host critical limit, and the Frizti 7680 MiB built-in ceiling).
+    if (budget < 10_GiB) {
+        max_critical = (std::min)(max_critical, u64{3800_MiB});
+    }
     critical_memory = (std::min)(critical_memory, max_critical);
     // What the device budget allows (budget minus margins), before the threshold adjustment below.
     // The EDEN_NX2_TC_*_MIB overrides can raise the thresholds up to this budget, never past it.

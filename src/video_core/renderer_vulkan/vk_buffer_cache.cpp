@@ -458,6 +458,10 @@ bool BufferCacheRuntime::CanReportMemoryUsage() const {
     return device.CanReportMemoryUsage();
 }
 
+u64 BufferCacheRuntime::GetDeviceMemoryBudget() const {
+    return device.GetDeviceMemoryBudget();
+}
+
 u32 BufferCacheRuntime::GetUniformBufferAlignment() const {
     return static_cast<u32>(device.GetUniformBufferAlignment());
 }
