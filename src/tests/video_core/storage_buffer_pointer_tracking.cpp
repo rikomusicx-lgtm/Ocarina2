@@ -87,6 +87,8 @@ IR::U64 Address(IR::IREmitter& ir, const IR::U32& low, const IR::U32& high) {
 }
 } // Anonymous namespace
 
+void EmitTableLoop(KernelProgram& fixture, u32 pointers);
+
 TEST_CASE("Kernel parameter pointers win over 16-byte aligned strides",
           "[shader][storage_buffer]") {
     KernelProgram fixture;
