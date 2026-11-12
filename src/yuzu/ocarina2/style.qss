@@ -246,8 +246,7 @@ QToolButton#Ocarina2DockButton:hover {
 }
 QToolButton#Ocarina2DockButton:pressed { background: #1b1a28; border-color: #565070; }
 QWidget#Ocarina2Home {
-    background: qradialgradient(cx: 0.5, cy: 0.32, radius: 1.15, fx: 0.5, fy: 0.22,
-        stop: 0 #28233e, stop: 0.45 #1d1a29, stop: 0.8 #151022, stop: 1 #100d18);
+    background: #1d1a29;
 }
 QWidget#Ocarina2TopBar {
     background: #0d0b16;
@@ -269,7 +268,7 @@ QLabel#Ocarina2Wordmark {
 }
 QLabel#Ocarina2Clock {
     color: #e6e4ee;
-    font-size: 16px;
+    font-size: 13px;
     font-weight: 700;
     background: transparent;
 }
@@ -535,11 +534,11 @@ QPushButton#Ocarina2Link {
         stop: 0 #212129, stop: 1 #1b1a20);
     color: #ececf1;
     border: 1px solid #2c2938;
-    border-radius: 17px;
-    min-height: 34px;
-    max-height: 34px;
-    padding: 0 16px;
-    font-size: 14px;
+    border-radius: 14px;
+    min-height: 28px;
+    max-height: 28px;
+    padding: 0 12px;
+    font-size: 13px;
     font-weight: 500;
 }
 QPushButton#Ocarina2Link:hover {

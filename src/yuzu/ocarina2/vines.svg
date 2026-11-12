@@ -1,0 +1,310 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     viewBox="0 0 1600 900" width="1600" height="900">
+  <defs>
+    <radialGradient id="leafGrad" cx="38%" cy="32%" r="75%">
+      <stop offset="0%"  stop-color="#93d17f"/>
+      <stop offset="35%" stop-color="#5ea855"/>
+      <stop offset="70%" stop-color="#356b31"/>
+      <stop offset="100%" stop-color="#1e4a22"/>
+    </radialGradient>
+    <radialGradient id="leafGradIn" cx="38%" cy="32%" r="75%">
+      <stop offset="0%"  stop-color="#7cc36a"/>
+      <stop offset="35%" stop-color="#488f47"/>
+      <stop offset="75%" stop-color="#2a5a2c"/>
+      <stop offset="100%" stop-color="#173a1e"/>
+    </radialGradient>
+    <linearGradient id="vineGrad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="900">
+      <stop offset="0%"  stop-color="#3f8f3f"/>
+      <stop offset="30%" stop-color="#2c6033"/>
+      <stop offset="70%" stop-color="#234b29"/>
+      <stop offset="100%" stop-color="#152b16"/>
+    </linearGradient>
+    <radialGradient id="moteGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"  stop-color="#fdf7c8"/>
+      <stop offset="45%" stop-color="#f3e68a" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#f3e68a" stop-opacity="0"/>
+    </radialGradient>
+
+    <g id="leaf">
+      <path d="M0,2 L0,8.5" fill="none" stroke="#2c6033" stroke-width="3.4" stroke-linecap="round"/>
+      <path d="M0,2 L0,8.5" fill="none" stroke="#3f8f3f" stroke-width="1.1" stroke-linecap="round" opacity="0.9"/>
+      <path d="M0,0 C-8.5,-2.5 -14,-13 -12.5,-27 C-11.2,-38.5 -6.2,-44.5 0,-52.5 C6.2,-44.5 11.2,-38.5 12.5,-27 C14,-13 8.5,-2.5 0,0 Z"
+            fill="url(#leafGrad)" stroke="#12240f" stroke-opacity="0.5" stroke-width="1"/>
+      <path d="M0,-3 C-1.3,-12 -1.6,-28 0,-47" fill="none" stroke="#173a1e" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="M0,-10 C-4.2,-13.5 -7.6,-18.8 -7.6,-24.5" fill="none" stroke="#173a1e" stroke-width="1" stroke-linecap="round" opacity="0.75"/>
+      <path d="M0,-10 C4.2,-13.5 7.6,-18.8 7.6,-24.5" fill="none" stroke="#173a1e" stroke-width="1" stroke-linecap="round" opacity="0.75"/>
+    </g>
+    <g id="leafIn">
+      <path d="M0,2 L0,8" fill="none" stroke="#2c6033" stroke-width="3" stroke-linecap="round"/>
+      <path d="M0,2 L0,8" fill="none" stroke="#3f8f3f" stroke-width="1" stroke-linecap="round" opacity="0.9"/>
+      <path d="M0,0 C-8,-2.2 -13.3,-11.5 -12,-24.5 C-10.6,-34.5 -5.8,-39.8 0,-46.5 C5.8,-39.8 10.6,-34.5 12,-24.5 C13.3,-11.5 8,-2.2 0,0 Z"
+            fill="url(#leafGradIn)" stroke="#0f2110" stroke-opacity="0.5" stroke-width="0.9"/>
+      <path d="M0,-3 C-1.2,-10 -1.5,-23.5 0,-41" fill="none" stroke="#122e17" stroke-width="1.3" stroke-linecap="round"/>
+    </g>
+  </defs>
+
+  <!-- ============ Vine frame: rounded rect with organic bumps ============ -->
+  <path d="M 620,86
+           C 636,84 661,82 702,82 C 815,80 882,79 905,79
+           C 944,81 995,92 1006,138 C 1010,162 1010,205 1009,250
+           C 1011,340 1011,402 1006,462
+           C 1004,546 944,572 898,573 C 795,577 668,574 655,570
+           C 592,570 578,528 578,462 C 578,340 578,225 578,172
+           C 578,126 592,90 620,86 Z"
+        fill="none" stroke="url(#vineGrad)" stroke-width="34"
+        stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 620,86 C 636,84 661,82 702,82 C 815,80 882,79 905,79 C 944,81 995,92 1006,138 C 1010,162 1010,205 1009,250 C 1011,340 1011,402 1006,462 C 1004,546 944,572 898,573 C 795,577 668,574 655,570 C 592,570 578,528 578,462 C 578,340 578,225 578,172 C 578,126 592,90 620,86 Z"
+        fill="none" stroke="#3f8f3f" stroke-width="9"
+        stroke-linejoin="round" stroke-linecap="round" opacity="0.8"/>
+
+  <!-- knots on the frame, like cut vine -->
+  <ellipse cx="578" cy="256" rx="6.5" ry="10" fill="#1e4a22" opacity="0.85"/>
+  <ellipse cx="1011" cy="300" rx="6" ry="9"   fill="#1e4a22" opacity="0.85"/>
+  <ellipse cx="778" cy="576" rx="9" ry="6"    fill="#1e4a22" opacity="0.85"/>
+
+  <!-- Inner leaves hugging the frame, left edge -->
+  <use xlink:href="#leafIn" transform="translate(560,150) rotate(-22) scale(1.05)"/>
+  <use xlink:href="#leafIn" transform="translate(560,248) rotate(0) scale(1.25)"/>
+  <use xlink:href="#leafIn" transform="translate(560,336) rotate(5) scale(1.4)"/>
+  <use xlink:href="#leafIn" transform="translate(560,432) rotate(-8) scale(1.15)"/>
+  <use xlink:href="#leafIn" transform="translate(566,522) rotate(15) scale(1.3)"/>
+  <!-- left edge, leaves pointing outward-left -->
+  <use xlink:href="#leaf" transform="translate(562,192) rotate(-68) scale(1.18)"/>
+  <use xlink:href="#leaf" transform="translate(560,296) rotate(-74) scale(1.32)"/>
+  <use xlink:href="#leaf" transform="translate(560,398) rotate(-70) scale(1.12)"/>
+  <use xlink:href="#leaf" transform="translate(565,478) rotate(-60) scale(1.28)"/>
+
+  <!-- Inner leaves hugging the frame, right edge -->
+  <use xlink:href="#leafIn" transform="translate(1040,148) rotate(22) scale(1.05)"/>
+  <use xlink:href="#leafIn" transform="translate(1040,246) rotate(2) scale(1.28)"/>
+  <use xlink:href="#leafIn" transform="translate(1040,336) rotate(-5) scale(1.45)"/>
+  <use xlink:href="#leafIn" transform="translate(1040,432) rotate(8) scale(1.2)"/>
+  <use xlink:href="#leafIn" transform="translate(1036,522) rotate(-15) scale(1.3)"/>
+  <!-- right edge, leaves pointing outward-right -->
+  <use xlink:href="#leaf" transform="translate(1038,190) rotate(66) scale(1.15)"/>
+  <use xlink:href="#leaf" transform="translate(1040,294) rotate(73) scale(1.38)"/>
+  <use xlink:href="#leaf" transform="translate(1040,398) rotate(70) scale(1.1)"/>
+  <use xlink:href="#leaf" transform="translate(1036,478) rotate(60) scale(1.25)"/>
+
+  <!-- Top edge, leaves poking outward-up -->
+  <use xlink:href="#leaf" transform="translate(648,80) rotate(-140) scale(1.25)"/>
+  <use xlink:href="#leaf" transform="translate(726,70) rotate(-162) scale(1.45)"/>
+  <use xlink:href="#leaf" transform="translate(805,64) rotate(180) scale(1.6)"/>
+  <use xlink:href="#leaf" transform="translate(884,70) rotate(160) scale(1.45)"/>
+  <use xlink:href="#leaf" transform="translate(958,80) rotate(140) scale(1.25)"/>
+  <!-- top inner leaves -->
+  <use xlink:href="#leafIn" transform="translate(700,88) rotate(155) scale(1.15)"/>
+  <use xlink:href="#leafIn" transform="translate(803,80) rotate(180) scale(1.3)"/>
+  <use xlink:href="#leafIn" transform="translate(906,88) rotate(205) scale(1.15)"/>
+
+  <!-- Bottom edge, leaves poking outward-down -->
+  <use xlink:href="#leaf" transform="translate(652,572) rotate(20) scale(1.25)"/>
+  <use xlink:href="#leaf" transform="translate(735,590) rotate(5) scale(1.5)"/>
+  <use xlink:href="#leaf" transform="translate(803,598) rotate(0) scale(1.65)"/>
+  <use xlink:href="#leaf" transform="translate(872,590) rotate(-5) scale(1.5)"/>
+  <use xlink:href="#leaf" transform="translate(950,572) rotate(-22) scale(1.25)"/>
+
+  <!-- ============ Tendrils from the frame's corners ============ -->
+  <!-- TOP-LEFT, from the frame corner, sweeping to the outer corner -->
+  <path d="M 622,96 C 520,88 420,66 330,58 C 236,50 148,-14 84,66 C 30,132 106,192 172,156 C 214,132 220,64 172,44"
+        fill="none" stroke="#16301a" stroke-width="17" stroke-linecap="round"/>
+  <path d="M 622,96 C 520,88 420,66 330,58 C 236,50 148,-14 84,66 C 30,132 106,192 172,156 C 214,132 220,64 172,44"
+        fill="none" stroke="url(#vineGrad)" stroke-width="11" stroke-linecap="round"/>
+  <path d="M 622,96 C 520,88 420,66 330,58 C 236,50 148,-14 84,66 C 30,132 106,192 172,156 C 214,132 220,64 172,44"
+        fill="none" stroke="#3f8f3f" stroke-width="2.6" stroke-linecap="round" opacity="0.85"/>
+  <use xlink:href="#leaf" transform="translate(505,84) rotate(2) scale(1.0)"/>
+  <use xlink:href="#leaf" transform="translate(380,62) rotate(-8) scale(0.9)"/>
+  <use xlink:href="#leaf" transform="translate(258,52) rotate(-32) scale(0.78)"/>
+  <use xlink:href="#leaf" transform="translate(74,122) rotate(70) scale(0.66)"/>
+  <use xlink:href="#leaf" transform="translate(152,150) rotate(140) scale(0.55)"/>
+  <use xlink:href="#leafIn" transform="translate(440,70) rotate(60) scale(0.95)"/>
+  <use xlink:href="#leafIn" transform="translate(322,58) rotate(6) scale(0.83)"/>
+  <use xlink:href="#leafIn" transform="translate(205,42) rotate(-20) scale(0.7)"/>
+
+  <!-- TOP-RIGHT -->
+  <path d="M 980,94 C 1086,82 1194,54 1305,34 C 1418,12 1532,-6 1550,92 C 1563,166 1448,182 1412,128 C 1384,88 1436,44 1492,50"
+        fill="none" stroke="#16301a" stroke-width="17" stroke-linecap="round"/>
+  <path d="M 980,94 C 1086,82 1194,54 1305,34 C 1418,12 1532,-6 1550,92 C 1563,166 1448,182 1412,128 C 1384,88 1436,44 1492,50"
+        fill="none" stroke="url(#vineGrad)" stroke-width="11" stroke-linecap="round"/>
+  <path d="M 980,94 C 1086,82 1194,54 1305,34 C 1418,12 1532,-6 1550,92 C 1563,166 1448,182 1412,128 C 1384,88 1436,44 1492,50"
+        fill="none" stroke="#3f8f3f" stroke-width="2.6" stroke-linecap="round" opacity="0.85"/>
+  <use xlink:href="#leaf" transform="translate(1086,76) rotate(-8) scale(1.0)"/>
+  <use xlink:href="#leaf" transform="translate(1196,54) rotate(-15) scale(0.88)"/>
+  <use xlink:href="#leaf" transform="translate(1312,34) rotate(-24) scale(0.76)"/>
+  <use xlink:href="#leaf" transform="translate(1428,26) rotate(-42) scale(0.66)"/>
+  <use xlink:href="#leaf" transform="translate(1480,132) rotate(-135) scale(0.55)"/>
+  <use xlink:href="#leafIn" transform="translate(1142,68) rotate(-55) scale(0.95)"/>
+  <use xlink:href="#leafIn" transform="translate(1258,46) rotate(-22) scale(0.83)"/>
+  <use xlink:href="#leafIn" transform="translate(1382,26) rotate(4) scale(0.72)"/>
+
+  <!-- BOTTOM-LEFT -->
+  <path d="M 632,596 C 520,624 412,672 316,742 C 226,808 150,876 72,732 C 22,628 166,600 222,668 C 264,722 216,792 162,780"
+        fill="none" stroke="#16301a" stroke-width="17" stroke-linecap="round"/>
+  <path d="M 632,596 C 520,624 412,672 316,742 C 226,808 150,876 72,732 C 22,628 166,600 222,668 C 264,722 216,792 162,780"
+        fill="none" stroke="url(#vineGrad)" stroke-width="11" stroke-linecap="round"/>
+  <path d="M 632,596 C 520,624 412,672 316,742 C 226,808 150,876 72,732 C 22,628 166,600 222,668 C 264,722 216,792 162,780"
+        fill="none" stroke="#3f8f3f" stroke-width="2.6" stroke-linecap="round" opacity="0.85"/>
+  <use xlink:href="#leaf" transform="translate(512,620) rotate(115) scale(1.0)"/>
+  <use xlink:href="#leaf" transform="translate(404,666) rotate(120) scale(0.88)"/>
+  <use xlink:href="#leaf" transform="translate(300,738) rotate(140) scale(0.76)"/>
+  <use xlink:href="#leaf" transform="translate(190,806) rotate(160) scale(0.65)"/>
+  <use xlink:href="#leaf" transform="translate(100,700) rotate(140) scale(0.55)"/>
+  <use xlink:href="#leafIn" transform="translate(458,634) rotate(60) scale(0.95)"/>
+  <use xlink:href="#leafIn" transform="translate(352,700) rotate(130) scale(0.83)"/>
+  <use xlink:href="#leafIn" transform="translate(242,778) rotate(150) scale(0.7)"/>
+
+  <!-- BOTTOM-RIGHT -->
+  <path d="M 976,596 C 1088,626 1185,674 1276,740 C 1370,808 1460,878 1548,728 C 1600,624 1450,606 1400,674 C 1360,730 1408,782 1458,772"
+        fill="none" stroke="#16301a" stroke-width="17" stroke-linecap="round"/>
+  <path d="M 976,596 C 1088,626 1185,674 1276,740 C 1370,808 1460,878 1548,728 C 1600,624 1450,606 1400,674 C 1360,730 1408,782 1458,772"
+        fill="none" stroke="url(#vineGrad)" stroke-width="11" stroke-linecap="round"/>
+  <path d="M 976,596 C 1088,626 1185,674 1276,740 C 1370,808 1460,878 1548,728 C 1600,624 1450,606 1400,674 C 1360,730 1408,782 1458,772"
+        fill="none" stroke="#3f8f3f" stroke-width="2.6" stroke-linecap="round" opacity="0.85"/>
+  <use xlink:href="#leaf" transform="translate(1090,620) rotate(-120) scale(1.0)"/>
+  <use xlink:href="#leaf" transform="translate(1194,664) rotate(-115) scale(0.88)"/>
+  <use xlink:href="#leaf" transform="translate(1290,736) rotate(-140) scale(0.76)"/>
+  <use xlink:href="#leaf" transform="translate(1404,806) rotate(-160) scale(0.65)"/>
+  <use xlink:href="#leaf" transform="translate(1500,694) rotate(-130) scale(0.55)"/>
+  <use xlink:href="#leafIn" transform="translate(1144,634) rotate(-58) scale(0.95)"/>
+  <use xlink:href="#leafIn" transform="translate(1238,700) rotate(-130) scale(0.83)"/>
+  <use xlink:href="#leafIn" transform="translate(1350,776) rotate(-150) scale(0.7)"/>
+
+  <!-- ============ Foliage, second pass: dense but airy ============ -->
+  <!-- left edge, outer -->
+  <use xlink:href="#leaf" transform="translate(568,108) rotate(-30) scale(0.75)"/>
+  <use xlink:href="#leaf" transform="translate(564,152) rotate(40) scale(0.7)"/>
+  <use xlink:href="#leaf" transform="translate(563,207) rotate(-25) scale(0.85)"/>
+  <use xlink:href="#leaf" transform="translate(563,248) rotate(-45) scale(0.8)"/>
+  <use xlink:href="#leaf" transform="translate(566,315) rotate(-10) scale(1.05)"/>
+  <use xlink:href="#leaf" transform="translate(563,360) rotate(-80) scale(1.0)"/>
+  <use xlink:href="#leaf" transform="translate(562,415) rotate(-15) scale(0.95)"/>
+  <use xlink:href="#leaf" transform="translate(561,462) rotate(-52) scale(0.8)"/>
+  <use xlink:href="#leaf" transform="translate(569,505) rotate(25) scale(0.85)"/>
+  <use xlink:href="#leaf" transform="translate(576,535) rotate(15) scale(0.7)"/>
+  <!-- right edge, outer -->
+  <use xlink:href="#leaf" transform="translate(1030,108) rotate(30) scale(0.75)"/>
+  <use xlink:href="#leaf" transform="translate(1036,152) rotate(-40) scale(0.7)"/>
+  <use xlink:href="#leaf" transform="translate(1037,207) rotate(25) scale(0.85)"/>
+  <use xlink:href="#leaf" transform="translate(1037,248) rotate(45) scale(0.8)"/>
+  <use xlink:href="#leaf" transform="translate(1034,315) rotate(10) scale(1.05)"/>
+  <use xlink:href="#leaf" transform="translate(1037,360) rotate(80) scale(1.0)"/>
+  <use xlink:href="#leaf" transform="translate(1038,415) rotate(15) scale(0.95)"/>
+  <use xlink:href="#leaf" transform="translate(1039,462) rotate(52) scale(0.8)"/>
+  <use xlink:href="#leaf" transform="translate(1031,505) rotate(-25) scale(0.85)"/>
+  <use xlink:href="#leaf" transform="translate(1024,535) rotate(-15) scale(0.7)"/>
+  <!-- top edge, outer -->
+  <use xlink:href="#leaf" transform="translate(600,95) rotate(-160) scale(0.75)"/>
+  <use xlink:href="#leaf" transform="translate(640,80) rotate(-155) scale(0.85)"/>
+  <use xlink:href="#leaf" transform="translate(676,78) rotate(-168) scale(0.85)"/>
+  <use xlink:href="#leaf" transform="translate(724,68) rotate(-162) scale(0.95)"/>
+  <use xlink:href="#leaf" transform="translate(760,66) rotate(-178) scale(0.9)"/>
+  <use xlink:href="#leaf" transform="translate(806,62) rotate(172) scale(1.0)"/>
+  <use xlink:href="#leaf" transform="translate(852,62) rotate(158) scale(0.95)"/>
+  <use xlink:href="#leaf" transform="translate(896,66) rotate(150) scale(0.9)"/>
+  <use xlink:href="#leaf" transform="translate(934,76) rotate(140) scale(0.8)"/>
+  <use xlink:href="#leaf" transform="translate(968,84) rotate(130) scale(0.75)"/>
+  <!-- bottom edge, outer -->
+  <use xlink:href="#leaf" transform="translate(600,556) rotate(-25) scale(0.8)"/>
+  <use xlink:href="#leaf" transform="translate(640,574) rotate(-18) scale(0.9)"/>
+  <use xlink:href="#leaf" transform="translate(700,588) rotate(-10) scale(0.9)"/>
+  <use xlink:href="#leaf" transform="translate(748,594) rotate(-2) scale(1.0)"/>
+  <use xlink:href="#leaf" transform="translate(802,596) rotate(0) scale(1.1)"/>
+  <use xlink:href="#leaf" transform="translate(856,592) rotate(8) scale(1.0)"/>
+  <use xlink:href="#leaf" transform="translate(906,584) rotate(16) scale(0.9)"/>
+  <use xlink:href="#leaf" transform="translate(958,572) rotate(24) scale(0.85)"/>
+  <use xlink:href="#leaf" transform="translate(1006,548) rotate(32) scale(0.75)"/>
+  <!-- left inner fill -->
+  <use xlink:href="#leafIn" transform="translate(585,122) rotate(-28) scale(0.8)"/>
+  <use xlink:href="#leafIn" transform="translate(580,292) rotate(10) scale(0.95)"/>
+  <use xlink:href="#leafIn" transform="translate(582,392) rotate(-12) scale(0.9)"/>
+  <use xlink:href="#leafIn" transform="translate(585,460) rotate(18) scale(0.8)"/>
+  <!-- right inner fill -->
+  <use xlink:href="#leafIn" transform="translate(1012,122) rotate(28) scale(0.8)"/>
+  <use xlink:href="#leafIn" transform="translate(1018,292) rotate(-10) scale(0.95)"/>
+  <use xlink:href="#leafIn" transform="translate(1016,392) rotate(12) scale(0.9)"/>
+  <use xlink:href="#leafIn" transform="translate(1012,460) rotate(-18) scale(0.8)"/>
+  <!-- top inner fill -->
+  <use xlink:href="#leafIn" transform="translate(640,105) rotate(155) scale(0.8)"/>
+  <use xlink:href="#leafIn" transform="translate(735,88) rotate(168) scale(0.9)"/>
+  <use xlink:href="#leafIn" transform="translate(895,88) rotate(-168) scale(0.9)"/>
+  <use xlink:href="#leafIn" transform="translate(958,105) rotate(-155) scale(0.8)"/>
+  <!-- bottom inner fill -->
+  <use xlink:href="#leafIn" transform="translate(645,552) rotate(152) scale(0.75)"/>
+  <use xlink:href="#leafIn" transform="translate(720,566) rotate(170) scale(0.85)"/>
+  <use xlink:href="#leafIn" transform="translate(890,564) rotate(-170) scale(0.85)"/>
+  <use xlink:href="#leafIn" transform="translate(955,548) rotate(-152) scale(0.75)"/>
+  <!-- tendril fill-ins, TL -->
+  <use xlink:href="#leaf" transform="translate(455,75) rotate(10) scale(0.62)"/>
+  <use xlink:href="#leaf" transform="translate(350,64) rotate(-6) scale(0.55)"/>
+  <use xlink:href="#leaf" transform="translate(250,48) rotate(-30) scale(0.55)"/>
+  <use xlink:href="#leaf" transform="translate(150,38) rotate(-8) scale(0.5)"/>
+  <!-- tendril fill-ins, TR -->
+  <use xlink:href="#leaf" transform="translate(1135,72) rotate(-48) scale(0.62)"/>
+  <use xlink:href="#leaf" transform="translate(1252,50) rotate(-25) scale(0.55)"/>
+  <use xlink:href="#leaf" transform="translate(1368,30) rotate(10) scale(0.5)"/>
+  <use xlink:href="#leaf" transform="translate(1472,12) rotate(-5) scale(0.5)"/>
+  <!-- tendril fill-ins, BL -->
+  <use xlink:href="#leaf" transform="translate(472,624) rotate(52) scale(0.62)"/>
+  <use xlink:href="#leaf" transform="translate(384,668) rotate(115) scale(0.55)"/>
+  <use xlink:href="#leaf" transform="translate(275,730) rotate(132) scale(0.5)"/>
+  <use xlink:href="#leaf" transform="translate(176,795) rotate(150) scale(0.55)"/>
+  <use xlink:href="#leaf" transform="translate(80,715) rotate(140) scale(0.45)"/>
+  <!-- tendril fill-ins, BR -->
+  <use xlink:href="#leaf" transform="translate(1130,628) rotate(-50) scale(0.62)"/>
+  <use xlink:href="#leaf" transform="translate(1232,668) rotate(-112) scale(0.55)"/>
+  <use xlink:href="#leaf" transform="translate(1335,726) rotate(-135) scale(0.5)"/>
+  <use xlink:href="#leaf" transform="translate(1420,795) rotate(-152) scale(0.55)"/>
+  <use xlink:href="#leaf" transform="translate(1535,720) rotate(-140) scale(0.45)"/>
+  <!-- corner sprigs, top-left -->
+  <use xlink:href="#leafIn" transform="translate(618,128) rotate(138) scale(0.65)"/>
+  <use xlink:href="#leafIn" transform="translate(642,100) rotate(118) scale(0.6)"/>
+  <use xlink:href="#leafIn" transform="translate(604,96) rotate(160) scale(0.55)"/>
+  <!-- corner sprigs, top-right -->
+  <use xlink:href="#leafIn" transform="translate(990,128) rotate(-138) scale(0.65)"/>
+  <use xlink:href="#leafIn" transform="translate(966,100) rotate(-118) scale(0.6)"/>
+  <use xlink:href="#leafIn" transform="translate(996,96) rotate(-160) scale(0.55)"/>
+  <!-- corner sprigs, bottom-left -->
+  <use xlink:href="#leafIn" transform="translate(616,540) rotate(138) scale(0.65)"/>
+  <use xlink:href="#leafIn" transform="translate(644,568) rotate(112) scale(0.6)"/>
+  <use xlink:href="#leafIn" transform="translate(610,560) rotate(148) scale(0.55)"/>
+    <!-- corner sprigs, bottom-right -->
+  <use xlink:href="#leafIn" transform="translate(984,540) rotate(-138) scale(0.65)"/>
+  <use xlink:href="#leafIn" transform="translate(960,568) rotate(-112) scale(0.6)"/>
+  <use xlink:href="#leafIn" transform="translate(990,560) rotate(-148) scale(0.55)"/>
+
+  <!-- Stems anchoring the corner sprigs to the frame -->
+    <path d="M 588,92 C 596,92 604,96 618,108 C 626,114 634,102 641,94" fill="none" stroke="#2c6033" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 588,92 C 596,92 604,96 618,108 C 626,114 634,102 641,94" fill="none" stroke="#3f8f3f" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+    <path d="M 596,100 C 600,104 602,112 605,122" fill="none" stroke="#2c6033" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M 596,100 C 600,104 602,112 605,122" fill="none" stroke="#3f8f3f" stroke-width="1" stroke-linecap="round" opacity="0.9"/>
+    <path d="M 1010,92 C 1002,92 994,96 980,108 C 972,114 966,102 959,94" fill="none" stroke="#2c6033" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 1010,92 C 1002,92 994,96 980,108 C 972,114 966,102 959,94" fill="none" stroke="#3f8f3f" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+    <path d="M 1002,100 C 998,104 996,112 993,122" fill="none" stroke="#2c6033" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M 1002,100 C 998,104 996,112 993,122" fill="none" stroke="#3f8f3f" stroke-width="1" stroke-linecap="round" opacity="0.9"/>
+    <path d="M 590,568 C 598,568 604,560 616,548 C 624,541 632,552 640,562" fill="none" stroke="#2c6033" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 590,568 C 598,568 604,560 616,548 C 624,541 632,552 640,562" fill="none" stroke="#3f8f3f" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+    <path d="M 598,560 C 602,556 604,548 607,540" fill="none" stroke="#2c6033" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M 598,560 C 602,556 604,548 607,540" fill="none" stroke="#3f8f3f" stroke-width="1" stroke-linecap="round" opacity="0.9"/>
+    <path d="M 1008,568 C 1000,568 994,560 982,548 C 974,541 966,552 958,562" fill="none" stroke="#2c6033" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 1008,568 C 1000,568 994,560 982,548 C 974,541 966,552 958,562" fill="none" stroke="#3f8f3f" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+    <path d="M 1000,560 C 996,556 994,548 991,540" fill="none" stroke="#2c6033" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M 1000,560 C 996,556 994,548 991,540" fill="none" stroke="#3f8f3f" stroke-width="1" stroke-linecap="round" opacity="0.9"/>
+
+  <!-- ============ Aqua glow motes ============ -->
+  <radialGradient id="aquaGrad" cx="50%" cy="50%" r="50%">
+    <stop offset="0%"  stop-color="#d8ffff"/>
+    <stop offset="30%" stop-color="#3fd8ff" stop-opacity="0.95"/>
+    <stop offset="70%" stop-color="#3fd8ff" stop-opacity="0.45"/>
+    <stop offset="100%" stop-color="#3fd8ff" stop-opacity="0"/>
+  </radialGradient>
+  <circle cx="368" cy="170" r="9" fill="url(#aquaGrad)"/>
+  <circle cx="1252" cy="168" r="7" fill="url(#aquaGrad)"/>
+  <circle cx="1122" cy="668" r="8" fill="url(#aquaGrad)"/>
+  <circle cx="268" cy="660" r="6" fill="url(#aquaGrad)"/>
+  <circle cx="688" cy="42" r="6" fill="url(#aquaGrad)"/>
+  <circle cx="936" cy="42" r="5" fill="url(#aquaGrad)"/>
+  <circle cx="800" cy="636" r="6" fill="url(#aquaGrad)"/>
+  <circle cx="150" cy="330" r="7" fill="url(#aquaGrad)"/>
+  <circle cx="1454" cy="332" r="7" fill="url(#aquaGrad)"/>
+</svg>

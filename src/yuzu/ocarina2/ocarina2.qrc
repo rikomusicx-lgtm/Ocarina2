@@ -1,8 +1,9 @@
-<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+﻿<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
 <RCC>
     <qresource prefix="ocarina2">
         <file>style.qss</file>
+        <file>assets/vines.png</file>
         <file>whats-new.md</file>
         <file>fonts/Inter-Regular.ttf</file>
         <file>fonts/Inter-Medium.ttf</file>
