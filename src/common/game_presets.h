@@ -71,9 +71,9 @@ inline void SetOcarinaOfTimePerformanceSettings(Values& settings, bool global,
     session(settings.async_presentation, true);
     session(settings.renderer_force_max_clock, true);
     session(settings.frame_gen, true);
-    session(settings.frame_gen_multiplier, 3);
-    session(settings.scaling_filter, ScalingFilter::Area);
-    session(settings.anti_aliasing, AntiAliasing::None);
+    session(settings.frame_gen_multiplier, 4);
+    session(settings.scaling_filter, ScalingFilter::SgsrEdge);
+    session(settings.anti_aliasing, AntiAliasing::Fxaa);
     session(settings.post_shader_enabled, false);
     session(settings.nvidia_dlss, false);
     session(settings.max_anisotropy, AnisotropyMode::Automatic);

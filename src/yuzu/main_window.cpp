@@ -2886,12 +2886,19 @@ void MainWindow::OnEmulationStopped() {
     render_window->hide();
     loading_screen->hide();
     loading_screen->Clear();
-    if (game_list->IsEmpty()) {
-        game_list_placeholder->show();
+    if (ocarina2_home) {
+        // In Ocarina2's single-window mode the games tab / home screen replaced the classic
+        // list layout; restore that, or the dock, back button and home page never come back
+        // after the game closes.
+        ocarina2_home->Restore();
     } else {
-        game_list->show();
+        if (game_list->IsEmpty()) {
+            game_list_placeholder->show();
+        } else {
+            game_list->show();
+        }
+        game_list->SetFilterFocus();
     }
-    game_list->SetFilterFocus();
     tas_label->clear();
     input_subsystem->GetTas()->Stop();
     OnTasStateChanged();

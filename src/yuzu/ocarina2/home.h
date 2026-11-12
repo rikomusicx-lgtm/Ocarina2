@@ -32,6 +32,8 @@ struct HomeHooks {
     std::function<bool()> game_list_empty;
     std::function<bool()> single_window;
     std::function<bool()> emulation_running;
+    std::function<QWidget*()> game_view;   ///< The games list's active view (tree/grid/carousel)
+    std::function<QWidget*()> filter_edit; ///< The games list's filter line edit
     QStandardItemModel* model = nullptr;
     QMenu* help_menu = nullptr;
     QList<QMenu*> classic_menus;  ///< File, Game, View, Tools, Help behind the dock's More button
@@ -62,6 +64,8 @@ private:
     void Refresh();
     /// Cheap selection update (bookmark row + what the hero image boots).
     void SelectGame(const QString& path, u64 program_id, const QString& title);
+    /// Pins the hero card to the background art's centre line.
+    void FixHomeLayout();
     /// The per-game context menu (right click / X on the hero image).
     void ShowGameMenu(const QString& path, u64 program_id, const QPoint& global_pos);
 
@@ -71,6 +75,8 @@ private:
     /// Centers the floating Back button at the bottom of the window.
     void PositionBackButton();
     bool HandleNavKey(QKeyEvent* event);
+    /// Games-tab navigation: self-contained (no reliance on where the focus landed wrong).
+    bool HandleListNavKey(QKeyEvent* event);
 
     QMainWindow* window;
     QWidget* game_list;

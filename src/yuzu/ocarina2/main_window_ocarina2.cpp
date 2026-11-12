@@ -3,6 +3,7 @@
 // MainWindow's Ocarina2 setup, kept out of main_window.cpp so Lichii merges stay clean. It runs
 // once at the end of the constructor and does nothing in a Lichii build.
 
+#include <QAbstractItemView>
 #include <QApplication>
 #include <QMessageBox>
 #include <QPushButton>
@@ -131,6 +132,8 @@ void MainWindow::SetUpOcarina2Ui() {
         .game_list_empty = [this] { return game_list->IsEmpty(); },
         .single_window = [this] { return ui->action_Single_Window_Mode->isChecked(); },
         .emulation_running = [this] { return emulation_running; },
+        .game_view = [this] { return static_cast<QWidget*>(game_list->CurrentView()); },
+        .filter_edit = [this] { return static_cast<QWidget*>(game_list->FilterEdit()); },
         .model = game_list->GetModel(),
         .help_menu = ui->menu_Help,
         .classic_menus = {ui->menu_File, ui->menu_Emulation, ui->menu_View, ui->menu_Tools,

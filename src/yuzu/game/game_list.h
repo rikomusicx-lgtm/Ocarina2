@@ -94,6 +94,11 @@ public:
         AddGamePopup(context_menu, program_id, path);
     }
 
+    /// Ocarina2 controller navigation: the currently visible view (tree/grid/carousel).
+    QAbstractItemView* CurrentView() const { return m_currentView; }
+    /// Ocarina2 controller navigation: the filter's line edit (nullptr when hidden).
+    QLineEdit* FilterEdit() const;
+
 public slots:
     void SetNupConversionRunning(bool running);
     void SetNxToolRunning(bool running);

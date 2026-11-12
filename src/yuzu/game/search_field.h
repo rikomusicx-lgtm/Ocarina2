@@ -24,6 +24,9 @@ public:
     void clear();
     void setFocus();
 
+    /// Ocarina2: the filter's line edit, so the controller can reach it too.
+    QLineEdit* LineEdit() const { return edit_filter; }
+
 private:
     void changeEvent(QEvent*) override;
     void RetranslateUI();

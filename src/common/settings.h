@@ -358,7 +358,7 @@ struct Values {
 
     // Mailbox: the host frame pacer (vk_host_pacer.h) times presents to the display itself.
     SwitchableSetting<VSyncMode, true> vsync_mode{linkage,
-                                                  VSyncMode::Mailbox,
+                                                  VSyncMode::Immediate,
                                                   "use_vsync",
                                                   Category::Renderer,
                                                   Specialization::RuntimeList,
@@ -378,7 +378,7 @@ struct Values {
                                            true};
 
     SwitchableSetting<ScalingFilter> scaling_filter{linkage,
-                                                    ScalingFilter::ScaleForce,
+                                                    ScalingFilter::SgsrEdge,
                                                     "scaling_filter",
                                                     Category::Renderer,
                                                     Specialization::Default,
@@ -436,7 +436,7 @@ struct Values {
                                                       true};
 
     SwitchableSetting<AntiAliasing> anti_aliasing{linkage,
-                                                  AntiAliasing::None,
+                                                  AntiAliasing::Fxaa,
                                                   "anti_aliasing",
                                                   Category::Renderer,
                                                   Specialization::Default,
@@ -465,7 +465,7 @@ struct Values {
                                                      true};
 
     SwitchableSetting<std::string> post_shader_preset{linkage,
-                                                      std::string(),
+                                                      std::string("Vivid"),
                                                       "post_shader_preset",
                                                       Category::Renderer,
                                                       Specialization::Default,
@@ -473,14 +473,14 @@ struct Values {
                                                       true};
 
     SwitchableSetting<bool> post_shader_enabled{linkage,
-                                                true,
+                                                false,
                                                 "post_shader_enabled",
                                                 Category::Renderer,
                                                 Specialization::Default,
                                                 true,
                                                 true};
 
-    SwitchableSetting<bool> frame_gen{linkage, false, "frame_gen", Category::Renderer,
+    SwitchableSetting<bool> frame_gen{linkage, true, "frame_gen", Category::Renderer,
                                       Specialization::Default, true, false};
 
     SwitchableSetting<FrameGenType> frame_gen_type{linkage,
@@ -493,7 +493,7 @@ struct Values {
                                                    &frame_gen};
 
     SwitchableSetting<u32, true> frame_gen_multiplier{linkage,
-                                                      2,
+                                                      4,
                                                       2,
                                                       4,
                                                       "frame_gen_multiplier",

@@ -76,17 +76,10 @@ GameList::GameList(FileSys::VirtualFilesystem vfs_, FileSys::ManualContentProvid
     connect(carousel_view, &QListView::activated, this, &GameList::ValidateEntry);
     connect(carousel_view, &QListView::customContextMenuRequested, this, &GameList::PopupContextMenu);
 
-    connect(controller_navigation, &ControllerNavigation::TriggerKeyboardEvent, this,
-            [this](Qt::Key key) {
-                if (system.IsPoweredOn()) {
-                    return;
-                }
-                if (!this->isActiveWindow() || !this->isVisible()) {
-                    return;
-                }
-                QKeyEvent* event = new QKeyEvent(QEvent::KeyPress, key, Qt::NoModifier);
-                QCoreApplication::postEvent(m_currentView, event);
-            });
+    // Ocarina2's window-wide controller navigation drives the whole UI onto the focus tree,
+    // so this legacy per-list pump would duplicate every key event. Disabled deliberately.
+    // controller_navigation->UnloadController();
+    (void)controller_navigation;
 
     connect(item_model, &GameListModel::PopulatingCompleted, this,
             &GameList::OnPopulatingCompleted);
@@ -255,6 +248,10 @@ void GameList::ResetViewMode() {
             item_model->PopulateAsync(UISettings::values.game_dirs);
         }
     }
+}
+
+QLineEdit* GameList::FilterEdit() const {
+    return search_field ? search_field->LineEdit() : nullptr;
 }
 
 void GameList::OnTextChanged(const QString& new_text) {

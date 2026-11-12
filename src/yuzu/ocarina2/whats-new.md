@@ -3,6 +3,28 @@ The "What's new" notes shown on first launch after an update (Help > What's New)
 public release notes here when cutting a build. The download instructions at the top are
 dropped automatically in the app.
 -->
+## Ocarina2 v1.1
+
+The GUI release: Ocarina2 looks like the console it imitates, boot to games list, and the worst v1 paper cuts are fixed.
+
+**New GUI**
+- **Hyrule home screen.** The home page is a built-in twilight scene of Hyrule Castle, drawn into the window. To use your own art instead, drop a `background.png` (or .jpg / .jpeg, up to 16 MB) into your ocarina2 folder and restart.
+- **Switch 2-style dock.** Home, Games, Add games, Settings, What's new and More across the bottom with the bubbly hover/focus bounce. The classic menus live behind More; the bar stays out of the game's way.
+- **Top bar.** Triforce avatar, Home/Games switch, network glyphs and clock, aqua on purple throughout — the title is aqua too.
+- **Games pane.** Games opens as a pane with its filter bar; controller focus lands on the list, A/Enter launches the highlighted game, B/Escape (or the Back button) returns home.
+- **What's new in-app.** This dialog, from the dock's What's new button or Help > What's New.
+
+**Bug fixes**
+- **Back button lost after the game closes.** In single-window mode the home screen and the dock stayed hidden after the game exited — you were stranded on the games list with no way home. The window now restores exactly what you had: the home screen, or the games pane with the Back button visible again.
+- **Games-pane controller double-fire.** The stick/D-pad could jump two rows per press with the games list and the filter bar focused; navigation is single-shot now.
+- **OoT reverting your graphics preset at boot.** The OoT performance preset pinned Area upscaling, no anti-aliasing and 3x frame generation on top of your settings on every boot. It now applies the same values the global preset bakes in (SGSR edge upscaling, FXAA, Optical Flow x4), and the per-game overrides defer to the global profile.
+- **Hero card placement** is anchored to the artwork slot on every window size.
+
+**Performance and defaults**
+- The v1 graphics preset is now the default for new installs: Optical Flow (FSR3) frame generation x4, SGSR edge upscaling, FXAA, immediate vsync, Vivid post shader profile (off).
+- Built for low-end PCs: the 8 GB memory layout stays on machines under 16 GB of RAM (12 GB only where it fits), handheld mode, BC3 ASTC textures and conservative VRAM for the texture cache — 8 GB cards should stay well under 4 GB of VRAM for this game.
+- The built-in Dynamic FPS patch keeps Ocarina of Time at full speed when the frame rate drops — the game no longer slows to a crawl at low FPS. If your PC can't hold 60, prefer 30 FPS mode (status bar toggle) and frame generation over the 60 FPS mode to avoid the hitching that comes with it.
+
 ## Ocarina2 v1
 
 The first real release. Ocarina2 is our own fork of the Eglantine/Eden family, built on Lichii

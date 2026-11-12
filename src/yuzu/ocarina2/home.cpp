@@ -10,9 +10,9 @@
 #include <sstream>
 #include <vector>
 
+#include <QAbstractItemView>
 #include <QApplication>
 #include <QBoxLayout>
-
 #include <QDateTime>
 #include <QDir>
 #include <QEvent>
@@ -20,6 +20,8 @@
 #include <QGraphicsDropShadowEffect>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QLineEdit>
+#include <QModelIndex>
 #include <QMainWindow>
 #include <QMenu>
 #include <QMenuBar>
@@ -195,9 +197,26 @@ std::vector<Game> CollectGames(QStandardItemModel* model, const QPixmap& fallbac
 
 } // namespace
 
-/// The page background: Ocarina of Time vine artwork behind the home content. The art is a
-/// baked-in SVG render shipped as a qrc resource; it never gets mouse events, so the vines
-/// can never get in the way.
+/// The page background: either a user-supplied image in the profile folder — drop a
+/// "background.png" (or .jpg / .jpeg, max 16 MB) into the ocarina2 profile folder and the home
+/// screen uses it, fitted to fill the page — or the built-in Hyrule scene baked in as a qrc
+/// resource. The painted art never gets mouse events, so it can never get in the way.
+static QPixmap ResolveHomeBg() {
+    const QString profile =
+        QString::fromStdString(Common::FS::GetEdenPathString(Common::FS::EdenPath::EdenDir));
+    for (const char* name : {"background.png", "background.jpg", "background.jpeg"}) {
+        const QFileInfo candidate(profile + QLatin1Char('/') + QLatin1String(name));
+        if (!candidate.isFile() || candidate.size() > 16 * 1024 * 1024) {
+            continue;
+        }
+        QPixmap pixmap(candidate.filePath());
+        if (!pixmap.isNull()) {
+            return pixmap;
+        }
+    }
+    return QPixmap(QStringLiteral(":/ocarina2/assets/zelda-bg.png"));
+}
+
 class Ocarina2HomePage : public QWidget {
 public:
     using QWidget::QWidget;
@@ -210,7 +229,7 @@ protected:
         QStyleOption option{};
         option.initFrom(this);
         style()->drawPrimitive(QStyle::PE_Widget, &option, &painter);
-        const QPixmap& art = Vines();
+        const QPixmap& art = ZeldaBg();
         const QPixmap art_scaled =
             art.scaled(rect().size(), Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
         const QPoint pos(rect().center().x() - art_scaled.width() / 2,
@@ -219,8 +238,8 @@ protected:
     }
 
 private:
-    static const QPixmap& Vines() {
-        static const QPixmap art(QStringLiteral(":/ocarina2/assets/vines.png"));
+    static const QPixmap& ZeldaBg() {
+        static const QPixmap art = ResolveHomeBg();
         return art;
     }
 };
@@ -236,10 +255,12 @@ Home::Home(QMainWindow* window_, QBoxLayout* central, QWidget* game_list_, QWidg
     page = MakePage();
     central->addWidget(page, 1);
 
-    game_list->installEventFilter(this);
-    placeholder->installEventFilter(this);
+    // One filter, one handler per event: it sees the whole tree exactly once, so no double-
+    // handling between the leaf widgets and their parents.
+    window->installEventFilter(this);
 
-    window->installEventFilter(this);  // keep the floating Back button centered at the bottom
+    // Fix the hero placement once we know our real size.
+    QTimer::singleShot(0, this, [this] { FixHomeLayout(); });
 
     back_button = new QPushButton(window);
     back_button->setObjectName(QStringLiteral("Ocarina2BackButton"));
@@ -290,7 +311,7 @@ QWidget* Home::MakeRail() {
 
         auto* button = new BounceToolButton(cell);
         button->setObjectName(QStringLiteral("Ocarina2DockButton"));
-        button->setProperty("band", 3);
+        button->setProperty("band", 4);
         button->setFixedSize(84, 84);
         button->setToolButtonStyle(Qt::ToolButtonIconOnly);
         button->setIcon(Icon(icon, 32));
@@ -354,6 +375,7 @@ QWidget* Home::MakePage() {
     page->setObjectName(QStringLiteral("Ocarina2Home"));
     page->setAttribute(Qt::WA_StyledBackground);
     page->setContextMenuPolicy(Qt::CustomContextMenu);
+    page->installEventFilter(this);
     connect(page, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
         ShowGameMenu(hero_path, hero_id, page->mapToGlobal(pos));
     });
@@ -430,16 +452,12 @@ QWidget* Home::MakePage() {
     });
     clock_timer->start();
 
-    // The "current game" row sits inside the middle column, directly below the hero image,
-    // centered.
-    auto* middle = new QWidget(page);
-    auto* mid = new QVBoxLayout(middle);
-    mid->setSpacing(0);
-    mid->setAlignment(Qt::AlignHCenter);
-    layout->addWidget(middle, 1);
-    mid->addStretch(3);
+    // Hero and title are absolutely positioned on the page itself rather than fitted into
+    // the vertical layout - the window can be resized freely and they stay pinned to
+    // the artwork's centre line.
+    layout->addStretch(1);
 
-    play = new QToolButton(middle);
+    play = new QToolButton(page);
     play->setObjectName(QStringLiteral("Ocarina2Hero"));
     play->setProperty("band", 1);
     play->setCursor(Qt::PointingHandCursor);
@@ -460,36 +478,69 @@ QWidget* Home::MakePage() {
     play_effect->setOffset(0, 8);
     play_effect->setColor(QColor(63, 216, 255, 120));
     play->setGraphicsEffect(play_effect);
-    mid->addWidget(play, 0, Qt::AlignHCenter);
-    mid->addSpacing(16);
 
-    // The highlighted game's name sits directly below the hero image, centered with its bookmark.
-    game_row = new QWidget(middle);
+    // The highlighted game's name, directly under the hero, parchment chip.
+    game_row = new QWidget(page);
     game_row->setObjectName(QStringLiteral("Ocarina2CurrentGameRow"));
     auto* rowl = new QHBoxLayout(game_row);
     rowl->setContentsMargins(0, 0, 0, 0);
-    rowl->setSpacing(8);
+    rowl->setSpacing(0);
     rowl->setAlignment(Qt::AlignHCenter);
-    auto* bookmark = new QLabel(game_row);
-    bookmark->setObjectName(QStringLiteral("Ocarina2CurrentGameIcon"));
-    bookmark->setPixmap(Glyph(QStringLiteral("bookmark"), 0x3fd8ff, 15).pixmap(15, 15));
-    rowl->addWidget(bookmark, 0, Qt::AlignVCenter);
     game_row_title = new QLabel(game_row);
     game_row_title->setObjectName(QStringLiteral("Ocarina2CurrentGame"));
+    game_row_title->setAlignment(Qt::AlignHCenter);
+    QFont title_font = game_row_title->font();
+    title_font.setFamily(QStringLiteral("Georgia"));
+    title_font.setBold(true);
+    title_font.setPointSize(16);
+    title_font.setLetterSpacing(QFont::AbsoluteSpacing, 0.8);
+    game_row_title->setFont(title_font);
     auto* name_glow = new QGraphicsDropShadowEffect(game_row_title);
-    name_glow->setBlurRadius(18);
-    name_glow->setOffset(0, 0);
-    name_glow->setColor(QColor(167, 139, 250, 235));  // violet glow behind the text
+    name_glow->setBlurRadius(24);
+    name_glow->setOffset(0, 1);
+    name_glow->setColor(QColor(63, 216, 255, 150));  // aqua halo behind the title text
     game_row_title->setGraphicsEffect(name_glow);
-    rowl->addWidget(game_row_title, 0, Qt::AlignVCenter);
-    mid->addWidget(game_row, 0, Qt::AlignHCenter);
-    mid->addStretch(1);
+    rowl->addWidget(game_row_title, 0, Qt::AlignHCenter);
 
     // The dock rides inside the page; a floating rounded plate carries the buttons, like the
     // Switch 2 home screen.
     layout->addWidget(MakeRail(), 0, Qt::AlignHCenter);
     layout->setContentsMargins(0, 0, 0, 18);
     return page;
+}
+
+void Home::FixHomeLayout() {
+    if (!page || !play) {
+        return;
+    }
+    const int page_h = page->height();
+    const int page_w = page->width();
+    const int topbar_h = topbar ? topbar->height() : 46;
+    const int rail_h = rail ? rail->height() : 108;
+    const int hero_h = play->height();
+
+    // Cover-scale exactly like the paint code: user override or built-in art, centred.
+    const QPixmap art = ResolveHomeBg();
+    const double art_w = art.isNull() ? 1920.0 : art.width();
+    const double art_h = art.isNull() ? 1080.0 : art.height();
+    const double scale = (std::max)(page_w / art_w, page_h / art_h);
+    const double scaled_h = art_h * scale;
+    const double art_top = (page_h - scaled_h) / 2.0;
+    const int slot_center_y = static_cast<int>(std::lround(art_top + scaled_h / 2.0));
+
+    int hero_top = slot_center_y - hero_h / 2;
+    hero_top = std::clamp(hero_top, topbar_h, (std::max)(topbar_h, page_h - hero_h));
+    play->move((page_w - play->width()) / 2, hero_top);
+
+    if (game_row) {
+        game_row->adjustSize();
+        const int row_h = game_row->height();
+        // Text sits just above the dock plate's top edge (the layout has an 18px bottom margin).
+        int row_top = rail ? rail->pos().y() - row_h - 6
+                           : page_h - 18 - rail_h - row_h - 6;
+        row_top = (std::max)(row_top, hero_top + hero_h + 4);
+        game_row->move((page_w - game_row->width()) / 2, row_top);
+    }
 }
 
 void Home::SelectGame(const QString& path, u64 program_id, const QString& title_text) {
@@ -579,17 +630,35 @@ void Home::ShowHome() {
     home_button->setFocus(Qt::OtherFocusReason);
     nav_index_ = 0;
     Refresh();
+    FixHomeLayout();
+    QTimer::singleShot(0, this, [this] { FixHomeLayout(); });
 }
 
 void Home::ShowList() {
     list_mode = true;
     page->hide();
     rail->show();
-    library_button->setFocus(Qt::OtherFocusReason);
     PositionBackButton();
     back_button->show();
     back_button->raise();
+    // The dock hides with the page; put focus on the games.
+    QWidget* focus_target = hooks.game_view ? hooks.game_view() : nullptr;
+    if (focus_target) {
+        focus_target->setFocus(Qt::OtherFocusReason);
+        if (auto* item_view = qobject_cast<QAbstractItemView*>(focus_target);
+            item_view && item_view->model() && !item_view->currentIndex().isValid()) {
+            item_view->setCurrentIndex(item_view->model()->index(0, 0));
+        }
+        if (const QWidget* fw = QApplication::focusWidget()) {
+            LOG_INFO(Frontend, "Ocarina2 ln: ShowList focused; focus widget now {}",
+                     fw->metaObject()->className());
+        }
+    } else if (back_button) {
+        back_button->setFocus(Qt::OtherFocusReason);
+        LOG_INFO(Frontend, "Ocarina2 ln: ShowList focused; focus is the back button");
+    }
     nav_index_ = 1;  // the "Games" button in the dock
+    RebuildNavOrder();
     if (hooks.game_list_empty()) {
         placeholder->show();
     } else {
@@ -600,14 +669,20 @@ void Home::ShowList() {
 void Home::Restore() {
     // A restart shows the list for a moment, and nothing may cover a running game.
     if (hooks.single_window() && hooks.emulation_running()) {
+        LOG_INFO(Frontend, "Ocarina2 restore: skipped (emulation running)");
         return;
     }
+    LOG_INFO(Frontend, "Ocarina2 restore: list_mode={} back_button_valid={}",
+             list_mode, back_button != nullptr);
     if (list_mode) {
-        rail->show();
-        page->hide();
+        // Restoring after the game stops must bring back the back button too, otherwise the
+        // user is stranded on the games pane with no way home. ShowList is the same state the
+        // Games dock button produces: games pane up, back button visible, focus on the list.
+        ShowList();
     } else {
         ShowHome();
     }
+    FixHomeLayout();
 }
 
 void Home::OnEmulationStarting() {
@@ -617,6 +692,119 @@ void Home::OnEmulationStarting() {
     rail->hide();
     page->hide();
     back_button->hide();
+}
+
+bool Home::HandleListNavKey(QKeyEvent* event) {
+    const int key = event->key();
+
+    // B/Escape is the console's Back: leave the games screen.
+    if (key == Qt::Key_Escape || key == Qt::Key_Home) {
+        ShowHome();
+        return true;
+    }
+
+    QWidget* view = hooks.game_view ? hooks.game_view() : nullptr;
+    auto* item_view = qobject_cast<QAbstractItemView*>(view);
+    QWidget* edit = hooks.filter_edit ? hooks.filter_edit() : nullptr;
+    const QWidget* current = QApplication::focusWidget();
+    {
+        QString tag = QStringLiteral("null");
+        if (const QWidget* fw = current) {
+            tag = QString::fromUtf8(fw->metaObject()->className());
+            if (!fw->objectName().isEmpty()) {
+                tag += QStringLiteral("/%1").arg(fw->objectName());
+            }
+        }
+        LOG_INFO(Frontend, "Ocarina2 ln: key={} focus={}", key, tag.toStdString());
+    }
+
+    const auto ensure_index = [&] {
+        if (item_view && item_view->model()) {
+            const QModelIndex idx = item_view->currentIndex();
+            if (!idx.isValid() && item_view->model()->rowCount(idx.parent()) > 0) {
+                item_view->setCurrentIndex(item_view->model()->index(0, 0));
+            }
+        }
+    };
+
+    // A/confirm: play the highlighted game (or activate the back button if it has focus).
+    if (key == Qt::Key_Return || key == Qt::Key_Enter) {
+        if (auto* button = qobject_cast<QAbstractButton*>(const_cast<QWidget*>(current))) {
+            button->click();
+            return true;
+        }
+        if (item_view && item_view->model() && item_view->model()->rowCount() > 0) {
+            QModelIndex idx = item_view->currentIndex();
+            if (!idx.isValid()) {
+                idx = item_view->model()->index(0, 0);
+                item_view->setCurrentIndex(idx);
+            }
+            item_view->activated(idx);
+            return true;
+        }
+        return false;
+    }
+
+    if (key == Qt::Key_Up || key == Qt::Key_Down) {
+        const bool on_back = back_button && current == back_button;
+        const bool in_filter = edit && current == edit;
+        const bool in_view = view && current == view;
+        const bool empty = !item_view || !item_view->model() || item_view->model()->rowCount() == 0;
+        if (in_view && !empty) {
+            ensure_index();
+            const QModelIndex idx = item_view->currentIndex();
+            const int row = idx.isValid() ? idx.row() : 0;
+            const int last = item_view->model()->rowCount(idx.isValid() ? idx.parent() : QModelIndex()) - 1;
+            if (key == Qt::Key_Up && row == 0) {
+                return true;  // ceiling: stay on the games
+            }
+            if (key == Qt::Key_Down && row == last) {
+                if (back_button) {
+                    back_button->setFocus(Qt::OtherFocusReason);
+                    return true;
+                }
+                if (edit) {
+                    edit->setFocus(Qt::OtherFocusReason);
+                    return true;
+                }
+                return true;
+            }
+            return false;  // native selection movement inside the games view
+        }
+        if (on_back) {
+            if (key == Qt::Key_Up && view) {
+                view->setFocus(Qt::OtherFocusReason);
+                ensure_index();
+                return true;
+            }
+            if (key == Qt::Key_Down && edit) {
+                edit->setFocus(Qt::OtherFocusReason);
+                return true;
+            }
+            return true;  // don't fall through to the pane route
+        }
+        if (in_filter) {
+            if (key == Qt::Key_Up && back_button) {
+                back_button->setFocus(Qt::OtherFocusReason);
+                return true;
+            }
+            return false;  // cursor movement native to the line edit
+        }
+        // Focus wandered somewhere unexpected: heal it to the games, or the back button
+        // when there isn't a games list.
+        if (view && !empty) {
+            view->setFocus(Qt::OtherFocusReason);
+            ensure_index();
+            return true;
+        }
+        if (back_button) {
+            back_button->setFocus(Qt::OtherFocusReason);
+        }
+        return true;
+    }
+
+    // Left/Right: always the view's native behavior (grid/cursor).
+    return false;
 }
 
 bool Home::HandleNavKey(QKeyEvent* event) {
@@ -675,11 +863,12 @@ bool Home::HandleNavKey(QKeyEvent* event) {
     }
 
     // Explicit rows, like the Switch 2: Up/Down jumps between rows (keeping rough horizontal
-    // position), Left/Right walks the row. Rows: 0 = top bar, 1 = hero image, 3 = dock.
+    // position), Left/Right walks the row. Rows: 0 = top bar, 1 = games list / hero, 2 = back
+    // button, 3 = filter, 4 = dock. Empty rows are skipped automatically.
     const auto band_of = [](QWidget* w) {
         bool ok = false;
         const int band = w->property("band").toInt(&ok);
-        return ok ? band : 3;
+        return ok ? band : 4;
     };
     QWidget* current = QApplication::focusWidget();
     if (current == nullptr || !nav_order_.contains(current)) {
@@ -691,14 +880,45 @@ bool Home::HandleNavKey(QKeyEvent* event) {
         return false;
     }
     const int band = band_of(current);
-    const int target_band = std::clamp(band + dy, 0, 3);
-    if (dx != 0) {
+
+    // The games view keeps its native arrows; only at the very first or last row does Up and
+    // Down yield so the controller can move on to the next band. Left/Right always stay native.
+    if (hooks.game_view) {
+        if (QWidget* view = hooks.game_view(); view && current == view) {
+            if (dx != 0) {
+                return false;  // move the selection natively
+            }
+            bool at_edge = true;
+            if (auto* item_view = qobject_cast<QAbstractItemView*>(view);
+                item_view && item_view->model()) {
+                const QModelIndex idx = item_view->currentIndex();
+                if (idx.isValid()) {
+                    const int row = idx.row();
+                    const int last = item_view->model()->rowCount(idx.parent()) - 1;
+                    at_edge = dy < 0 ? row <= 0 : row >= last;
+                }
+            }
+            if (!at_edge) {
+                return false;  // move the selection natively
+            }
+        }
+    }
+    // The filter keeps Left/Right for editing the text.
+    if (dx != 0 && qobject_cast<QLineEdit*>(current)) {
+        return false;
+    }
+
+    const auto row_at = [&](int b) {
         QList<QWidget*> row;
         for (QWidget* w : nav_order_) {
-            if (band_of(w) == band && w->isVisible() && w->isEnabled()) {
+            if (band_of(w) == b && w->isVisible() && w->isEnabled()) {
                 row.append(w);
             }
         }
+        return row;
+    };
+    if (dx != 0) {
+        QList<QWidget*> row = row_at(band);
         if (row.isEmpty()) {
             return false;
         }
@@ -708,18 +928,18 @@ bool Home::HandleNavKey(QKeyEvent* event) {
         row[next]->setFocus(Qt::OtherFocusReason);
         return true;
     }
-    if (target_band == band) {
-        return false;
-    }
-    QList<QWidget*> row;
-    for (QWidget* w : nav_order_) {
-        if (band_of(w) == target_band && w->isVisible() && w->isEnabled()) {
-            row.append(w);
+    // Up/Down: nearest non-empty row in that direction.
+    int target_band = -1;
+    for (int b = band + dy; b >= 0 && b <= 4; b += dy) {
+        if (!row_at(b).isEmpty()) {
+            target_band = b;
+            break;
         }
     }
-    if (row.isEmpty()) {
+    if (target_band < 0) {
         return false;
     }
+    const QList<QWidget*> row = row_at(target_band);
     const double from_x = current->mapToGlobal(current->rect().center()).x();
     QWidget* best = row.front();
     double best_distance = std::numeric_limits<double>::infinity();
@@ -728,6 +948,15 @@ bool Home::HandleNavKey(QKeyEvent* event) {
         if (distance < best_distance) {
             best_distance = distance;
             best = w;
+        }
+    }
+    // Jumping into the games view: make sure a row is selected so the arrows keep working.
+    if (hooks.game_view && best == hooks.game_view()) {
+        if (auto* item_view = qobject_cast<QAbstractItemView*>(best);
+            item_view && item_view->model()) {
+            if (!item_view->currentIndex().isValid()) {
+                item_view->setCurrentIndex(item_view->model()->index(0, 0));
+            }
         }
     }
     if (best) {
@@ -739,20 +968,37 @@ bool Home::HandleNavKey(QKeyEvent* event) {
 
 void Home::RebuildNavOrder() {
     nav_order_.clear();
-    if (avatar_button) {
-        nav_order_.append(avatar_button);
+    if (list_mode) {
+        // Games screen: the list's active view (band 1), then the floating Back button
+        // (band 2), then the filter's line edit (band 3). The dock is hidden with the page.
+        if (hooks.game_view) {
+            if (QWidget* view = hooks.game_view()) {
+                view->setProperty("band", 1);
+                nav_order_.append(view);
+            }
+        }
+        if (back_button) {
+            back_button->setProperty("band", 2);
+            nav_order_.append(back_button);
+        }
+        if (hooks.filter_edit) {
+            if (QWidget* edit = hooks.filter_edit()) {
+                edit->setProperty("band", 3);
+                nav_order_.append(edit);
+            }
+        }
+    } else {
+        if (avatar_button) {
+            nav_order_.append(avatar_button);
+        }
+        nav_order_.append(play);
+        nav_order_.append(home_button);
+        nav_order_.append(library_button);
+        nav_order_.append(folder_button);
+        nav_order_.append(settings_button);
+        nav_order_.append(update_button);
+        nav_order_.append(menu_button);
     }
-    nav_order_.append(play);
-    if (list_mode && back_button) {
-        back_button->setProperty("band", 3);
-        nav_order_.append(back_button);
-    }
-    nav_order_.append(home_button);
-    nav_order_.append(library_button);
-    nav_order_.append(folder_button);
-    nav_order_.append(settings_button);
-    nav_order_.append(update_button);
-    nav_order_.append(menu_button);
     // Focus stays on the dock's Home button at rest; clamps handle list mode.
     if (nav_index_ < 0 || nav_index_ >= nav_order_.size()) {
         nav_index_ = std::max(0, static_cast<int>(nav_order_.size()) - 8);
@@ -764,6 +1010,10 @@ bool Home::eventFilter(QObject* watched, QEvent* event) {
         PositionBackButton();
         return false;
     }
+    if (watched == page && event->type() == QEvent::Resize) {
+        FixHomeLayout();
+        return false;
+    }
     // The main window shows its game list (start up, a game stopped, the list filled): show
     // the home page instead, unless the player asked for the full list.
     if (event->type() == QEvent::Show && (watched == game_list || watched == placeholder)) {
@@ -772,12 +1022,16 @@ bool Home::eventFilter(QObject* watched, QEvent* event) {
     if (event->type() == QEvent::KeyPress) {
         auto* key = static_cast<QKeyEvent*>(event);
         auto* t = qobject_cast<const QToolButton*>(watched);
-        LOG_INFO(Frontend, "Ocarina2 keypress on widget={} obj={} tip={} key={}",
-                 watched ? watched->metaObject()->className() : "null",
-                 t ? t->objectName().toStdString() : std::string{},
-                 t ? t->toolTip().toStdString() : std::string{},
-                 key->key());
-        // X (and the keyboard's Menu key) opens the options for the focused game.
+        // One filter, every path once. The window filter already sees everything; no need
+        // for the page filter to run the same checks (that used to double-step focus).
+        if (list_mode && key->key() != Qt::Key_Menu) {
+            // The games pane drives its own rows for the controller; arrow keys elsewhere
+            // wander back into the pane so the screen is never a dead end.
+            if (HandleListNavKey(key)) {
+                return true;
+            }
+        }
+        // Key menu opens the options for the focused game.
         if (key->key() == Qt::Key_Menu) {
             if (auto* button = qobject_cast<QToolButton*>(watched);
                 button && button->property("path").isValid()) {
@@ -791,9 +1045,13 @@ bool Home::eventFilter(QObject* watched, QEvent* event) {
                 return true;
             }
         }
-        if (auto* widget = qobject_cast<QWidget*>(watched);
-            watched && nav_order_.contains(widget) && HandleNavKey(key)) {
-            return true;
+        // Home-screen navigation (dock, hero) in any mode outside the games pane.
+        if (!list_mode) {
+            if (auto* widget = qobject_cast<QWidget*>(watched)) {
+                if (nav_order_.contains(widget) && HandleNavKey(key)) {
+                    return true;
+                }
+            }
         }
     }
     return QObject::eventFilter(watched, event);

@@ -56,7 +56,8 @@ AboutDialog::AboutDialog(QWidget* parent)
         "Graphite UI), leonardochappuis (Linux, water), CheezerWheezer (AMD), koriko\n"
         "- **Community** \u2014 janvitos, ProphetWild, 101Leafy, nyakuoff, monsterlag, "
         "Dark (Dynamic FPS), EvilOOT (DMA snapshot)\n"
-        "- **Artwork** \u2014 YOB (yobslab); **Ocarina of Forks Discord**\n"
+        "- **Ocarina2 UI & artwork** \u2014 rikomusicx-lgtm (the home screen, dock, top bar "
+        "and this fork's look); **Ocarina of Forks Discord**\n"
         "- **Ocarina2** \u2014 rikomusicx-lgtm/Ocarina2, with its testers and bug "
         "reporters"));
     ui->verticalLayout_3->insertWidget(1, credits);
