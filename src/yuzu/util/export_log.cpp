@@ -192,6 +192,7 @@ QString SystemSummary(const std::vector<VkDeviceInfo::Record>& vk_device_records
         &values.renderer_backend, &values.vulkan_device,   &values.oot_30fps,
         &values.use_speed_limit,  &values.speed_limit,     &values.accelerate_astc,
         &values.astc_recompression, &values.oot_high_refresh, &values.oot_high_refresh_cap,
+        &values.vram_cap,
     };
     for (auto* setting : Settings::Frizti::TunedSettings(values)) {
         settings.push_back(setting);

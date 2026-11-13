@@ -79,8 +79,15 @@ BufferCache<P>::BufferCache(Tegra::MaxwellDeviceMemoryManager& device_memory_, R
     // started paging when the process crossed 4 GB). Cards with a driver budget of 10 GiB or
     // more (RX 9070 XT-class) are not capped here: the budget-following collector and the
     // commit-room/host critical limit (and the Frizti 7680 MiB built-in ceiling) bound them.
+    // The player can force a smaller limit from Settings > Core > VRAM Cap (Performance);
+    // the 4 GB pick is this same 3.8 GB clamp. The buffer cache gets the same treatment.
     u64 cap = u64{3800_MiB};
-    if constexpr (requires { runtime.GetDeviceMemoryBudget(); }) {
+    const Settings::VramCap vram_cap = Settings::values.vram_cap.GetValue();
+    if (vram_cap != Settings::VramCap::Auto) {
+        cap = vram_cap == Settings::VramCap::Cap_4Gb ? u64{3800_MiB}
+            : vram_cap == Settings::VramCap::Cap_6Gb ? u64{6144} << 20
+            : u64{8192} << 20;
+    } else if constexpr (requires { runtime.GetDeviceMemoryBudget(); }) {
         if (runtime.GetDeviceMemoryBudget() >= (u64{10} << 30)) {
             cap = std::numeric_limits<u64>::max();
         }

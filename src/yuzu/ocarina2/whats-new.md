@@ -164,6 +164,11 @@ between Optical Flow and Lossless Scaling (right-click the FG button) both work 
   presented frame is downscaled to a thumbnail and hashed every frame, and when nothing has moved
   for about a second FG stops generating interpolated frames and the raw frame is presented at its
   own pace. It resumes the instant something changes, with no rebuild or quality pop.
+- New setting in Core (same place as Memory Layout): **VRAM Cap (Performance)**. Default leaves
+  the current behavior alone (driver budget follower, hard 3.8 GB clamp below 10 GiB cards);
+  4 GB picks the old smaller-card hard cap permanently; 6 GB or 8 GB give the emulator's texture
+  and buffer caches a bigger collector ceiling. Applies on the next launch; your own machine
+  reports ~5 GB of budget, so 6 GB is the natural pick, and 4 GB is what 4 GB cards want.
 
 **We know there are more bugs — we are fixing them.**
 

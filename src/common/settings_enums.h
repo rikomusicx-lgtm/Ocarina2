@@ -144,6 +144,7 @@ ENUM(CpuAccuracy, Auto, Accurate, Unsafe, Paranoid, Debugging);
 ENUM(CpuClock, Normal, Boost, Overclock)
 ENUM(NativeAsyncDraws, Wait, Bounded, Skip);
 ENUM(MemoryLayout, Memory_4Gb, Memory_6Gb, Memory_8Gb, Memory_10Gb, Memory_12Gb);
+ENUM(VramCap, Auto, Cap_4Gb, Cap_6Gb, Cap_8Gb);
 ENUM(ConfirmStop, Ask_Always, Ask_Based_On_Game, Ask_Never);
 ENUM(FullscreenMode, Borderless, Exclusive);
 ENUM(NvdecEmulation, Off, Cpu, Gpu);

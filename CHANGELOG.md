@@ -150,6 +150,10 @@ Known issues:
   for about a second FG emits no interpolated frames at all and the raw base frame is presented at
   its own pace (identical to displaying FG output of an unchanged frame). FG resumes the moment
   the content changes. The chain stays built, so there is no rebuild or quality pop on resume.
+- New "VRAM Cap (Performance)" setting next to Memory Layout in System settings: Default (driver
+  budget follower, hard 3.8 GB clamp below 10 GiB), 4 GB (the old smaller-card hard cap), 6 GB or
+  8 GB ceilings for the emulator's texture cache. Caps both the texture and the buffer cache's
+  critical collector threshold; applies on the next launch.
 
 ## [0.1.0]
 

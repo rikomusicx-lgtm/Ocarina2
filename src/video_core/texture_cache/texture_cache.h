@@ -380,7 +380,15 @@ void TextureCache<P>::ApplyThresholdOverrides(bool log) {
     // crossed 4 GB of used VRAM (on a 6 GB card). Cards with a driver budget of 10 GiB or more
     // are not capped here; they follow the budget-following code in TickFrame (and the
     // commit-room/host critical limit, and the Frizti 7680 MiB built-in ceiling).
-    if (budget < 10_GiB) {
+    // The player can force a smaller limit from Settings > Core > VRAM Cap (Performance);
+    // the 4 GB pick is this same 3.8 GB clamp, made permanent for 4 GB cards.
+    const Settings::VramCap vram_cap = Settings::values.vram_cap.GetValue();
+    if (vram_cap != Settings::VramCap::Auto) {
+        const u64 picked_cap = vram_cap == Settings::VramCap::Cap_4Gb ? u64{3800_MiB}
+                            : vram_cap == Settings::VramCap::Cap_6Gb ? u64{6144} << 20
+                            : u64{8192} << 20;
+        max_critical = (std::min)(max_critical, picked_cap);
+    } else if (budget < 10_GiB) {
         max_critical = (std::min)(max_critical, u64{3800_MiB});
     }
     critical_memory = (std::min)(critical_memory, max_critical);

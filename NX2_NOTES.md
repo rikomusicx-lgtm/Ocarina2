@@ -1370,3 +1370,19 @@ CPU overhead (same log):
   (row 141); split-GPU "front/back" waiting (open PR #1433). All structural, no small win.
 - The biggest player-visible symptom in big places - the *apparent* CPU saturation with the
   game running in slow motion - was fixed by 5b74405eb4/8b497ab217 (the 100 ms step cap).
+
+## 2026-11-13 (late afternoon) - the "VRAM Cap (Performance)" setting (4 GB / 6 GB / 8 GB, Core tab)
+
+Owner: keep the hard 3.8 GB clamp for 4 GB-VRAM people, as an option; his card is 6 GB (6144
+MiB, driver budget ~5.0-5.3 GB). New setting next to Memory Layout in Core (game-specific too,
+SWITCHABLE(false?) no, SWITCHABLE true):
+
+- ENUM(VramCap, Auto, Cap_4Gb, Cap_6Gb, Cap_8Gb) - settings_enums.h; Default Auto = the current
+  rule (hard 3.8 GB clamp below 10 GiB of driver budget; budget follower above it). The 10 GiB
+  gate now yields to an explicit pick in the VRAM Cap from both the texture and the buffer cache
+  (buffer cache cap date is the same).
+- The 4 GB option is the 3.8 GB hard cap (3800 MiB critical), permanent for cards that need it.
+  The 6 GB option allows the budget follower up to 6144 MiB; 8 GB to 8192 MiB - which is more
+  room than this machine can use, but harmless to ship.
+- Applies on next launch: Init() runs ApplyThresholdOverrides at construction; no live switch.
+- The Frizti TunedSettings list deliberately does not include it; default stays Auto.

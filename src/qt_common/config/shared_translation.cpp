@@ -73,6 +73,14 @@ std::unique_ptr<TranslationMap> InitializeTranslations(QObject* parent) {
            tr("Switch 2 games always use 12 GB while they run, whatever this says: it only "
               "applies to Switch 1 games.\nIncreases the amount of emulated RAM. Doesn't affect "
               "performance/stability but may allow HD texture mods to load."));
+    INSERT(Settings, vram_cap, tr("VRAM Cap (Performance)"),
+           tr("Cap the emulator's VRAM use for this game. The emulator will not evict above\n"
+              "this size, which trades a bit of cache thrash for consistency.\n"
+              "\nDefault follows the card's reported driver budget (hard 3.8 GB clamp below "
+              "10 GiB, budget follower above it). Pick 4 GB to get exactly that old hard cap back,\n"
+              "6 GB or 8 GB to trade cache eviction for a bigger working set. Your card reports a\n"
+              "driver budget of about 5 GB, so 6 GB is as far as this will help here.\n"
+              "Applies on the next launch."));
     INSERT(Settings, use_speed_limit, QString(), QString());
     INSERT(Settings, current_speed_mode, QString(), QString());
     INSERT(Settings, speed_limit, tr("Limit Speed Percent"),
@@ -528,6 +536,13 @@ std::unique_ptr<ComboboxTranslationMap> ComboboxEnumeration(QObject* parent) {
                           {
                               PAIR(VramUsageMode, Conservative, tr("Conservative")),
                               PAIR(VramUsageMode, Aggressive, tr("Aggressive")),
+                          }});
+    translations->insert({Settings::EnumMetadata<Settings::VramCap>::Index(),
+                          {
+                              PAIR(VramCap, Auto, tr("Default")),
+                              PAIR(VramCap, Cap_4Gb, tr("4 GB")),
+                              PAIR(VramCap, Cap_6Gb, tr("6 GB")),
+                              PAIR(VramCap, Cap_8Gb, tr("8 GB")),
                           }});
     translations->insert(
         {Settings::EnumMetadata<Settings::RendererBackend>::Index(),

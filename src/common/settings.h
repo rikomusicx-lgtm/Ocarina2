@@ -216,6 +216,15 @@ struct Values {
                                                              Category::Core,
                                                              Specialization::Default,
                                                              true};
+    // Hard ceiling for the texture cache's critical threshold (Performance): Auto follows the
+    // current rule (hard 3.8 GB clamp below 10 GiB of budget, budget follower above); 4 GB is the
+    // old smaller-card hard cap; 6 GB / 8 GB give bigger cards room to keep more resident.
+    SwitchableSetting<VramCap, true> vram_cap{linkage,
+                                              VramCap::Auto,
+                                              "vram_cap",
+                                              Category::Core,
+                                              Specialization::Default,
+                                              true};
     SwitchableSetting<bool> use_speed_limit{
                                             linkage, true, "use_speed_limit", Category::Core, Specialization::Paired, true, true};
 
