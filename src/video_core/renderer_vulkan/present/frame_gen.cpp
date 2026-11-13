@@ -342,11 +342,12 @@ void FrameGen::InitThumbnail() {
 
 void FrameGen::RecordThumbnail(vk::CommandBuffer cmdbuf, VkImage source,
                                VkExtent2D source_extent) {
+    const VkAccessFlags shader_read = VK_ACCESS_SHADER_READ_BIT;
     const std::array before{
         MakeTransitionBarrier(source, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
                               VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL),
         MakeTransitionBarrier(*thumbnail_image,
-                              thumbnail_frame == 0 ? VkAccessFlags{0} : VK_ACCESS_SHADER_READ_BIT,
+                              thumbnail_frame == 0 ? VkAccessFlags{0} : shader_read,
                               VK_ACCESS_TRANSFER_WRITE_BIT,
                               thumbnail_frame == 0 ? VK_IMAGE_LAYOUT_UNDEFINED
                                                    : VK_IMAGE_LAYOUT_GENERAL,
