@@ -1400,3 +1400,10 @@ static scenes, large GPUs unclamped, new VRAM Cap (Performance) dropdown 4/6/8 G
 package table unchanged from the template.
 
 The 1.3 recipe remains owner-distributed only; the release ships no game data.
+
+## 2026-11-13 - open bug for 1.4 (owner instruction)
+
+Bug report, owner field observation, 2026-11-13: first load into Hyrule Town (OoT Switch 2),
+textures glitch badly - texture sampling/format/tile bug, not a pipeline problem; reproduces
+on first entry only so far. Not for 1.3 (released); target 1.4. Owner wants the project paused
+here until 1.4 planning. White flash mostly fixed (v1.3 notes); LSFG deferred to the next update.
