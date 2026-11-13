@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <cstddef>
+#include <cstdio>
 #include <cstring>
 
 #include <catch2/catch_test_macros.hpp>
@@ -99,19 +100,21 @@ TEST_CASE("Draws that differ only in cleared state share a canonical key",
     b.attachments[1].factor_dest_a.Assign(7);     // blending off on target 1
     b.attachments[4].enable.Assign(1);            // no target 4
     b.depth_bounds_max = 0;
-    UNSCOPED_INFO("BEFORE: attachment0 a: raw=" << a.attachments[0].raw << " b: raw="
-                  << b.attachments[0].raw);
-    UNSCOPED_INFO("BEFORE: attachment1 a: raw=" << a.attachments[1].raw << " b: raw="
-                  << b.attachments[1].raw);
-    UNSCOPED_INFO("BEFORE: attachment2 a: raw=" << a.attachments[2].raw << " b: raw="
-                  << b.attachments[2].raw);
-    UNSCOPED_INFO("BEFORE: attachment3 a: raw=" << a.attachments[3].raw << " b: raw="
-                  << b.attachments[3].raw);
-    UNSCOPED_INFO("BEFORE: attachment4 a: raw=" << a.attachments[4].raw << " b: raw="
-                  << b.attachments[4].raw);
+    std::fprintf(stderr, "DIAG BEFORE a: %08x %08x %08x %08x %08x\n", a.attachments[0].raw,
+                 a.attachments[1].raw, a.attachments[2].raw, a.attachments[3].raw,
+                 a.attachments[4].raw);
+    std::fprintf(stderr, "DIAG BEFORE b: %08x %08x %08x %08x %08x\n", b.attachments[0].raw,
+                 b.attachments[1].raw, b.attachments[2].raw, b.attachments[3].raw,
+                 b.attachments[4].raw);
     CHECK(a.Hash() != b.Hash());
     a.CanonicalizeNative(0b1111);
     b.CanonicalizeNative(0b1111);
+    std::fprintf(stderr, "DIAG AFTER  a: %08x %08x %08x %08x %08x\n", a.attachments[0].raw,
+                 a.attachments[1].raw, a.attachments[2].raw, a.attachments[3].raw,
+                 a.attachments[4].raw);
+    std::fprintf(stderr, "DIAG AFTER  b: %08x %08x %08x %08x %08x\n", b.attachments[0].raw,
+                 b.attachments[1].raw, b.attachments[2].raw, b.attachments[3].raw,
+                 b.attachments[4].raw);
     if (!(a == b)) {
         // CI-only diagnosis (Linux GCC build): report the first differing byte.
         const auto* pa = reinterpret_cast<const unsigned char*>(&a);
