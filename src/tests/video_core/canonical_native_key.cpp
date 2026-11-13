@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include <cstddef>
-#include <cstdio>
 #include <cstring>
 
 #include <catch2/catch_test_macros.hpp>
@@ -100,52 +98,9 @@ TEST_CASE("Draws that differ only in cleared state share a canonical key",
     b.attachments[1].factor_dest_a.Assign(7);     // blending off on target 1
     b.attachments[4].enable.Assign(1);            // no target 4
     b.depth_bounds_max = 0;
-    std::fprintf(stderr, "DIAG BEFORE a: %08x %08x %08x %08x %08x\n", a.attachments[0].raw,
-                 a.attachments[1].raw, a.attachments[2].raw, a.attachments[3].raw,
-                 a.attachments[4].raw);
-    std::fprintf(stderr, "DIAG BEFORE b: %08x %08x %08x %08x %08x\n", b.attachments[0].raw,
-                 b.attachments[1].raw, b.attachments[2].raw, b.attachments[3].raw,
-                 b.attachments[4].raw);
     CHECK(a.Hash() != b.Hash());
     a.CanonicalizeNative(0b1111);
     b.CanonicalizeNative(0b1111);
-    std::fprintf(stderr, "DIAG AFTER  a: %08x %08x %08x %08x %08x\n", a.attachments[0].raw,
-                 a.attachments[1].raw, a.attachments[2].raw, a.attachments[3].raw,
-                 a.attachments[4].raw);
-    std::fprintf(stderr, "DIAG AFTER  b: %08x %08x %08x %08x %08x\n", b.attachments[0].raw,
-                 b.attachments[1].raw, b.attachments[2].raw, b.attachments[3].raw,
-                 b.attachments[4].raw);
-    if (!(a == b)) {
-        // CI-only diagnosis (Linux GCC build): report the first differing byte.
-        const auto* pa = reinterpret_cast<const unsigned char*>(&a);
-        const auto* pb = reinterpret_cast<const unsigned char*>(&b);
-        for (size_t i = 0; i < sizeof(a); ++i) {
-            if (pa[i] != pb[i]) {
-                UNSCOPED_INFO("byte " << i << " differs: a=" << int(pa[i]) << " b=" << int(pb[i]));
-            }
-        }
-        UNSCOPED_INFO("color_formats a: " << int(a.color_formats[0]) << ", " << int(a.color_formats[1])
-                      << " b: " << int(b.color_formats[0]) << ", " << int(b.color_formats[1]));
-        UNSCOPED_INFO("ext_3_blend a: " << (a.extended_dynamic_state_3_blend ? 1 : 0)
-                      << " b: " << (b.extended_dynamic_state_3_blend ? 1 : 0));
-        UNSCOPED_INFO("dyn_vertex_input a: " << (a.dynamic_vertex_input ? 1 : 0)
-                      << " b: " << (b.dynamic_vertex_input ? 1 : 0));
-        UNSCOPED_INFO("attachment0 a: raw=" << a.attachments[0].raw << " b: raw="
-                      << b.attachments[0].raw);
-        UNSCOPED_INFO("attachment1 a: raw=" << a.attachments[1].raw << " b: raw="
-                      << b.attachments[1].raw);
-        UNSCOPED_INFO("attachment2 a: raw=" << a.attachments[2].raw << " b: raw="
-                      << b.attachments[2].raw);
-        UNSCOPED_INFO("attachment3 a: raw=" << a.attachments[3].raw << " b: raw="
-                      << b.attachments[3].raw);
-        UNSCOPED_INFO("attachment4 a: raw=" << a.attachments[4].raw << " b: raw="
-                      << b.attachments[4].raw);
-        UNSCOPED_INFO("used a: " << (a.color_formats[0] ? 1 : 0) << " p 1x" << (a.color_formats[1] ? 1 : 0));
-        UNSCOPED_INFO("sizeof(FixedPipelineState)=" << sizeof(Vulkan::FixedPipelineState)
-                      << " offsetof(attributes)=" << offsetof(Vulkan::FixedPipelineState, attributes)
-                      << " offsetof(attachments)=" << offsetof(Vulkan::FixedPipelineState, attachments));
-        FAIL("states differ after canonicalization");
-    }
     CHECK(a == b);
     CHECK(a.Hash() == b.Hash());
 }
