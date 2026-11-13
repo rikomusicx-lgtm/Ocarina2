@@ -1316,3 +1316,29 @@ budget can hold it (the RX 9070 XT-class headroom fix d31b87be4a; this PC is not
 
 Not released. CI builds these bytes now; the owner tests the rebuilt exe before anything about v1.3
 moves. White flash and the VRAM-churn behavior in heavy areas remain open.
+
+## 2026-11-13 (morning) - FG idles on static screens (title screen, menus, loading)
+
+The owner asked for FG to be idle on the title screen. Diagnosis: the game paces VI at swap
+interval 2 (30 Hz present), below the frame-gen target, so the tarball FG interpolator kept
+running everywhere including the mostly-static title screen - producing duplicates of an
+unchanged image while the interpolator burned the GPU every frame. FG dropping to zero only on
+screen remains impossible without knowing the frame content, so:
+
+- FrameGen::RecordThumbnail: present frame is downscaled through vkCmdBlitImage into a persistent
+  32x18 RGBA8 thumbnail image, copied to a host-visible 2304 B buffer, and hashed with CityHash64
+  on the CPU a couple frames later (a torn read only perturbs the hash, never corrupts anything).
+- After ~1 s (60 frames) of an unchanged thumbnail, WantedGenerations() returns plan{0, false},
+  FG emits no interpolated frames at all, and the raw base frame is presented as-is - exactly the
+  same pixels FG would have interpolated. The chain stays built; the moment the hash changes every
+  frame the streak resets and FG resumes instantly, no rebuild, no quality pop.
+- Verified: tests target builds video_core and links; FPS stays the raw base rate on static
+  screens (status bar reads "FGx4 (IDLE)" then), FG stops calling the chain entirely until the
+  next change.
+
+Method check vs upstream (AGENTS.md): no equivalent PR/issue exists in upstream zortos293/Lichii;
+the 253 upstream commits ahead never touch frame_gen_pacer / frame_gen.cpp idle semantics. This
+is new, fork-native behavior.
+
+Also recorded: upstream/nx2 is 253 commits ahead of this fork (1106 ahead of upstream); merging
+upstream is the owner's decision, not ours to make unilaterally.

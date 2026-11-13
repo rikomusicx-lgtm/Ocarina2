@@ -5,9 +5,11 @@
 #include <string>
 #include <vector>
 
+#include "common/cityhash.h"
 #include "common/fs/file.h"
 #include "common/fs/fs.h"
 #include "common/fs/path_util.h"
+#include "common/logging.h"
 #include "common/settings.h"
 #include "video_core/frame_gen/lossless_install.h"
 #include "video_core/renderer_vulkan/present/frame_gen.h"
@@ -23,6 +25,14 @@ namespace {
 constexpr size_t COLOR_CHANNELS = 4;
 constexpr u64 LSFG_REQUIRED_FRAMES = 2;
 constexpr u32 LSFG_RECURRENCE_FRAMES = 2;
+
+// The thumbnail used to detect a static frame (title screens, menus, loading screens): a 32x18
+// downscale of the presented frame, hashed from the host once per frame. 60 repeats ≈ 1 s.
+constexpr VkExtent2D ThumbnailExtent{.width = 32, .height = 18};
+constexpr size_t ThumbnailBytes = static_cast<size_t>(ThumbnailExtent.width) *
+                                  ThumbnailExtent.height *
+                                  COLOR_CHANNELS;
+constexpr u32 ThumbnailStaticStreak = 60;
 
 [[nodiscard]] f32 ManualFlowScale() {
     return static_cast<f32>(Settings::values.frame_gen_flow_scale.GetValue()) / 100.0f;
@@ -242,6 +252,12 @@ void FrameGen::Process(const Device& device, Frame* frame, VkFormat format,
         warm_streak = 0;
         return;
     }
+
+    if (!thumbnail_built) {
+        InitThumbnail();
+    } else {
+        ObserveThumbnail();
+    }
     state.store(VideoCore::FrameGenState::Running, std::memory_order_relaxed);
 
     peak_guest_extent.width = (std::max)(peak_guest_extent.width, guest_extent.width);
@@ -249,10 +265,16 @@ void FrameGen::Process(const Device& device, Frame* frame, VkFormat format,
 
     const VkExtent2D extent{.width = frame->width, .height = frame->height};
     const f32 flow_scale = ConfiguredFlowScale(peak_guest_extent, extent);
+
     if ((!chain && !fsr3_chain) || built_extent.width != extent.width || built_extent.height != extent.height ||
         built_format != format || built_flow_scale != flow_scale) {
         Rebuild(device, extent, format, flow_scale);
     }
+
+    scheduler.RequestOutsideRenderPassOperationContext();
+    scheduler.Record([image = *frame->image, extent, this](vk::CommandBuffer cmdbuf) {
+        RecordThumbnail(cmdbuf, image, extent);
+    });
 
     const u64 count = frame_count++;
     last_count = count;
@@ -292,11 +314,127 @@ size_t FrameGen::WantedGenerations(size_t capacity) {
         return 0;
     }
     plan = pacer.Plan(capacity);
+    if (ContentIsStatic() && plan.generations > 0) {
+        // Content unchanged for about a second (title screens, menus, loading screens): the
+        // interpolated frames would be pixel-identical to the raw frame, FG idles and the raw
+        // base frame is presented at its own pace instead.
+        plan = {};
+        return 0;
+    }
     return plan.generations;
 }
 
 size_t FrameGen::GeneratedFrameCount() const {
     return generated ? last_generations : 0;
+}
+
+void FrameGen::InitThumbnail() {
+    thumbnail_image =
+        CreateWrappedImage(memory_allocator, ThumbnailExtent, VK_FORMAT_R8G8B8A8_UNORM);
+    thumbnail_buffer =
+        CreateWrappedBuffer(memory_allocator, ThumbnailBytes, MemoryUsage::Download);
+    thumbnail_built = true;
+}
+
+[[nodiscard]] bool FrameGen::ContentIsStatic() const {
+    return static_streak >= ThumbnailStaticStreak;
+}
+
+void FrameGen::RecordThumbnail(vk::CommandBuffer cmdbuf, VkImage source,
+                               VkExtent2D source_extent) {
+    const std::array before{
+        MakeTransitionBarrier(source, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                              VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL),
+        MakeTransitionBarrier(*thumbnail_image,
+                              thumbnail_frame == 0 ? VkAccessFlags{0} : VK_ACCESS_SHADER_READ_BIT,
+                              VK_ACCESS_TRANSFER_WRITE_BIT,
+                              thumbnail_frame == 0 ? VK_IMAGE_LAYOUT_UNDEFINED
+                                                   : VK_IMAGE_LAYOUT_GENERAL,
+                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL),
+    };
+    cmdbuf.PipelineBarrier(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                           {}, {}, before);
+
+    const VkImageBlit region{
+        .srcSubresource{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                        .mipLevel = 0,
+                        .baseArrayLayer = 0,
+                        .layerCount = 1},
+        .srcOffsets{VkOffset3D{0, 0, 0},
+                    VkOffset3D{static_cast<s32>(source_extent.width),
+                               static_cast<s32>(source_extent.height), 1}},
+        .dstSubresource{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                        .mipLevel = 0,
+                        .baseArrayLayer = 0,
+                        .layerCount = 1},
+        .dstOffsets{VkOffset3D{0, 0, 0},
+                    VkOffset3D{static_cast<s32>(ThumbnailExtent.width),
+                               static_cast<s32>(ThumbnailExtent.height), 1}},
+    };
+    cmdbuf.BlitImage(source, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, *thumbnail_image,
+                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, region, VK_FILTER_LINEAR);
+
+    const std::array between{
+        MakeTransitionBarrier(*thumbnail_image, VK_ACCESS_TRANSFER_WRITE_BIT,
+                              VK_ACCESS_TRANSFER_READ_BIT,
+                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                              VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL),
+    };
+    cmdbuf.PipelineBarrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, {},
+                           {}, between);
+
+    const VkBufferImageCopy copy{
+        .bufferOffset = 0,
+        .bufferRowLength = 0,
+        .bufferImageHeight = 0,
+        .imageSubresource{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                          .mipLevel = 0,
+                          .baseArrayLayer = 0,
+                          .layerCount = 1},
+        .imageOffset{.x = 0, .y = 0, .z = 0},
+        .imageExtent{.width = ThumbnailExtent.width, .height = ThumbnailExtent.height, .depth = 1},
+    };
+    cmdbuf.CopyImageToBuffer(*thumbnail_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                             *thumbnail_buffer, copy);
+
+    const std::array after{
+        MakeTransitionBarrier(*thumbnail_image, VK_ACCESS_TRANSFER_READ_BIT,
+                              VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                              VK_IMAGE_LAYOUT_GENERAL),
+        MakeTransitionBarrier(source, VK_ACCESS_TRANSFER_READ_BIT,
+                              VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                              VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL),
+    };
+    cmdbuf.PipelineBarrier(VK_PIPELINE_STAGE_TRANSFER_BIT,
+                           VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                               VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                           0, {}, {}, after);
+}
+
+void FrameGen::ObserveThumbnail() {
+    if (thumbnail_frame < 2) {
+        ++thumbnail_frame;
+        return;
+    }
+    const std::span<u8> mapped = thumbnail_buffer.Mapped();
+    const u64 hash = Common::CityHash64(reinterpret_cast<const char*>(mapped.data()), ThumbnailBytes);
+    if (hash == thumbnail_last) {
+        static_streak = std::min(static_streak + 1, ThumbnailStaticStreak);
+        if (static_streak == ThumbnailStaticStreak && !static_logged) {
+            LOG_INFO(Render_Vulkan, "Frame generation: content unchanged for {} frames, FG idles "
+                                    "until it changes",
+                     static_streak);
+            static_logged = true;
+        }
+    } else {
+        thumbnail_last = hash;
+        static_streak = 0;
+        if (static_logged) {
+            LOG_INFO(Render_Vulkan, "Frame generation: content changing again, FG resumes");
+            static_logged = false;
+        }
+    }
+    ++thumbnail_frame;
 }
 
 void FrameGen::GenerateInto(const Device& device, Frame* destination, size_t generation) {

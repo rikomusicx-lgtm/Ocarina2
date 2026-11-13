@@ -145,6 +145,11 @@ Known issues:
   100 ms (cntfrq/10, the same as zortos293/Lichii#655's FPS Unlock), up from Dark's 50 ms
   (cntfrq/20): the game runs at real speed down to about 10 fps instead of in slow motion below
   20 fps, the way big maps were freezing for players.
+- Frame generation idles on static screens (title screen, menus, loading screens): the presented
+  frame is downscaled to a small thumbnail and hashed every frame; when the content has not moved
+  for about a second FG emits no interpolated frames at all and the raw base frame is presented at
+  its own pace (identical to displaying FG output of an unchanged frame). FG resumes the moment
+  the content changes. The chain stays built, so there is no rebuild or quality pop on resume.
 
 ## [0.1.0]
 

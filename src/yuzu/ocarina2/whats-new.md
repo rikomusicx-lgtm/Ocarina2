@@ -160,6 +160,10 @@ between Optical Flow and Lossless Scaling (right-click the FG button) both work 
   into slow motion below 20 fps. If your PC can't hold 60, prefer 30 FPS mode
   (status bar toggle) and frame generation over the 60 FPS mode to avoid the hitching that comes
   with it.
+- Frame generation now goes idle on static screens - the title screen, menus, loading screens: the
+  presented frame is downscaled to a thumbnail and hashed every frame, and when nothing has moved
+  for about a second FG stops generating interpolated frames and the raw frame is presented at its
+  own pace. It resumes the instant something changes, with no rebuild or quality pop.
 
 **We know there are more bugs — we are fixing them.**
 

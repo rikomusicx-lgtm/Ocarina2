@@ -4,10 +4,12 @@
 #pragma once
 
 #include <atomic>
+#include <memory>
 #include <optional>
 
 #include "common/common_types.h"
 #include "video_core/renderer_base.h"
+#include "video_core/vulkan_common/vulkan_wrapper.h"
 #include "video_core/renderer_vulkan/present/frame_gen_pacer.h"
 #include "video_core/renderer_vulkan/present/lsfg_chain.h"
 #include "video_core/renderer_vulkan/present/lsfg_shaders.h"
@@ -41,6 +43,10 @@ public:
 private:
     void Rebuild(const Device& device, VkExtent2D extent, VkFormat format, f32 flow_scale);
     void DumpDebugImages(u64 count);
+    void InitThumbnail();
+    void RecordThumbnail(vk::CommandBuffer cmdbuf, VkImage source, VkExtent2D source_extent);
+    void ObserveThumbnail();
+    [[nodiscard]] bool ContentIsStatic() const;
 
     MemoryAllocator& memory_allocator;
     Scheduler& scheduler;
@@ -48,6 +54,19 @@ private:
     std::optional<LsfgShaders> shaders;
     std::optional<LsfgChain> chain;
     std::optional<Fsr3FrameGen> fsr3_chain;
+
+    // FG idles while the presented frame content stops changing (title screens, menus, loading
+    // screens): a tiny thumbnail of the frame is downscaled and hashed on the GPU every frame;
+    // when the hash repeats for about a second FG produces no interpolated frames at all and the
+    // raw base frame is presented at its own pace (visually identical, since the content has not
+    // moved). The 60 Hz chain stays built so FG resumes instantly when content changes again.
+    vk::Image thumbnail_image{};
+    vk::Buffer thumbnail_buffer{};
+    u64 thumbnail_last{~0ULL};
+    u32 thumbnail_frame{};
+    u32 static_streak{};
+    bool thumbnail_built{};
+    bool static_logged{};
     FrameGenPacer pacer;
     FrameGenPlan plan{};
     VkExtent2D peak_guest_extent{};
