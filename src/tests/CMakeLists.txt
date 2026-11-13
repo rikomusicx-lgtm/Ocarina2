@@ -268,9 +268,15 @@ endif()
 
 # needed for vma
 if (NOT MSVC)
+    # The fork's union-bitfield code (FixedPipelineState, guest colour and stencil state) writes
+    # through BitField<Width, T> members of the same union as reads through other specializations.
+    # GCC's strict-aliasing rules let it drop the lower stores behind the later ones, which is why
+    # canonical_native_key.cpp fails on GCC while passing on MSVC/Clang. Unions with members of
+    # different class types are not aliasable under -fstrict-aliasing; disable it for this target.
     target_compile_options(tests PRIVATE
         $<$<COMPILE_LANGUAGE:C,CXX>:-Wno-conversion>
         $<$<COMPILE_LANGUAGE:C,CXX>:-Wno-unused-variable>
         $<$<COMPILE_LANGUAGE:C,CXX>:-Wno-unused-parameter>
-        $<$<COMPILE_LANGUAGE:C,CXX>:-Wno-missing-field-initializers>)
+        $<$<COMPILE_LANGUAGE:C,CXX>:-Wno-missing-field-initializers>
+        $<$<COMPILE_LANGUAGE:C,CXX>:-fno-strict-aliasing>)
 endif()
