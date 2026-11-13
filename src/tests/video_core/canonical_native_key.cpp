@@ -113,8 +113,21 @@ TEST_CASE("Draws that differ only in cleared state share a canonical key",
         }
         UNSCOPED_INFO("color_formats a: " << int(a.color_formats[0]) << ", " << int(a.color_formats[1])
                       << " b: " << int(b.color_formats[0]) << ", " << int(b.color_formats[1]));
+        UNSCOPED_INFO("ext_3_blend a: " << (a.extended_dynamic_state_3_blend ? 1 : 0)
+                      << " b: " << (b.extended_dynamic_state_3_blend ? 1 : 0));
+        UNSCOPED_INFO("dyn_vertex_input a: " << (a.dynamic_vertex_input ? 1 : 0)
+                      << " b: " << (b.dynamic_vertex_input ? 1 : 0));
+        UNSCOPED_INFO("attachment0 a: raw=" << a.attachments[0].raw << " b: raw="
+                      << b.attachments[0].raw);
         UNSCOPED_INFO("attachment1 a: raw=" << a.attachments[1].raw << " b: raw="
                       << b.attachments[1].raw);
+        UNSCOPED_INFO("attachment2 a: raw=" << a.attachments[2].raw << " b: raw="
+                      << b.attachments[2].raw);
+        UNSCOPED_INFO("attachment3 a: raw=" << a.attachments[3].raw << " b: raw="
+                      << b.attachments[3].raw);
+        UNSCOPED_INFO("attachment4 a: raw=" << a.attachments[4].raw << " b: raw="
+                      << b.attachments[4].raw);
+        UNSCOPED_INFO("used a: " << (a.color_formats[0] ? 1 : 0) << " p 1x" << (a.color_formats[1] ? 1 : 0));
         UNSCOPED_INFO("sizeof(FixedPipelineState)=" << sizeof(Vulkan::FixedPipelineState)
                       << " offsetof(attributes)=" << offsetof(Vulkan::FixedPipelineState, attributes)
                       << " offsetof(attachments)=" << offsetof(Vulkan::FixedPipelineState, attachments));
