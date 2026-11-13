@@ -1437,7 +1437,10 @@ struct Game {
     FileSys::RealVfsFilesystem filesystem;
     std::unique_ptr<FileSys::NupContainer> container;
     std::vector<FileSys::VirtualDir> roots;
+    // Which program actually runs: the update when there is one, else the base.
     u64 title_id{};
+    u64 base_title_id{};
+    u64 update_title_id{};
     u32 version{};
 };
 
@@ -1466,7 +1469,10 @@ void OpenGame(Game& out, const std::filesystem::path& game, const std::filesyste
         fmt::print("package {}: {:016X} v{} kind {}{}\n", i, package.title_id, package.version,
                    static_cast<int>(package.kind), romfs ? "" : " (no RomFS)");
         if (package.kind == FileSys::NupContainer::PackageKind::Base) {
-            out.title_id = package.title_id;
+            out.base_title_id = package.title_id;
+        } else if (package.kind == FileSys::NupContainer::PackageKind::Update) {
+            // What actually runs: the update program when present, else the base.
+            out.update_title_id = package.title_id;
         }
         if (package.kind != FileSys::NupContainer::PackageKind::Addon) {
             out.version = std::max(out.version, package.version);
@@ -1484,6 +1490,8 @@ void OpenGame(Game& out, const std::filesystem::path& game, const std::filesyste
     if (merged) {
         out.roots.push_back(merged);
     }
+    // The update is the program that actually runs; fall back to the base when the dump has one.
+    out.title_id = out.update_title_id ? out.update_title_id : out.base_title_id;
 }
 
 FileSys::Nx2ShaderExtract::Result ExtractGame(const Game& game, unsigned threads) {
