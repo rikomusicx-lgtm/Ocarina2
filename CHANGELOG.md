@@ -88,7 +88,7 @@ Known issues:
 - First-boot shader compile hitches persist until the cache is warm; the preloader mitigates but
   does not eliminate them.
 
-## [Unreleased]
+## [Ocarina2 v1.3] - 2026-11-13
 
 - Clang flavor: the fork now also builds with clang-cl (iiVM 23.1.5), shipped as a separate
   Clang package; one TU keeps the scalar std::ranges::find for clang's

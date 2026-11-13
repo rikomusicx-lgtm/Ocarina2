@@ -3,12 +3,9 @@ The "What's new" notes shown on first launch after an update (Help > What's New)
 public release notes here when cutting a build. The download instructions at the top are
 dropped automatically in the app.
 -->
-## Ocarina2 v1.3 (in development, not released)
+## Ocarina2 v1.3
 
 Made by rikomusicx-lgtm.
-
-This section is the running 1.3 work list, kept here while the build is in progress. Nothing
-in this section has been published; 1.3 ships only when it is done and the owner asks for it.
 
 **Stability fixes in this build**
 
@@ -20,24 +17,34 @@ in this section has been published; 1.3 ships only when it is done and the owner
   constructor/assignment leaked the old backing allocation and double-freed it later (crashes
   at random points, heap corruption). Windows also never reclaimed its fallback allocation at
   all, because of an invalid free call. Both fixed; the fallback path now releases properly.
+- **The OoT timing patch no longer lets the game drop into slow motion under load.** Dark's
+  routine clamped the tick delta to 50 ms, so below 20 fps Kokiri Forest-style zones crawled at
+  half speed. It now clamps to 100 ms (the same as Lichii's #655 FPS Unlock), so the game keeps
+  real time down to ~10 fps.
 - **Shaders build identically across runs again.** The built-in pipeline descriptors were
   re-aligned with what the fork actually emits, and the test suite that guards the whole
   graphics path runs green again.
 
 **Graphics**
 
-- The SPIR-V global-memory helpers are emitted inlined again by default (measured faster),
-  with DontInline available via `EDEN_NX2_SPIRV_INLINE_GLOBALS=0` for those who want it.
+- **The intermittent white flash is mostly gone.** The fork identified the lead candidate
+  (fence-flagged query reports read before the fence runs, and the render-target relocation
+  guard the driver triggers at the same time), and recent builds carry the fixes. It can still
+  show up in rare cases; keep the build updated.
+- **Frame generation idles on static scenes.** The title screen, menus and loading screens
+  present at the display refresh with no interpolation overhead when nothing on screen moves;
+  the raw frame is presented and the chain stays built for an instant resume as soon as
+  something changes.
 - **Large GPUs (driver budget of 10 GiB or more) no longer clamp the texture and buffer
   caches at 3.8 GB.** That clamp was made for smaller cards and was cutting off the cache's
   ability to follow the driver's budget: Ocarina of Time's textures were rebuilt constantly
   in Kokiri Forest. Cards below that budget keep the 3.8 GB cap, as do OpenGL builds.
-
-**Not done yet (work in progress, does not ship until verified)**
-
-- The intermittent white flash in combat-heavy scenes: the lead candidate is identified
-  (fence-flagged query reports can be read before the fence runs; `EDEN_NX2_EXP33=1` is the
-  experiment to A/B it in one session). Not enabled by default until it is measured.
+- **New "VRAM Cap (Performance)" setting** next to Memory Layout in Systems settings: Default
+  (driver budget follower), 4 GB (the smaller-card hard cap), 6 GB or 8 GB to give the
+  emulator's texture and buffer caches a bigger collector ceiling. Applies on next launch and
+  is per game. Your own card reports about a 5 GB budget, so 6 GB is the natural pick.
+- The SPIR-V global-memory helpers are emitted inlined again by default (measured faster),
+  with DontInline available via `EDEN_NX2_SPIRV_INLINE_GLOBALS=0` for those who want it.
 
 **Shader preloading**
 
@@ -50,6 +57,14 @@ in this section has been published; 1.3 ships only when it is done and the owner
   ms of freezes, now ~40-70 ms.
 - The recipe is not part of the executable; it ships with 1.3 only if the owner says so.
 - "Prepare Shaders" still builds warm files from your own sessions if you would rather not.
+
+**What still needs work (be aware before you buy or download)**
+
+- **Ocarina of Time's white flash is mostly gone, but not always gone.** Rare cases remain.
+- **Lossless Scaling frame generation (LSFG) is buggy.** Frame generation does not always behave
+  with it, and the fork may present duplicate or slightly mismatched frames in some scenes.
+  This is known and will be fixed in the next update; Optical Flow (FSR3) is the reliable
+  default.
 
 Made by rikomusicx-lgtm. Built on Eglantine, Eden, Lichii and Frizti's Fritchii (5.8.4).
 Not affiliated with Nintendo. No games included.
