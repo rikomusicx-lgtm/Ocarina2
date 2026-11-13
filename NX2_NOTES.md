@@ -1250,3 +1250,31 @@ this machine):
   but nobody has watched it), nor does it say anything about the 1.3 release assets (the
   recipe going out with a 1.3 release is a distribution decision for the owner; by
   construction the recipe carries no game code).
+## 2026-11-12 (late night) - recipe title id fixed; precompiled pipelines accepted at boot
+
+Findings from "check the log", in order:
+- The running build kept logging "no recipe for 0400486024DEC000" even though a recipe sat
+  in %APPDATA%\ocarina2\cache\shader\0400486024dec000\game.nx2recipe. Root cause: the tool
+  (tools/nx2-precompile) stamped the recipe with the base package's title only; a standalone
+  update dump (kind 1) produced title_id 0, which the runtime rejects by design (it requires
+  the recipe's title to equal the running title exactly). Fixed: the recipe now records the
+  update's title when present, else the base's (commit 11e76c55c8). Recipe regenerated
+  (1,211,406 bytes) and copied over the cache one; the dead title-0 recipe kept as
+  game.nx2recipe.title-id-zero.bak in the same folder.
+- The runner's earlier "audit ... Exit code: 1" was PowerShell's stderr-is-an-error
+  artifact, not the tool: re-run shows exit 0 with "42848 programs checked: 0 pieces of
+  their code in the recipe".
+- Relaunched straight into OoT (the .nup path as a command line argument). The log now
+  shows "[ 14.5] Precompiled pipelines: assembling ... game.nx2recipe (game version 131072)
+  with this copy of the game on 3 threads" instead of the old line, and the finished
+  precompiled.fork-v57.nx2prep (1127029588 bytes - byte-size identical to the tool-built
+  reference) plus its .recipe.txt note landed in the same cache folder. The background
+  preparation is running with 0 restarts so far.
+- Linux build-check is green on the aliasing fix (e1a50f2091) and on the diagnostics
+  restore (0353a1b8e0); Windows was already green on both.
+- Nothing released, tagged or published; v1.3 remains untagged at the owner's word.
+
+Distribution decision still the owner's: the recipe (built from his dump) and/or the
+1.13 GB precompiled file could go with 1.3 if he wants them shipped; by construction the
+recipe carries no game code (audit-verified), but it was derived from his dump.
+
