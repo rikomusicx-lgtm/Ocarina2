@@ -88,6 +88,13 @@ Known issues:
 - First-boot shader compile hitches persist until the cache is warm; the preloader mitigates but
   does not eliminate them.
 
+## [Unreleased]
+
+- Ocarina2 v1.4 (in development): same dispatch-only release flow as 1.3; the 1.4 scope is
+  locked in src/yuzu/ocarina2/whats-new.md (Hyrule Town first-load texture glitch, LSFG fix,
+  lower-hardware pass, merge upstream Lichii/Fritchii fixes). No release until the owner
+  asks; CI must stay green.
+
 ## [Ocarina2 v1.3] - 2026-11-13
 
 - Clang flavor: the fork now also builds with clang-cl (iiVM 23.1.5), shipped as a separate

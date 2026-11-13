@@ -3,6 +3,29 @@ The "What's new" notes shown on first launch after an update (Help > What's New)
 public release notes here when cutting a build. The download instructions at the top are
 dropped automatically in the app.
 -->
+## Ocarina2 v1.4 (in development)
+
+Made by rikomusicx-lgtm.
+
+This section is the running 1.4 work list. Nothing in it has shipped; 1.4 ships only when the
+owner says so, after the items below are fixed and tested on real hardware.
+
+**Targets for this release**
+
+- **Hyrule Town (and first large town) texture glitch on first load** - the one the owner
+  reproduced on his machine. Textures in Hyrule Town look stretched/garbage on the first entry
+  after a cold boot and settle afterwards. Tracked in NX2_NOTES.
+- **Lossless Scaling (LSFG) frame generation is buggy** - flagged by the owner for 1.4.
+  Optical Flow (FSR3) is the reliable default in 1.3 and stays that way until LSFG is fixed.
+- **Lower-hardware pass** - another round of performance tuning aimed at entry-level cards
+  (RDNA 2/integrated, small-cache 6 GB cards), while keeping the same output we can hold.
+- **Deeper emulation work** - bring in more upstream fixes from the Lichii family forks
+  (Lichii-, Eglantine-, Fritchii lineage), careful about merge scope; CI stays green or nothing
+  lands.
+
+Bugs already carried by 1.3 (the white flash) are on the list to re-verify; the release notes
+will name which ones are done.
+
 ## Ocarina2 v1.3
 
 Made by rikomusicx-lgtm.

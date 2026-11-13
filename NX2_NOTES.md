@@ -1407,3 +1407,26 @@ Bug report, owner field observation, 2026-11-13: first load into Hyrule Town (Oo
 textures glitch badly - texture sampling/format/tile bug, not a pipeline problem; reproduces
 on first entry only so far. Not for 1.3 (released); target 1.4. Owner wants the project paused
 here until 1.4 planning. White flash mostly fixed (v1.3 notes); LSFG deferred to the next update.
+
+## 2026-11-13 (late afternoon) - 1.4 scaffold and 1.4 targets locked in
+
+Owner kicked off 1.4. Setup is the same as 1.3 (dispatch-only release, no publishing on
+push; the owner wants the 1.4 release on demand, not automated).
+
+What is committed now, in tree:
+- Version bumped to 1.4 (dist/ocarina2_version.txt).
+- CHANGELOG: Unreleased block at the top names v1.4 scope and the "no release until the
+  owner asks, CI must stay green" rule.
+- src/yuzu/ocarina2/whats-new.md: a v1.4 section names the four targets:
+  Hyrule Town first-load texture glitch, LSFG buggy (deferred), lower-hardware pass,
+  deeper emulation work with upstream cherry-picks.
+- file_sys: RsMan-Dev's built-in Texture Pool x2 patch (#1313) ported - both records
+  cherry-picked with the fork's designated initializers and covered by the builtin_patches
+  test. This is the exact class of first-town-in, guard house, failing allocation
+  dereference; it also applies to any unmapped-read crash the allocator reports for OoT.
+  The patch is on by default and toggleable in Add-Ons (same semantics as the others).
+
+Not yet validated: the Hyrule Town first-load glitch has not been observed in a log yet,
+so the root cause is still unknown; the Texture Pool patch is the adjacent allocator-blowup
+fix and is on by default now. The full 1.4 plan needs the owner's play test to localize it
+(by area and by render-path: FSR3 vs LSFG, preload vs cold, Max Resolution on/off).

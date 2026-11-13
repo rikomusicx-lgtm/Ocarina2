@@ -912,3 +912,39 @@ TEST_CASE("Dark's standalone Dynamic FPS mod is skipped and hidden for the built
         REQUIRE(listed(context.Manager(), "Other mod"));
     }
 }
+
+
+// Texture Pool x2 (built-in): RsMan-Dev's patch from zortos293/Lichii#1313; it doubles the
+// initial graphics pool so full-size render targets don't outgrow it in the guard house.
+constexpr std::string_view TexturePool = "Texture Pool x2 (built-in)";
+
+TEST_CASE("Built-in Texture Pool x2 doubles the allocator's initial pool size", "[patch_manager]") {
+    constexpr size_t CallOffset = sizeof(Loader::NSOHeader) + 0xC2A36C;
+    constexpr size_t RoutineOffset = sizeof(Loader::NSOHeader) + 0x3C462C0;
+    constexpr u32 StpInstruction = 0xA90127E8;
+    constexpr u32 CallInstruction = 0x94C06FD5;
+    PatchManagerTestContext context;
+    const auto manager = context.Manager();
+
+    auto nso = MakeDynamicMain();
+    std::memcpy(nso.data() + CallOffset, &StpInstruction, sizeof(StpInstruction));
+
+    auto patched = manager.PatchNSO(nso, "main");
+    REQUIRE(WordAt(patched, CallOffset) == CallInstruction);
+    REQUIRE(Common::HexToString(std::span{patched}.subspan(RoutineOffset, 12)) ==
+            "08F97FD3E82701A9C0035FD6");
+    REQUIRE(WordAt(patched, RoutineOffset + 12) == 0);
+
+    // Toggle off in Add-Ons: the original word is restored and the cave stays zeroed.
+    Settings::values.disabled_addons[OcarinaTitleId] = {std::string{TexturePool}};
+    patched = manager.PatchNSO(nso, "main");
+    REQUIRE(WordAt(patched, CallOffset) == StpInstruction);
+    REQUIRE(WordAt(patched, RoutineOffset) == 0);
+
+    // Wrong original word: the built-in refuses to apply, the module is left alone.
+    Settings::values.disabled_addons.erase(OcarinaTitleId);
+    std::memcpy(nso.data() + CallOffset, &NopInstruction, sizeof(NopInstruction));
+    patched = manager.PatchNSO(nso, "main");
+    REQUIRE(WordAt(patched, CallOffset) == NopInstruction);
+    REQUIRE(WordAt(patched, RoutineOffset) == 0);
+}

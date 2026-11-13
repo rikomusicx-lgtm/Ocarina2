@@ -93,6 +93,23 @@ constexpr std::array MAX_RESOLUTION_RECORDS{
                        .original = 0x360041E8}, // tbz w8, #0, 0x80640c
 };
 
+// RsMan-Dev's texture pool patch (#1313, merged upstream): stp x8, x9, [sp, #0x10] stores the
+// graphics allocator's initial pool size (x8); the call doubles it first
+// (lsl x8, x8, #1 ; stp ; ret). Without it, the guard house dereferences a null allocation
+// once the full-size render targets outgrow the pool.
+// TEXTURE_POOL_ORIGINAL would be 0xA90127E8 (stp x8, x9, [sp, #0x10], the little-endian word);
+// it is inlined in the records below. Keep this:
+constexpr std::array<u8, 4> TEXTURE_POOL_CALL{0xD5, 0x6F, 0xC0, 0x94};       // bl 0x3c462c0
+constexpr std::array<u8, 12> TEXTURE_POOL_ROUTINE{
+    0x08, 0xF9, 0x7F, 0xD3, 0xE8, 0x27, 0x01, 0xA9, 0xC0, 0x03, 0x5F, 0xD6,
+};
+constexpr std::array TEXTURE_POOL_RECORDS{
+    BuiltinPatchRecord{.module_offset = 0xC2A36C, .bytes = TEXTURE_POOL_CALL,
+                       .checked = true, .original = 0xA90127E8},
+    BuiltinPatchRecord{.module_offset = 0x3C462C0, .bytes = TEXTURE_POOL_ROUTINE,
+                       .checked = true, .original = 0},
+};
+
 // Dynamic FPS by Dark (Eglantine Dev), bundled with his permission: the game's frame step follows
 // the time measured with the system counter instead of assuming 30 fps, so it runs at full speed
 // at any frame rate the smoothing can follow. A call (bl 0x3c46200) to a routine in unused space
@@ -303,6 +320,16 @@ constexpr std::array BUILTIN_PATCHES{
         .replaces = DYNAMIC_FPS_NAME,
         .state_offset = HIGH_REFRESH_STATE_OFFSET,
         .state_size = HIGH_REFRESH_STATE_SIZE,
+    },
+    // Texture Pool x2 (#1313): doubles the game's initial graphics pool, so the render targets
+    // going at full scale in the guard house don't outgrow it (a guard-house allocation failure
+    // dereferences a null pool and hangs). On by default; disable with the Add-Ons toggle.
+    BuiltinPatch{
+        .name = "Texture Pool x2 (built-in)",
+        .title_id = 0x0400486024DEC000,
+        .module = "main",
+        .build_id = "E0F3CCFAF50065AE4EA01EB5AEB13B1A45DA3348",
+        .records = TEXTURE_POOL_RECORDS,
     },
     BuiltinPatch{
         .name = DYNAMIC_FPS_NAME,
