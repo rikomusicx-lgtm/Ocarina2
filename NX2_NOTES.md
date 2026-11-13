@@ -1278,3 +1278,41 @@ Distribution decision still the owner's: the recipe (built from his dump) and/or
 1.13 GB precompiled file could go with 1.3 if he wants them shipped; by construction the
 recipe carries no game code (audit-verified), but it was derived from his dump.
 
+
+## 2026-11-12 (night, later) - bullet time in big areas fixed (option B by the owner); the "crash" was VRAM thrash
+
+The owner chose the timing patch fix (B) for "game going in complete slow motion while going through
+big places".
+
+What the freeze actually was (found after the report, on the same run):
+- The process never crashed: it stayed alive but starved (0.2 s of CPU in 5 s, 16.5 GB working set)
+  and the window looked dead; no crash dumps, no WER events.
+- The log shows the texture cache tripped the class-limited 3.8 GB critical threshold every few
+  frames ("Aggressive GC engaged: used 5168 MiB >= critical 3739 MiB" repeatedly), hundreds of fastmem
+  page-protect/unmap stalls per frame, read-backs occasionally over 100 ms, and a report of "Worst
+  frame in the last 10 s: 3829.4 ms (36 of 43 frames over 33 ms)". On this 6 GB RTX 3050 the machine
+  is beyond the budget's useful edge for 1440p->4K + FSR3 FG x4 in heavy areas; Windows paging and GC
+  thrash followed.
+- Root mechanics of the bullet time: Dark's built-in Dynamic FPS routine capped the tick delta at
+  50 ms (cntfrq/20 at +0x24..+0x30), so at < 20 fps (exactly the open-field rate) the game advanced
+  < 60% of real time = constant slow motion. Lichii#655 "FPS Unlock" raises the same cap to 100 ms
+  (cntfrq/10 = the tail fminnm's 6.0 = 100 ms at 60 fps).
+
+Fix (both paths, like #655):
+- DYNAMIC_FPS_ROUTINE (what ships with oot_high_refresh=false): mov x14,#0x14 -> #0xa
+  (cntfrq/10) in the tick-delta clamp. HIGH_REFRESH_ROUTINE: same tick-clamp word change, and the
+  tail fminnm max-step constant 3.0f -> 6.0f at +0x84.
+- src/tests/core/builtin_patches.cpp mirrors the routine bytes byte for byte; updated in step.
+  Both verified against the disassembly (capstone) encoding and structure unchanged; the fork keeps
+  the 0.02f floor and the 1.0f speed scale.
+- Test-manager verified by Capstone disasm: mov x14,#0xa in both; fminnm sees s3=6.0f; test mirror
+  matches (bytes compare equal).
+
+Honest expectation: it stops the bullet time (real-time logic down to ~10 fps). It does NOT make the
+game render faster: at 3-10 fps in heavy areas it is still a slideshow on this PC. The machine needs
+fewer pixels to be playable: lower render scale and/or FG x2, or 30 FPS mode (the built-in for that,
+within option C the owner rejected), and the fork may raise the 3.8 GB cap only on cards whose driver
+budget can hold it (the RX 9070 XT-class headroom fix d31b87be4a; this PC is not that class).
+
+Not released. CI builds these bytes now; the owner tests the rebuilt exe before anything about v1.3
+moves. White flash and the VRAM-churn behavior in heavy areas remain open.

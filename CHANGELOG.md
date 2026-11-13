@@ -141,6 +141,10 @@ Known issues:
 - Keep zeroed page-table pages committed (fixes a racy Windows crash), track every 64-byte block a
   usage range touches, retain gathered buffers until their sources are removed, and collect texture
   cache debug statistics only when asked; wait for the JIT code space commit instead of crashing.
+- Built-in Dynamic FPS and the high refresh rate patch clamp the Ocarina of Time tick delta to
+  100 ms (cntfrq/10, the same as zortos293/Lichii#655's FPS Unlock), up from Dark's 50 ms
+  (cntfrq/20): the game runs at real speed down to about 10 fps instead of in slow motion below
+  20 fps, the way big maps were freezing for players.
 
 ## [0.1.0]
 

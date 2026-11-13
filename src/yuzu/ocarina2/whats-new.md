@@ -154,8 +154,10 @@ between Optical Flow and Lossless Scaling (right-click the FG button) both work 
 - Built for low-end PCs: the 8 GB memory layout stays on machines under 16 GB of RAM (12 GB only
   where it fits), handheld mode, BC3 ASTC textures and conservative VRAM for the texture cache —
   8 GB cards should stay well under 4 GB of VRAM for this game.
-- The built-in Dynamic FPS patch keeps Ocarina of Time at full speed when the frame rate drops —
-  the game no longer slows to a crawl at low FPS. If your PC can't hold 60, prefer 30 FPS mode
+- The built-in Dynamic FPS patch now keeps Ocarina of Time at full speed even when the frame rate
+  collapses: the tick delta is clamped to 100 ms per real frame (the same amount Lichii's #655
+  FPS Unlock uses), up from 50 ms, so the game stays real-time down to ~10 fps instead of dropping
+  into slow motion below 20 fps. If your PC can't hold 60, prefer 30 FPS mode
   (status bar toggle) and frame generation over the 60 FPS mode to avoid the hitching that comes
   with it.
 
