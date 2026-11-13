@@ -1386,3 +1386,17 @@ SWITCHABLE(false?) no, SWITCHABLE true):
   room than this machine can use, but harmless to ship.
 - Applies on next launch: Init() runs ApplyThresholdOverrides at construction; no live switch.
 - The Frizti TunedSettings list deliberately does not include it; default stays Auto.
+
+## 2026-11-13 (afternoon) - Ocarina2 v1.3 released (build-27)
+
+Owner said go. Dispatched release-binaries with publish_release=true on nx2 HEAD (3fef0fb679).
+Release tag build-27, title "Ocarina2 v1.3" (dist/ocarina2_version.txt), 10 assets published:
+Windows x86_64 + PGO, Linux x86_64 AppImage/tar.gz + PGO, Linux ARM (aarch64) AppImage/tar.gz +
+PGO, no macOS package (hosted arm64 runners too scarce, same policy as v1.2). Publish verified
+green: build-check green on both platforms, release-binaries Prepare/build/Publish all success.
+Release body carries the whats-new for v1.3 (stability: GPU address-space crash fix, guest memory
+move corruption fix, FPS 100 ms tick-delta clamp; graphics: white flash mostly gone, FG idles on
+static scenes, large GPUs unclamped, new VRAM Cap (Performance) dropdown 4/6/8 GB), then the PGO
+package table unchanged from the template.
+
+The 1.3 recipe remains owner-distributed only; the release ships no game data.
