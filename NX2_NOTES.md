@@ -1342,3 +1342,31 @@ is new, fork-native behavior.
 
 Also recorded: upstream/nx2 is 253 commits ahead of this fork (1106 ahead of upstream); merging
 upstream is the owner's decision, not ours to make unilaterally.
+
+## 2026-11-13 (afternoon) - VRAM and CPU analysis, written down (no code changes yet)
+
+VRAM (this user, RTX 3050 6 GB, budget ~5299 MiB reported by the driver, critical capped
+3739 MiB for cards under 10 GiB):
+- The ASTC->BC3 recompression is REQUIRED on this machine (notes row 128: gpu_accuracy Low,
+  uncompressed ASTC was worse on 6 GB cards); the fork always re-encodes to BC formats for
+  this path (astc_recompression default Bc3). Raw ASTC (2 bpp) would be ~4x smaller in
+  storage, but the fork has no "Original/native ASTC" option - and NVIDIA's ASTC LDR support
+  is real but was not validated as an emulator path for this game; flipping defaults is an
+  owner-test decision, not a unilateral one.
+- Virtual textures trimmed to the first level that fits 512 MiB since 87d84d513c-era fork
+  work; already the reason the 8192x8192x68 ASTC arrays fit at all.
+- Driver pipelines ~1292 at ~0.45 MB each; the 1.13 GB precompiled prepared set is held by the
+  driver's cache; staging buffers ~130 MB; all count toward the 5299 MiB budget.
+- REAL reductions available without caps: lower render scale (frame storage dominates; SGSR
+  already strains at 1440p->4K FG x4 on 6 GB), fewer FG multipliers, less upscaling. These are
+  user-side settings; there is no fork-side toggle that recycles identical textures without
+  reworking the streamer (high risk, game-specific).
+- The fork CANNOT raise the 3.8 GB cap back on 10 GiB- classes of cards: that was the d31b87be4a
+  gate revert (>10 GiB class follows budget follower). This PC is not that class.
+
+CPU overhead (same log):
+- ~1,400 SVCs per guest frame through the fork's global scheduler lock (row 109 known);
+  macro interpreter 11-13% of the GPU thread (row 116 known); draw setup ~6.4 us x 55k draws
+  (row 141); split-GPU "front/back" waiting (open PR #1433). All structural, no small win.
+- The biggest player-visible symptom in big places - the *apparent* CPU saturation with the
+  game running in slow motion - was fixed by 5b74405eb4/8b497ab217 (the 100 ms step cap).
