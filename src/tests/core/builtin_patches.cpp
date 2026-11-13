@@ -373,7 +373,7 @@ TEST_CASE("Built-in Dynamic FPS defaults on and can be disabled in Add-Ons", "[p
     REQUIRE(
         Common::HexToString(std::span{patched}.subspan(DynamicRoutineOffset, DynamicRoutineSize)) ==
         "2818201ECA9200B04A0138912BE03BD54C0140F94B0100F9CC0200B46B010CCB0DE03BD5"
-        "8E0280D2AE09CE9A7F010EEBCB818B9A4C0540F94C0000B5EC030BAA6E010CCB8C0D8E8B"
+        "4E0180D2AE09CE9A7F010EEBCB818B9A4C0540F94C0000B5EC030BAA6E010CCB8C0D8E8B"
         "4C0500F98201239EA301239E4218231E4208211EC300001C0309231E4020231E4D000054"
         "4840201EC0035FD60AD7833F");
     REQUIRE(WordAt(patched) == BranchInstruction);
@@ -658,7 +658,7 @@ TEST_CASE("High refresh rate built-in calls its own routine only while its setti
         REQUIRE(word_at(patched, Routine + 0x6C) == 0x14000002); // b +0x74
         REQUIRE(word_at(patched, Routine + 0x70) == 0xD65F03C0); // ret
         REQUIRE(word_at(patched, Routine + 0x78) == 0x1E230848); // fmul s8, s2, s3
-        REQUIRE(word_at(patched, Routine + 0x84) == 0x40400000); // 3.0f
+        REQUIRE(word_at(patched, Routine + 0x84) == 0x40C00000); // 6.0f
         REQUIRE(word_at(patched, Routine + 0x88) == 0x3F800000); // 1.0f
         REQUIRE(word_at(patched, Routine + 0x8C) == 0);
         // The water ripple accumulator (zortos293/Lichii#1152) right after it, and its hook.
