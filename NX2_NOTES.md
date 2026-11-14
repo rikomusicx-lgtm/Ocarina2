@@ -1539,3 +1539,15 @@ Deleted from origin: fix/oot-fps-perf-timing, fritchii-merge. Remote now holds o
 (and release tags, untouched). Verified before deletion: qmd_prediction.cpp and eglantine.profdata
 are in nx2; font_merge.cpp and nup_read_bench.cpp are not, and were never re-landed there.
 Owner's decision, documented in session.
+
+## 2026-11-14 (continued) - bug list status
+
+- Docked->handheld hero flash: deferred by owner until the flash-watch round (he will toggle in-game).
+- Title screen finicky buttons + fading text + not fluid: best theory is the 1.4 FG static-idle
+  (title pace drops to VI 30 Hz; text fades look chunkier). Added EDEN_NX2_FG_IDLE=0 escape hatch
+  (frame_gen.cpp) for an A/B. No fix landed yet beyond the knob.
+- Hyrule Town first-load textures: no fix landed yet; the last log shows Texture Pool x2 applied,
+  no ASTC decode failure markers, and repeated Aggressive GC lines at critical ~4.3-4.6 GB.
+  Consistent with VRAM pressure feeding the cache thrash, but no smoking gun found yet.
+- Fresh playable build: CI head a497e38090 ships today's ports (Windows x86_64 zip, run 43556633183,
+  expires 2026-11-21). The owner still has the local pid 10216 build.
