@@ -1581,3 +1581,15 @@ Deferred (fork lacks the machinery or it conflicts with fork work):
   path and registry are fork-divergent; needs owner + live lock worry review, not a blind port.
 - #1663/#1679 Ocarina FPS Unlock record families: upstream's cave overlaps this fork's
   HIGH_REFRESH cave; needs re-derivation + builtin_patches fingerprint alignment.
+
+## 2026-11-14 (DLSS quality + Windows minidump)
+
+Ported the two remaining Lichii build-177 items the owner asked for today ("i mean the dlss"):
+- #1589: DLSS quality setting actually scales the OoT render resolution. Balanced 2276x1280 /
+  Performance 1920x1080 / Ultra Performance 1280x720 applied at patch stage; otherwise.Dlss Quality
+  in the public builds is disabled outright, so it's an isolated change behind one setting.
+- #1534: Yoshi book workloads (large buffers sharing one page) no longer loop-in-loop on joins.
+- #1453: Windows host crash log + eden_crash.dmp minidump, qt and yuzu_cmd
+
+Wrote oxbroken notes, all green on local tests 1065/1065. DLSS is off in owner's OoT config today
+("nvidia_dlss=false"); nothing in this will trigger anything until he toggles it.
