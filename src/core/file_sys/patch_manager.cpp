@@ -141,6 +141,50 @@ constexpr std::array TEXTURE_POOL_RECORDS{
                        .checked = true, .original = 0},
 };
 
+// Ocarina's sound manager assumes at least one whole 60 fps step per update: its fade and delay
+// timers and parameter ramps count updates from the step it is given each frame. Below a whole
+// step (FPS Unlock above 60 fps) some sounds are never released when an area unloads; they pile
+// up until the game's voice budget is full, and then most new sounds and the music stop until a
+// restart (#716, #1092). So above 60 fps FPS Unlock runs the sound manager job (main+0x415300,
+// phase in w2; phase 0 reads the step and updates the engine, phase 1 follows) at 60 Hz: its entry
+// goes to SOUND_GATE, which in phase 0 adds the step to an accumulator (timer state + 0xA0) and
+// runs the job only once a whole step has built up, else returns; the other phases follow that
+// frame's decision (flag at state + 0xA4). At 60 fps and below it runs every frame as before.
+// The job's step load (main+0x415334) goes to SOUND_FEED, max(step, 1.0), so the engine always
+// gets whole steps and sound still follows real time.
+// zortos293/Lichii#1660, with SOUND_FEED at main+0x3C4687C (upstream uses main+0x3C46280, the
+// Hyrule Cheat Menu's bytes in this fork), so the bl below is re-encoded for the new address.
+// SOUND_GATE is PC-relative and must sit at main+0x3C46800.
+constexpr std::array<u8, 4> SOUND_ENTRY_ORIGINAL{0x7F, 0x23, 0x03, 0xD5}; // pacibsp
+constexpr std::array<u8, 4> SOUND_ENTRY_BRANCH{0x40, 0xC5, 0xE0, 0x14};   // b main+0x3C46800
+constexpr std::array<u8, 4> SOUND_STEP_ORIGINAL{0x00, 0x11, 0x40, 0xBD};  // ldr s0, [x8, #0x10]
+constexpr std::array<u8, 4> SOUND_STEP_CALL{0x52, 0xC5, 0xE0, 0x94};      // bl main+0x3C4687C
+// adrp x16, state ; add x16, x16, #0xea0 ; cbnz w2, other ; adrp x9, time ; ldr x9, [x9, #0x890] ;
+// ldr x9, [x9] ; ldr s16, [x9, #0x10] ; fmov s17, #1.0 ; fcmp s16, s17 ; b.ge every_frame ;
+// ldr s18, [x16] ; fadd s18, s18, s16 ; fcmp s18, s17 ; b.lt wait ; fsub s18, s18, s17 ;
+// str s18, [x16] ; mov w9, #1 ; str w9, [x16, #4] ; b run ;
+// wait: str s18, [x16] ; str wzr, [x16, #4] ; ret ;
+// every_frame: nop (a remainder built up below a whole step carries over) ; mov w9, #1 ;
+// str w9, [x16, #4] ; b run ;
+// other: ldr w9, [x16, #4] ; cbz w9, skip ; run: pacibsp ; b main+0x415304 ; skip: ret
+// x9, x16 and s16-s18 are free at the job's entry.
+constexpr std::array<u8, 124> SOUND_GATE{
+    0xD0, 0x92, 0x00, 0xB0, 0x10, 0x82, 0x3A, 0x91, 0x02, 0x03, 0x00, 0x35, 0xC9, 0x81, 0x00, 0x90,
+    0x29, 0x49, 0x44, 0xF9, 0x29, 0x01, 0x40, 0xF9, 0x30, 0x11, 0x40, 0xBD, 0x11, 0x10, 0x2E, 0x1E,
+    0x00, 0x22, 0x31, 0x1E, 0xAA, 0x01, 0x00, 0x54, 0x12, 0x02, 0x40, 0xBD, 0x52, 0x2A, 0x30, 0x1E,
+    0x40, 0x22, 0x31, 0x1E, 0xCB, 0x00, 0x00, 0x54, 0x52, 0x3A, 0x31, 0x1E, 0x12, 0x02, 0x00, 0xBD,
+    0x29, 0x00, 0x80, 0x52, 0x09, 0x06, 0x00, 0xB9, 0x0A, 0x00, 0x00, 0x14, 0x12, 0x02, 0x00, 0xBD,
+    0x1F, 0x06, 0x00, 0xB9, 0xC0, 0x03, 0x5F, 0xD6, 0x1F, 0x20, 0x03, 0xD5, 0x29, 0x00, 0x80, 0x52,
+    0x09, 0x06, 0x00, 0xB9, 0x03, 0x00, 0x00, 0x14, 0x09, 0x06, 0x40, 0xB9, 0x69, 0x00, 0x00, 0x34,
+    0x7F, 0x23, 0x03, 0xD5, 0xA4, 0x3A, 0x1F, 0x17, 0xC0, 0x03, 0x5F, 0xD6,
+};
+// ldr s0, [x8, #0x10] ; fmov s16, #1.0 ; fmaxnm s0, s0, s16 ; ret
+constexpr std::array<u8, 16> SOUND_FEED{
+    0x00, 0x11, 0x40, 0xBD, 0x10, 0x10, 0x2E, 0x1E, 0x00, 0x68, 0x30, 0x1E, 0xC0, 0x03, 0x5F, 0xD6,
+};
+constexpr size_t SOUND_GATE_OFFSET = 0x3C46800;
+constexpr size_t SOUND_FEED_OFFSET = 0x3C4687C;
+
 // Dynamic FPS by Dark (Eglantine Dev), bundled with his permission: the game's frame step follows
 // the time measured with the system counter instead of assuming 30 fps, so it runs at full speed
 // at any frame rate the smoothing can follow. A call (bl 0x3c46200) to a routine in unused space
@@ -347,12 +391,27 @@ constexpr std::array PLATFORM_STEER_RECORDS{
     BuiltinPatchRecord{.module_offset = 0x261EB18, .bytes = TURN_SPEED_HOOK, .checked = true, .original_bytes = TURN_SPEED_ORIGINAL},
     BuiltinPatchRecord{0x3C46A40, TURN_SPEED_ROUTINE, {}, true},
 };
-// The records appended to the FPS Unlock built-ins above Dark's two: the counters (#1663) and the
-// platform/steering fixes (#1679).
+// The sound gate with Dark's Dynamic FPS (its own built-in's records, applied after his): the
+// sound manager job's entry (zortos293/Lichii#1660). SOUND_GATE is PC-relative to 0x3C46800 and
+// SOUND_FEED sits at 0x3C4687C, so the bl at 0x415334 is re-encoded.
+constexpr std::array SOUND_RECORDS{
+    BuiltinPatchRecord{.module_offset = 0x415300, .bytes = SOUND_ENTRY_BRANCH,
+                       .checked = true, .original = 0xD503237F}, // pacibsp
+    BuiltinPatchRecord{.module_offset = 0x415334, .bytes = SOUND_STEP_CALL,
+                       .checked = true, .original = 0xBD401100}, // ldr s0, [x8, #0x10]
+    BuiltinPatchRecord{SOUND_GATE_OFFSET, SOUND_GATE, {}, true},
+    BuiltinPatchRecord{SOUND_FEED_OFFSET, SOUND_FEED, {}, true},
+};
+// The records appended to the FPS Unlock built-ins above Dark's two: the counters (#1663), the
+// platform/steering fixes (#1679) and the sound gate (zortos293/Lichii#1660).
 constexpr auto OOT_EXTRA_RECORDS = [] {
-    std::array<BuiltinPatchRecord, STEP_COUNTER_RECORDS.size() + PLATFORM_STEER_RECORDS.size()> out{};
+    std::array<BuiltinPatchRecord, STEP_COUNTER_RECORDS.size() + PLATFORM_STEER_RECORDS.size() +
+                                      SOUND_RECORDS.size()>
+        out{};
     std::ranges::copy(STEP_COUNTER_RECORDS, out.begin());
     std::ranges::copy(PLATFORM_STEER_RECORDS, out.begin() + STEP_COUNTER_RECORDS.size());
+    std::ranges::copy(SOUND_RECORDS,
+                      out.begin() + STEP_COUNTER_RECORDS.size() + PLATFORM_STEER_RECORDS.size());
     return out;
 }();
 
@@ -536,9 +595,10 @@ constexpr std::array BUILTIN_PATCHES{
     // The FPS Unlock fixes (#1663, #1679): four step-driven counters no longer freeze or run fast
     // above 60 fps (pickup windows, ocarina tick, step rate manager countdown in hitstop, ambient
     // wave phases), the moving platforms stop sliding out from under the player above 100 fps,
-    // and Gohma steers above 60 fps. Off-state twin to Dark's pair since upstream shares one
-    // cave; here they're a separate built-in applied after Dark's, so Dark's stays exactly his
-    // pair for the user-mod replacement logic.
+    // Gohma steers above 60 fps, and the sound manager job runs at 60 Hz with whole steps
+    // (#1660, so sounds aren't lost when an area unloads). Off-state twin to Dark's pair since
+    // upstream shares one cave; here they're a separate built-in applied after Dark's, so Dark's
+    // stays exactly his pair for the user-mod replacement logic.
     BuiltinPatch{
         .name = FPS_UNLOCK_RECORDS_NAME,
         .title_id = 0x0400486024DEC000,

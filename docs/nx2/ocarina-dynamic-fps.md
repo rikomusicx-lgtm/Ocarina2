@@ -76,6 +76,27 @@ Normal and an unscaled counter are prerequisites for evaluating its timing;
 the Add-On does not change global clock behavior or automatically override
 the user's settings. Correct gameplay speed with the Add-On is unverified.
 
+## The sound gate (zortos293/Lichii#1660)
+
+The sound manager assumes at least one whole 60 fps step per update: its fade
+and delay timers and parameter ramps count updates from the step it is given.
+Below a whole step (FPS Unlock above 60 fps) some sounds are never released
+when an area unloads; they pile up until the game's voice budget is full, and
+most new sounds and the music stop until a restart.
+
+So above 60 fps FPS Unlock runs the sound manager job (main+0x415300, phase in
+w2) at 60 Hz: its entry goes to a gate at main+0x3C46800 which, in phase 0,
+adds the step to an accumulator in Dark's timer state (+0xA0) and runs the job
+only once a whole step has built up, else returns. The other phases follow
+that frame's decision (flag at +0xA4). At 60 fps and below it runs every frame
+as before. The job's step load (main+0x415334) calls main+0x3C4687C (this
+fork's dedicated feed location; upstream uses main+0x3C46280, which this fork
+leaves for the Hyrule Cheat Menu), which returns max(step, 1.0), so the engine
+always gets whole steps and sound still follows real time. The gate and feed
+live in the sibling `FPS Unlock fixes (built-in)` Add-On (applied after
+Dark's), alongside the step-counter and platform/steering fixes; Dark's
+built-in stays his pair only.
+
 ## Tests
 
 The `[patch_manager]` tests call production `PatchManager::PatchNSO` with

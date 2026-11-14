@@ -232,14 +232,67 @@ constexpr size_t OcarinaCave = 0x3C46E00; // ours, at the free end of that page
 constexpr size_t OcarinaWaterHook = 0x475F8;
 constexpr u32 WaterFcvtzs = 0x1E380009; // fcvtzs w9, s0
 
+// The FPS Unlock fixes' checked originals (from patch_manager.cpp): the fixture carries the
+// game's words there so the whole built-in applies, and the sound gate's bytes are ours (see
+// SOUND_FEED_OFFSET; upstream's bl goes to 0x3C46280).
+constexpr size_t CodeBase = sizeof(Loader::NSOHeader);
+constexpr size_t SoundEntryOffset = CodeBase + 0x415300;
+constexpr size_t SoundStepOffset = CodeBase + 0x415334;
+constexpr size_t SoundGateOffset = CodeBase + 0x3C46800;
+constexpr size_t SoundFeedOffset = CodeBase + 0x3C4687C;
+constexpr u32 SoundEntryOriginalInstruction = 0xD503237F; // pacibsp
+constexpr u32 SoundEntryBranchInstruction = 0x14E0C540;   // b main+0x3C46800
+constexpr u32 SoundStepOriginalInstruction = 0xBD401100;  // ldr s0, [x8, #0x10]
+constexpr u32 SoundStepCallInstruction = 0x94E0C552;      // bl main+0x3C4687C
+constexpr std::string_view SoundGate =
+    "D09200B010823A9102030035C9810090294944F9290140F9301140BD11102E1E0022311EAA010054"
+    "120240BD522A301E4022311ECB000054523A311E120200BD29008052090600B90A000014120200BD"
+    "1F0600B9C0035FD61F2003D529008052090600B903000014090640B9690000347F2303D5A43A1F17"
+    "C0035FD6";
+constexpr std::string_view SoundFeed = "001140BD10102E1E0068301EC0035FD6";
+constexpr std::array<u8, 4> StepHudOriginal{0x0C, 0x00, 0x38, 0x1E};
+constexpr std::array<u8, 4> StepReplayOriginal{0x08, 0x00, 0x39, 0x1E};
+constexpr std::array<u8, 44> StepHitstopOriginal{
+    0x00, 0xB9, 0xA1, 0x5E, 0x09, 0x01, 0x38, 0x1E, 0x00, 0xD8, 0x21, 0x5E, 0x00, 0x39,
+    0x20, 0x1E, 0x00, 0x20, 0x30, 0x1E, 0xAA, 0x17, 0x00, 0x54, 0x00, 0x20, 0x31, 0x1E,
+    0x09, 0x18, 0x00, 0x54, 0x0A, 0x9B, 0x40, 0xB9, 0x3F, 0x05, 0x00, 0x71, 0x29, 0xC5,
+    0x9F, 0x1A,
+};
+constexpr std::array<u8, 4> StepAmbientOriginal{0x7A, 0x07, 0x00, 0x11};
+constexpr std::array<u8, 4> GroundVelocityOriginalA{0x6C, 0x19, 0x00, 0x54};
+constexpr std::array<u8, 4> GroundVelocityOriginalB{0x2C, 0x1E, 0x00, 0x54};
+constexpr std::array<u8, 4> GroundVelocityOriginalC{0xCC, 0x17, 0x00, 0x54};
+
+void WriteBytes(std::vector<u8>& nso, size_t offset, std::span<const u8> bytes) {
+    REQUIRE(nso.size() >= offset + bytes.size());
+    std::memcpy(nso.data() + offset, bytes.data(), bytes.size());
+}
+
+void WriteSoundAndStepWords(std::vector<u8>& nso) {
+    const u32 entry = SoundEntryOriginalInstruction;
+    const u32 step = SoundStepOriginalInstruction;
+    std::memcpy(nso.data() + SoundEntryOffset, &entry, sizeof(entry));
+    std::memcpy(nso.data() + SoundStepOffset, &step, sizeof(step));
+    WriteBytes(nso, CodeBase + 0xA68300, StepHudOriginal);
+    WriteBytes(nso, CodeBase + 0x3293410, StepReplayOriginal);
+    WriteBytes(nso, CodeBase + 0x2F53268, StepHitstopOriginal);
+    WriteBytes(nso, CodeBase + 0x53F914, StepAmbientOriginal);
+    WriteBytes(nso, CodeBase + 0x13A070, GroundVelocityOriginalA);
+    WriteBytes(nso, CodeBase + 0x13D710, GroundVelocityOriginalB);
+    WriteBytes(nso, CodeBase + 0x389AC2C, GroundVelocityOriginalC);
+    constexpr std::array<u8, 8> TurnSpeed{0x01, 0x08, 0x21, 0x1E, 0x00, 0x08, 0x28, 0x1E};
+    WriteBytes(nso, CodeBase + 0x261EB18, TurnSpeed);
+}
+
 // Ocarina's main as the high refresh rate tests need it: the water renderer's fcvtzs (the ripple
 // hook's original), a BSS that holds the routine's state, and zero bytes from Dark's routine to
 // the end of its page.
 std::vector<u8> MakeOcarinaMain() {
     constexpr size_t Code = sizeof(Loader::NSOHeader);
     auto nso = MakeMain(OcarinaBuildId, NopInstruction);
-    nso.resize(Code + OcarinaCave + 0x200);
+    nso.resize(Code + OcarinaCave + 0x400);
     std::memcpy(nso.data() + Code + OcarinaWaterHook, &WaterFcvtzs, sizeof(WaterFcvtzs));
+    WriteSoundAndStepWords(nso);
     Loader::NSOHeader header;
     std::memcpy(&header, nso.data(), sizeof(header));
     header.segments[2].location = 0x4000000;
@@ -634,6 +687,22 @@ TEST_CASE("High refresh rate built-in calls its own routine only while its setti
         std::memcpy(&word, nso.data() + offset, sizeof(word));
         return word;
     };
+    // The zero gap between Dark's routine and the high refresh cave: everything except the FPS
+    // Unlock fixes' caves (the sound gate #1660 at 0x3C46800..0x3C4688B, the step counter routines
+    // #1663 at 0x3C46900..0x3C46A3C, and the turn-speed routine #1679 at 0x3C46A40..0x3C46A68)
+    // stays zero.
+    const auto expect_gap_zero = [&](const std::vector<u8>& patched, size_t begin, size_t end) {
+        constexpr size_t SoundEnd = SoundFeedOffset + 16;
+        constexpr size_t CounterBegin = CodeBase + 0x3C46900;
+        constexpr size_t CounterEnd = CodeBase + 0x3C46A68;
+        for (size_t offset = begin; offset < end; offset += 4) {
+            if ((offset >= SoundGateOffset && offset < SoundEnd) ||
+                (offset >= CounterBegin && offset < CounterEnd)) {
+                continue;
+            }
+            REQUIRE(word_at(patched, offset) == 0);
+        }
+    };
     const auto listed = [](const FileSys::PatchManager& manager, std::string_view name) {
         const auto patches = manager.GetPatches();
         return std::ranges::find(patches, name, &FileSys::Patch::name) != patches.end();
@@ -658,9 +727,7 @@ TEST_CASE("High refresh rate built-in calls its own routine only while its setti
         Settings::values.oot_high_refresh.SetValue(false);
         const auto patched = context.Manager().PatchNSO(nso, "main");
         REQUIRE(dark_only(patched));
-        for (size_t offset = Dark + 0x78; offset < Routine; offset += 4) {
-            REQUIRE(word_at(patched, offset) == 0);
-        }
+        expect_gap_zero(patched, Dark + 0x78, Routine);
         // v5.8: the ripple accumulator and its hook with Dark's mode too (zortos293/Lichii#1180).
         REQUIRE(word_at(patched, Code + OcarinaWaterHook) == 0x14EFFE26); // b 0x3c46e90
         REQUIRE(word_at(patched, Routine + 0x90) == 0xB00092C9);          // adrp x9, 0x4e9f000
@@ -681,9 +748,7 @@ TEST_CASE("High refresh rate built-in calls its own routine only while its setti
         Settings::values.disabled_addons.erase(OcarinaTitleId);
         REQUIRE(dark_only(patched));
         REQUIRE(word_at(patched, Code + OcarinaWaterHook) == WaterFcvtzs);
-        for (size_t offset = Dark + 0x78; offset < Routine + 0x200; offset += 4) {
-            REQUIRE(word_at(patched, offset) == 0);
-        }
+        expect_gap_zero(patched, Dark + 0x78, Routine + 0x200);
     }
 
     SECTION("On: the call to the high refresh routine, with its speed scale word") {
@@ -692,9 +757,7 @@ TEST_CASE("High refresh rate built-in calls its own routine only while its setti
         REQUIRE(word_at(patched, CallOffset) == HighRefreshCall);
         // Dark's routine stays, nothing after it (another mod's spot).
         REQUIRE(word_at(patched, Dark + 0x74) == DarkThreshold);
-        for (size_t offset = Dark + 0x78; offset < Routine; offset += 4) {
-            REQUIRE(word_at(patched, offset) == 0);
-        }
+        expect_gap_zero(patched, Dark + 0x78, Routine);
         REQUIRE(word_at(patched, Routine + 0x18) == 0xB40002CC); // cbz x12, +0x70 (Dark's)
         REQUIRE(word_at(patched, Routine + 0x6C) == 0x14000002); // b +0x74
         REQUIRE(word_at(patched, Routine + 0x70) == 0xD65F03C0); // ret
@@ -988,4 +1051,66 @@ TEST_CASE("Built-in Texture Pool x2 doubles the allocator's initial pool size", 
     patched = manager.PatchNSO(nso, "main");
     REQUIRE(WordAt(patched, CallOffset) == NopInstruction);
     REQUIRE(WordAt(patched, RoutineOffset) == 0);
+}
+
+// FPS Unlock's sound gate (zortos293/Lichii#1660): the sound manager job (main+0x415300) is
+// branched to a gate at main+0x3C46800 accumulated at Dark's timer state +0xA0; the job's step
+// load (main+0x415334) calls SOUND_FEED at main+0x3C4687C (this fork's feed location; upstream's
+// is 0x3C46280) with max(step, 1.0). The gate is in the "FPS Unlock fixes (built-in)", not in
+// Dark's pair.
+TEST_CASE("Built-in FPS Unlock fixes install the sound gate", "[patch_manager]") {
+    PatchManagerTestContext context;
+
+    const auto gate_hex = [](const std::vector<u8>& nso) {
+        return Common::HexToString(std::span{nso}.subspan(SoundGateOffset, SoundGate.size() / 2));
+    };
+
+    SECTION("Default: the fixes built-in installs the gate and Dark's two") {
+        Settings::values.disabled_addons[OcarinaTitleId] = {std::string{MaxResolution}};
+        auto nso = MakeOcarinaMain();
+        auto patched = context.Manager().PatchNSO(nso, "main");
+        REQUIRE(WordAt(patched, SoundEntryOffset) == SoundEntryBranchInstruction);
+        REQUIRE(WordAt(patched, SoundStepOffset) == SoundStepCallInstruction);
+        REQUIRE(gate_hex(patched) == SoundGate);
+        REQUIRE(Common::HexToString(std::span{patched}.subspan(SoundFeedOffset, SoundFeed.size() / 2)) ==
+                SoundFeed);
+        // Dark's pair still lands (they're a separate built-in).
+        REQUIRE(WordAt(patched, sizeof(Loader::NSOHeader) + 0x6E6CC4) == 0x94D57D4F);
+    }
+
+    SECTION("Dark's built-in alone does not install the gate") {
+        // "FPS Unlock fixes" off in Add-Ons, everything else default.
+        Settings::values.disabled_addons[OcarinaTitleId] = {std::string{MaxResolution},
+                                                            std::string{FpsUnlock}};
+        auto nso = MakeOcarinaMain();
+        auto patched = context.Manager().PatchNSO(nso, "main");
+        REQUIRE(WordAt(patched, SoundEntryOffset) == SoundEntryOriginalInstruction);
+        REQUIRE(WordAt(patched, SoundStepOffset) == SoundStepOriginalInstruction);
+        REQUIRE(WordAt(patched, SoundGateOffset) == 0);
+        REQUIRE(WordAt(patched, SoundFeedOffset) == 0);
+    }
+
+    SECTION("Wrong original at the sound job's entry skips the whole fixes built-in") {
+        Settings::values.disabled_addons[OcarinaTitleId] = {std::string{MaxResolution}};
+        auto nso = MakeOcarinaMain();
+        nso[SoundEntryOffset] ^= 0x01;
+        auto patched = context.Manager().PatchNSO(nso, "main");
+        REQUIRE(WordAt(patched, SoundEntryOffset) != SoundEntryBranchInstruction);
+        REQUIRE(WordAt(patched, SoundStepOffset) == SoundStepOriginalInstruction);
+        REQUIRE(WordAt(patched, SoundGateOffset) == 0);
+        REQUIRE(WordAt(patched, SoundFeedOffset) == 0);
+        // Dark's pair is unaffected (own built-in).
+        REQUIRE(WordAt(patched, sizeof(Loader::NSOHeader) + 0x6E6CC4) == 0x94D57D4F);
+    }
+
+    SECTION("Wrong original at the sound job's step load skips the whole fixes built-in") {
+        Settings::values.disabled_addons[OcarinaTitleId] = {std::string{MaxResolution}};
+        auto nso = MakeOcarinaMain();
+        nso[SoundStepOffset] ^= 0x01;
+        auto patched = context.Manager().PatchNSO(nso, "main");
+        REQUIRE(WordAt(patched, SoundEntryOffset) == SoundEntryOriginalInstruction);
+        REQUIRE(WordAt(patched, SoundStepOffset) != SoundStepCallInstruction);
+        REQUIRE(WordAt(patched, SoundGateOffset) == 0);
+        REQUIRE(WordAt(patched, SoundFeedOffset) == 0);
+    }
 }
