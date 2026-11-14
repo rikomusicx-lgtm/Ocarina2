@@ -1108,9 +1108,14 @@ VideoCommon::OcarinaUpscaleBackend ResolveOcarinaUpscaler(const Device& device) 
 #ifdef EGLANTINE_STREAMLINE
     dlss_available = Streamline::IsDlssAvailable();
 #endif
+    // Balanced's scene is padded, which only DLSS takes.
+    const auto scale = Settings::AppliedOcarinaRenderScale();
+    const bool render_scaled =
+        scale && *scale != Settings::NvidiaDlssQuality::Balanced;
+    const bool fsr_chosen = VideoCommon::OcarinaFsrChosen(Settings::values.oot_anti_aliasing.GetValue());
     const auto backend = VideoCommon::SelectOcarinaUpscaler(
-        Settings::values.oot_anti_aliasing.GetValue(), Settings::values.nvidia_dlss.GetValue(),
-        dlss_available, value ? value : "");
+        fsr_chosen, Settings::values.nvidia_dlss.GetValue() && !fsr_chosen, dlss_available,
+        render_scaled, value ? value : "");
     if (backend == VideoCommon::OcarinaUpscaleBackend::Fsr && !Fsr3Upscaler::IsSupported(device)) {
         return VideoCommon::OcarinaUpscaleBackend::Native;
     }

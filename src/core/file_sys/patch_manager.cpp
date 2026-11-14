@@ -4,6 +4,7 @@
 // SPDX-FileCopyrightText: Copyright 2018 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <optional>
 #include <algorithm>
 #include <span>
 #include <array>
@@ -77,12 +78,41 @@ struct BuiltinPatch {
     const char* disable_env = nullptr;
     /// When set, the patch applies (and is listed in Add-Ons) only while this returns true.
     bool (*setting_enabled)() = nullptr;
+    /// When set, the patch applies only if NVIDIA DLSS is on at this quality, docked, and the Max
+    /// Resolution built-in was applied (its scale path is what this changes). Not listed in
+    /// Add-Ons: the user gets it through the DLSS dropdown, not an ad-hoc toggle.
+    std::optional<Settings::NvidiaDlssQuality> dlss_quality{};
     /// Another built-in this one contains: skipped once this one is applied.
     std::string_view replaces{};
     /// When set, guest state the patch keeps in the module (offset, size): it must lie in BSS.
     size_t state_offset = 0;
     size_t state_size = 0;
 };
+
+// The NVIDIA DLSS render scale patch family (ProfessorTee's #903): render scale for DLSS modes.
+// Max Resolution's fixed-scale path returns 1.0 of 2560x1440 (main+0x806420: mov w9,
+// #0x3f800000), which DLSS takes to 4K as Quality. Balanced, Performance and Ultra Performance
+// request lower scales that DLSS reconstructs 4K from; these patches replace that immediate so
+// the module is patched at boot. DLSS only applies (Full scene is quality). These patch entries
+// are gated by dlss_quality below: nothing is applied unless DLSS is on, docked, Max Resolution
+// on, and the DLSS quality matches.
+constexpr std::array<u8, 4> RENDER_SCALE_ONE{0x09, 0xF0, 0xA7, 0x52};         // 1.0
+constexpr std::array<u8, 4> RENDER_SCALE_BALANCED{0xE9, 0xEB, 0xA7, 0x52};    // 0.871, 2276x1280
+constexpr std::array<u8, 4> RENDER_SCALE_PERFORMANCE{0x09, 0xE8, 0xA7, 0x52}; // 0.75, 1920x1080
+constexpr std::array<u8, 4> RENDER_SCALE_ULTRA{0x09, 0xE0, 0xA7, 0x52};       // 0.5, 1280x720
+constexpr std::array RENDER_BALANCED_RECORDS{
+    BuiltinPatchRecord{.module_offset = 0x806420, .bytes = RENDER_SCALE_BALANCED,
+                       .checked = true, .original = 0x52A7F009},  // mov w9, #0x3f800000
+};
+constexpr std::array RENDER_PERFORMANCE_RECORDS{
+    BuiltinPatchRecord{.module_offset = 0x806420, .bytes = RENDER_SCALE_PERFORMANCE,
+                       .checked = true, .original = 0x52A7F009},  // mov w9, #0x3f800000
+};
+constexpr std::array RENDER_ULTRA_RECORDS{
+    BuiltinPatchRecord{.module_offset = 0x806420, .bytes = RENDER_SCALE_ULTRA,
+                       .checked = true, .original = 0x52A7F009},  // mov w9, #0x3f800000
+};
+constexpr std::array CHECK_ORIG_MAX_RES{0xE8, 0x41, 0x00, 0x36};
 
 // Ocarina of Time takes its "dynamic resolution disabled" path, so the 3D renders at full scale
 // instead of following the GPU-time controller down to its 480p floor.
@@ -439,6 +469,7 @@ constexpr std::array POLL_BACKOFF_RECORDS{
 };
 
 constexpr std::array BUILTIN_PATCHES{
+    // This exact name is matched by the render-scale DLSS gating below; keep it identical.
     BuiltinPatch{
         .name = "Max Resolution (built-in)",
         .title_id = 0x0400486024DEC000,
@@ -460,9 +491,34 @@ constexpr std::array BUILTIN_PATCHES{
         .state_offset = HIGH_REFRESH_STATE_OFFSET,
         .state_size = HIGH_REFRESH_STATE_SIZE,
     },
-    // Texture Pool x2 (#1313): doubles the game's initial graphics pool, so the render targets
-    // going at full scale in the guard house don't outgrow it (a guard-house allocation failure
-    // dereferences a null pool and hangs). On by default; disable with the Add-Ons toggle.
+    // The NVIDIA DLSS render scale patch family: applies only with NVIDIA DLSS on at the chosen
+    // level (Balanced / Performance / Ultra Performance), docked, and the Max Resolution built-in
+    // present (its scale path is what gets replaced). These aren't built-in Add-Ons; the player
+    // picks the mode from the DLSS dropdown, not as a separate toggle.
+    BuiltinPatch{
+        .name = "DLSS Balanced render scale (built-in)",
+        .title_id = 0x0400486024DEC000,
+        .module = "main",
+        .build_id = "E0F3CCFAF50065AE4EA01EB5AEB13B1A45DA3348",
+        .records = RENDER_BALANCED_RECORDS,
+        .dlss_quality = Settings::NvidiaDlssQuality::Balanced,
+    },
+    BuiltinPatch{
+        .name = "DLSS Performance render scale (built-in)",
+        .title_id = 0x0400486024DEC000,
+        .module = "main",
+        .build_id = "E0F3CCFAF50065AE4EA01EB5AEB13B1A45DA3348",
+        .records = RENDER_PERFORMANCE_RECORDS,
+        .dlss_quality = Settings::NvidiaDlssQuality::Performance,
+    },
+    BuiltinPatch{
+        .name = "DLSS Ultra Performance render scale (built-in)",
+        .title_id = 0x0400486024DEC000,
+        .module = "main",
+        .build_id = "E0F3CCFAF50065AE4EA01EB5AEB13B1A45DA3348",
+        .records = RENDER_ULTRA_RECORDS,
+        .dlss_quality = Settings::NvidiaDlssQuality::UltraPerformance,
+    },
     BuiltinPatch{
         .name = "Texture Pool x2 (built-in)",
         .title_id = 0x0400486024DEC000,
@@ -934,6 +990,9 @@ std::vector<u8> PatchManager::PatchNSO(const std::vector<u8>& nso, const std::st
     if (nso.size() < sizeof(Loader::NSOHeader)) {
         return nso;
     }
+    if (name == "main") {
+        Settings::SetAppliedOcarinaRenderScale(std::nullopt);
+    }
 
     Loader::NSOHeader header;
     std::memcpy(&header, nso.data(), sizeof(header));
@@ -1016,6 +1075,19 @@ std::vector<u8> PatchManager::PatchNSO(const std::vector<u8>& nso, const std::st
         }
         if (patch.setting_enabled != nullptr && !patch.setting_enabled()) {
             continue;
+        }
+        if (patch.dlss_quality) {
+#ifdef EGLANTINE_STREAMLINE
+            const bool max_resolution_applied =
+                std::find(replaced.cbegin(), replaced.cend(),
+                          std::string_view{"Max Resolution (built-in)"}) != replaced.cend();
+            if (*patch.dlss_quality != Settings::OcarinaDlssRenderScale().value_or(
+                    Settings::NvidiaDlssQuality::Automatic) || !max_resolution_applied) {
+                continue;
+            }
+#else
+            continue;
+#endif
         }
         if (std::find(replaced.cbegin(), replaced.cend(), patch.name) != replaced.cend()) {
             LOG_INFO(Loader, "    - Skipping \"{}\": included in an applied built-in patch",
@@ -1110,6 +1182,9 @@ std::vector<u8> PatchManager::PatchNSO(const std::vector<u8>& nso, const std::st
                  patch.records.size(), name);
         if (!patch.replaces.empty()) {
             replaced.push_back(patch.replaces);
+        }
+        if (patch.dlss_quality) {
+            Settings::SetAppliedOcarinaRenderScale(patch.dlss_quality);
         }
     }
 
@@ -1673,7 +1748,8 @@ std::vector<Patch> PatchManager::GetPatches(VirtualFile update_raw) const {
     }
 
     for (const auto& patch : BUILTIN_PATCHES) {
-        if (patch.title_id != title_id ||
+        // DLSS render-scale patches apply only when DLSS is set up for that level; they're not Add-Ons.
+        if (patch.title_id != title_id || patch.dlss_quality ||
             (patch.enable_env != nullptr &&
              std::string_view{std::getenv(patch.enable_env) ? std::getenv(patch.enable_env) : ""} !=
                  "1") ||
