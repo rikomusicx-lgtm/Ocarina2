@@ -10,10 +10,8 @@ Made by rikomusicx-lgtm.
 **What's in this release**
 
 - **DLSS is on for Ocarina of Time out of the box.** The OoT preset ships with DLSS
-  force-enabled and the Ultra Performance quality setting (render small, rebuilt for your
-  display), and the preset no longer overrides your docked/handheld choice or your DLSS
-  setting on every boot. The DLSS quality selector (Balanced / Performance / Ultra
-  Performance) is visible again in per-game settings.
+  force-enabled, and it no longer overrides your docked/handheld choice or your DLSS
+  setting on every boot. The DLSS quality selector is visible again in per-game settings.
 - **Shader compilation does less redundant work.** The compiler emits SSA phis only where a
   value is actually live across blocks and drops the identity phis it used to create anyway,
   so there is less to build for the same result.

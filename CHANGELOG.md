@@ -90,9 +90,9 @@ Known issues:
 
 ## [Ocarina2 v1.4] - 2026-11-14
 
-Made by rikomusicx-lgtm. DLSS for Ocarina of Time: the OoT preset ships with DLSS on and
-Ultra Performance quality, the DLSS selector is visible per-game again, and the preset no longer
-overrides docked/handheld or DLSS at boot. Plus a round of renderer and memory work: SSA phis
+Made by rikomusicx-lgtm. DLSS for Ocarina of Time: the OoT preset ships with DLSS on,
+the DLSS selector is visible per-game again, and the preset no longer overrides
+docked/handheld or DLSS at boot. Plus a round of renderer and memory work: SSA phis
 only where needed, the Ocarina camera read from the guest buffer binding, points/lines through
 the mesh compute fallback (foliage shadows), 1.0 output passes under No Sharpening, the sound
 manager at 60 Hz under FPS Unlock, FPS Unlock step counters / platforms / Gohma steering fixed,
