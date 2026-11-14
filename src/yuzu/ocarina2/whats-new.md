@@ -3,41 +3,75 @@ The "What's new" notes shown on first launch after an update (Help > What's New)
 public release notes here when cutting a build. The download instructions at the top are
 dropped automatically in the app.
 -->
-## Ocarina2 v1.4 (in development)
+## Ocarina2 v1.4
 
 Made by rikomusicx-lgtm.
 
-This section is the running 1.4 work list. Nothing in it has shipped; 1.4 ships only when the
-owner says so, after the items below are fixed and tested on real hardware.
+**What's in this release**
 
-**Targets for this release**
+- **DLSS is on for Ocarina of Time out of the box.** The OoT preset ships with DLSS
+  force-enabled and the Ultra Performance quality setting (render small, rebuilt for your
+  display), and the preset no longer overrides your docked/handheld choice or your DLSS
+  setting on every boot. The DLSS quality selector (Balanced / Performance / Ultra
+  Performance) is visible again in per-game settings.
+- **Shader compilation does less redundant work.** The compiler emits SSA phis only where a
+  value is actually live across blocks and drops the identity phis it used to create anyway,
+  so there is less to build for the same result.
+- **Temple of Time camera angles stop dropping under upscaling.** The renderer tracks
+  Ocarina's camera straight from the guest's buffer binding instead of a derived value.
+- **Foliage shadows draw again.** Points and lines route through the mesh compute fallback
+  instead of disappearing.
+- **The base game's 1.0 output passes are handled correctly by No Sharpening.**
+- **The sound manager runs at 60 Hz under FPS Unlock** — music and voices no longer cut out
+  above 60 fps.
+- **FPS Unlock behaves across the range** — the game's internal step counters, moving
+  platforms and Gohma's steering all tick correctly at high frame rates (100 fps included).
+- **The GPU memory registry delivers its calls outside its lock** — addresses a frozen
+  session caused by that path.
+- **Memory paths do less redundant work.** Large dirty guest writes are collected a page at
+  a time; freed buffers are cleared from every channel's bindings; guest threads are
+  suspended before power-off; ranges sharing at most a page with a large buffer are no longer
+  merged into it; recently used views are kept while the device has room; oversized ASTC
+  arrays are decoded a few layers at a time; cold-memory hints only kick in when the host is
+  short of RAM; freed SMMU blocks are handed back out when space runs out; address-space
+  listeners fire in order, outside the lock.
+- **Windows: a crash leaves evidence.** An unhandled exception writes a host crash line to
+  the log and an `eden_crash.dmp` minidump.
+- **Texture Pool x2 is built in and on by default** (RsMan-Dev's patch). It targets
+  allocator failures mid-stream — the class of bug behind the town glitch reports — so
+  streams that used to fail now have a second arena. Toggle it in Add-Ons if you want to
+  compare.
+- **New `EDEN_NX2_FG_IDLE=0` switch** disables the static-screen frame-generation idle
+  (title screen, menus, loading screens) for diagnosis, if you are chasing an idle-related
+  glitch or want the old behavior.
 
-- **Hyrule Town (and first large town) texture glitch on first load** - the one the owner
-  reproduced on his machine. Textures in Hyrule Town look stretched/garbage on the first entry
-  after a cold boot and settle afterwards. Tracked in NX2_NOTES. Owner re-tested on the running
-  1.4 build on 2026-11-13 and it still happens.
-- **Title screen buttons look finicky** - the button text will fade or just look weird on the
-  title screen. Owner noted 2026-11-13.
-- **Title screen is not as fluid as it should be** - note taken 2026-11-13; likely related to
-  the same UI/renderer path as the buttons above.
-- **Lossless Scaling (LSFG) frame generation is buggy** - flagged by the owner for 1.4.
-  Optical Flow (FSR3) is the reliable default in 1.3 and stays that way until LSFG is fixed.
-- **Lower-hardware pass** - another round of performance tuning aimed at entry-level cards
-  (RDNA 2/integrated, small-cache 6 GB cards), while keeping the same output we can hold.
-- **Deeper emulation work** - bring in more upstream fixes from the Lichii family forks
-  (Lichii-, Eglantine-, Fritchii lineage), careful about merge scope; CI stays green or nothing
-  lands. As of 2026-11-14: the DLSS path (quality modes scale the render resolution:
-  Balanced 2276x1280 / Performance 1920x1080 / Ultra Performance 1280x720), DLSS image
-  sanitizing, FPS Unlock fixes (step counters, platforms, Gohma steering, the sound manager at
-  60 Hz so music and voices don't stop above 60 fps), the Ocarina camera read from its raw
-  buffer binding (no more upscale dropouts in the Temple of Time's camera angles), points and
-  lines through the mesh compute fallback (foliage shadows), the base v1.0 game's output passes
-  handled by No Sharpening, the GPU memory registry delivering listener calls in order and
-  outside its lock (no more frozen sessions), and the Windows host crash report (a log line and
-  eden_crash.dmp) if a build ever dies.
+**Known issues (still open)**
 
-Bugs already carried by 1.3 (the white flash) are on the list to re-verify; the release notes
-will name which ones are done.
+- **Hyrule Town texture glitch on first load** — still under investigation. The Texture
+  Pool x2 patch targets the allocator class of failure behind it; it is not confirmed as
+  the fix yet. Owner reports keep coming in on this one.
+- **Title screen: buttons can fade or look weird, and the screen isn't as fluid as it could
+  be** — under investigation.
+- **White flash is mostly gone (see 1.3); rare cases remain.**
+- **Lossless Scaling (LSFG) frame generation is still buggy.** Optical Flow (FSR3) is the
+  reliable default and stays that way until LSFG is fixed.
+
+**Credits**
+
+Made by **rikomusicx-lgtm**. Built on the work of:
+
+- **Eglantine** — Camille LaVey and contributors
+- **Eden** — the Eden team, the continuation of yuzu; yuzu-emu; **Sudachi** — Man Sorahia
+  and contributors
+- **Lichii** — zortos293 (maintainer) and the Lichii contributors; Djihads80
+- **Fritchii** — Frizti (5.8.4 is part of this build)
+- **Dark** — the Dynamic FPS timing patch
+- **EvilOOT** — DMA snapshot research
+- **RsMan-Dev** — the Texture Pool x2 patch
+- **janvitos, ProphetWild, 101Leafy, nyakuoff, monsterlag** — testing and bug reports
+- **Ocarina of Forks Discord** — testers and bug reporters
+
+Not affiliated with Nintendo. No games included.
 
 ## Ocarina2 v1.3
 

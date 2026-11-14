@@ -88,12 +88,21 @@ Known issues:
 - First-boot shader compile hitches persist until the cache is warm; the preloader mitigates but
   does not eliminate them.
 
-## [Unreleased]
+## [Ocarina2 v1.4] - 2026-11-14
 
-- Ocarina2 v1.4 (in development): same dispatch-only release flow as 1.3; the 1.4 scope is
-  locked in src/yuzu/ocarina2/whats-new.md (Hyrule Town first-load texture glitch, LSFG fix,
-  lower-hardware pass, merge upstream Lichii/Fritchii fixes). No release until the owner
-  asks; CI must stay green.
+Made by rikomusicx-lgtm. DLSS for Ocarina of Time: the OoT preset ships with DLSS on and
+Ultra Performance quality, the DLSS selector is visible per-game again, and the preset no longer
+overrides docked/handheld or DLSS at boot. Plus a round of renderer and memory work: SSA phis
+only where needed, the Ocarina camera read from the guest buffer binding, points/lines through
+the mesh compute fallback (foliage shadows), 1.0 output passes under No Sharpening, the sound
+manager at 60 Hz under FPS Unlock, FPS Unlock step counters / platforms / Gohma steering fixed,
+GPU memory registry and address-space listeners delivered outside their locks, dirty-memory
+collection a page at a time, ASTC arrays decoded in layers, and a host crash line plus
+eden_crash.dmp minidump on Windows. Adds the built-in Texture Pool x2 patch (on by default).
+
+Known issues: Hyrule Town first-load texture glitch (under investigation), title screen
+buttons/fluidity (under investigation), white flash rare cases remain, LSFG frame generation
+still buggy (Optical Flow stays the default). See src/yuzu/ocarina2/whats-new.md.
 
 ## [Ocarina2 v1.3] - 2026-11-13
 
