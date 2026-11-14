@@ -1469,3 +1469,56 @@ emulator ourselves), CI stays green, and NO release or tag until he absolutely s
 
 The three game bugs are tracked as v1.4 targets in whats-new.md. Optimization hunt
 outlined below in the 2026-11-14 entries.
+
+## 2026-11-14 - upstream performance hunt (user asked for lower-hardware/general perf commits)
+
+The fork tracks zortos293/Lichii (nx2) and zork-Eglantine-Community/Eglantine (nx2). Read-only
+review of everything perf-shaped since the fork's merge-bases; ported the parts that fit this
+fork's trees, declined the rest with reasons. D:\Ocarina2-1.4-build-test is the canonical clone
+per the owner; the OneDrive/C-drive project folder is frozen for working there.
+
+Ported (each local-green, CI pending as of writing):
+- page-split Collect in GPUDirtyMemoryManager (our commit): Collect now hands the part of a write
+  inside each 2 KiB page to CollectInPage (the pre-#1586 upstream body). Upstream #1586's other
+  halves (MayHavePending gather skip, BACKX verify, vertex-input cache) are NOT ported: our fork
+  implements equivalents and its own EXP knobs.
+- Lichii#1568 cold-hint clamp for placeholder device addresses (complements our #1581 host-RAM
+  guard).
+- Lichii#1528 + #1532: freed SMMU blocks recycle for the same size (1 GiB kept); the FlatAllocator
+  hands kept blocks back on exhaustion and retries; its linear pass restarts at the end-of-map
+  free space; the "nothing to search" path returns no address instead of asserting.
+- Lichii#1479 buffer_cache half: GPU-written pages are marked before QueueFenceDownload arms read
+  traps (DMACopy mirror + MarkWrittenBuffer). The rasterizer half is already fork behavior
+  (GetFlushArea page_filter/MayBeGpuModified fast path).
+- Lichii#621 Windows half: SleepForOneTick (NtDelayExecution(-1)) for the < 2 s pending-channel
+  poll; the rest of #621 is already fork behavior (progressed/last_progress, EXP6).
+- Eglantine d713f4462a: RangeMap reuses the last kind_map interval (kind_map now mutable).
+- Lichii#1083: TranscodeAstcToBcn decodes a layer batch at a time (halve layers until the decode
+  image fits) instead of failing all at every use. Candidate for the Hyrule Town ASTC theory.
+- Eglantine 1725659895 (skip unchanged words) and abb9ae8426 (bitmap-word page marks) are already
+  in the fork (hot-pages/word-exact variants with counters).
+
+Reviewed and NOT ported (reasons):
+- Lichii#1586 MayHavePending + InvalidateGPUCache gather skip: fork equivalents exist; risky.
+- Lichii#1519/#1521/#1515 fast draws: the fork has no fast-draw subsystem; wholesale port is a
+  project, not a cherry-pick.
+- Lichii#858 split back-thread rewrite (1995 lines, 39 files): too big, defer.
+- Lichii#1218/#1413: heavy lock-rework sets; defer.
+- Lichii#1654 legacy pipeline cache migration / #1619 prebuild skipped pipelines / #1620 marker:
+  interacts with the fork's OoT recipe pipeline-cache path; needs dedicated testing.
+- Eglantine 5d742e369e Preflushable fence downloads: fork already queues only marked Preflushable
+  ranges (Quantitatively the Kokiri Forest 5 GB/s win) and its flush-on-demand in GetFlushArea is
+  the white-flash workaround (EDEN_NX2_PREFLUSH default for OoT); the trap-subtract hunk would
+  regress that bug. Not ported.
+- Lichii#1663/#1679 Ocarina FPS Unlock record families: built for upstream's FPS Unlock cave,
+  which this fork re-derived (HIGH_REFRESH_ROUTINE at 0x3C46E00, darkfps dynamic-FPS records).
+  Cave regions overlap; needs a dedicated re-derivation + builtin_patches fingerprint update.
+  Deferred, documented in whats-new as a 1.4 candidate.
+- #1577 MKW/FE precache, #1407 AMD-only pipeline binaries, #1653 RADV pipeline cache, #1301 NVIDIA
+  Linux disk cache limit, #1332 MKW split cache line: game/platform-specific, not our targets.
+
+Owner notes 2026-11-13 (late), still open for 1.4: title screen button text finicky (fades/looks
+weird); first Hyrule Town textures still bug; title screen not fluid. Per-game VRAM Cap was pinned
+8 GB in 0400486024DEC000.ini over the global 6 GB; ini set to 6 GB at the owner's request (.bak-6gb
+backup). OoT ran Cap_8Gb for that session; restart picks up 6 GB. A clean emulator exit can rewrite
+the per-game ini back to 3.
