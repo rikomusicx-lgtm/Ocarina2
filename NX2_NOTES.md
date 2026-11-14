@@ -1551,3 +1551,33 @@ Owner's decision, documented in session.
   Consistent with VRAM pressure feeding the cache thrash, but no smoking gun found yet.
 - Fresh playable build: CI head a497e38090 ships today's ports (Windows x86_64 zip, run 43556633183,
   expires 2026-11-21). The owner still has the local pid 10216 build.
+
+## 2026-11-14 - Lichii cherry-pick round 2 results (b6f2b4ffa7..b68bcbf316)
+
+Ported (CI pending at write time where noted; local suite green: 1063 cases):
+- kernel threading: PhysicalCore::Idle waits in hardware (MONITORX/UMWAIT) before blocking a
+  guest core (our Common::WaitForFlag + Interrupt flag cache line). Fork had the Event-level
+  machinery already and the gpu_thread wake side; only the guest Idle half was missing. GM.
+- dynarmic: exclusive reservation entries get their own 64-byte lines (fast guest atomics).
+  #1331. The fork's dynarmic routes exclusive loads through callbacks by design, so upstream's
+  jit_ordered_loads.cpp asserts fail here for the fork's reason; the fix is independent.
+- buffer_cache: page host-protection changes from guest writes apply after dropping
+  buffer_cache.mutex (DeferredPageCaching). Unmap waits for in-flight deferred updates. #1518.
+
+Skipped (fork has equivalents):
+- #1376 gpu_thread half (the fork has EXP6 + pending_wake + highlight from earlier #621 work);
+  adaptive NextPollWindow adaptation (fork has EDEN_NX2_IDLE_SPIN_US + PAUSE).
+- Eglantine abb9ae8426 (page marks by bitmap word) and 1725659895 (skip unchanged words):
+  equivalent fork code exists with its own diagnostics.
+- Eglantine 7/4-host-swap flush-layout commit d713f4462a was already ported (eeee19e72c).
+
+Deferred (fork lacks the machinery or it conflicts with fork work):
+- #1519/#1521/#1515/#1081 fast draws: no fast-draw subsystem here; too big.
+- #1155 descriptor flush cap: fork has no TranslateStages/StageTranslation framework.
+- #1654 legacy pipeline cache migration / #1619/skipped-prebuild / #1620 precache marker:
+  no shader_cache_v2 (recipe pipeline cache instead); #1620's lowering/emission stamp infra
+  does not exist either.
+- #1413 sparse-block GPU kernel-lock waits / #1218 listener-outside-locks: our nvgsv/stub
+  path and registry are fork-divergent; needs owner + live lock worry review, not a blind port.
+- #1663/#1679 Ocarina FPS Unlock record families: upstream's cave overlaps this fork's
+  HIGH_REFRESH cave; needs re-derivation + builtin_patches fingerprint alignment.
