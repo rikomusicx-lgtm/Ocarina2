@@ -79,7 +79,7 @@ TEST_CASE("OOT 60 FPS preset restores Max Resolution and enables frame generatio
     CHECK(settings->vram_usage_mode.GetValue() == Settings::VramUsageMode::Aggressive);
     CHECK(settings->async_presentation.GetValue());
     CHECK(settings->use_reactive_flushing.GetValue() == false);
-    CHECK(settings->nvidia_dlss.GetValue() == false);
+    CHECK(settings->nvidia_dlss.GetValue() == true);
     CHECK(settings->post_shader_enabled.GetValue() == false);
     const u64 host_ram = Common::GetMemInfo().TotalPhysicalMemory;
     const auto expected_layout = host_ram >= (u64{16} << 30) ? Settings::MemoryLayout::Memory_12Gb
