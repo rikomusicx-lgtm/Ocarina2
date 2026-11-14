@@ -25,28 +25,17 @@ public:
 
     ~GPUDirtyMemoryManager() = default;
 
+    /// Collects a write a page at a time: a transform covers one page (one bit per 64 bytes), so
+    /// a write that crosses a page boundary cannot be held by one transform. BuildTransform shifted
+    /// a u32 by 32 or more in that case, which was undefined and could leave the mask empty (upstream
+    /// carried the same failure as Lichii #1586).
     void Collect(PAddr address, size_t size) {
-        TransformAddress t = BuildTransform(address, size);
-        TransformAddress tmp, original;
-        do {
-            tmp = current.load(std::memory_order_acquire);
-            original = tmp;
-            if (tmp.address != t.address) {
-                if (IsValid(tmp.address)) {
-                    std::scoped_lock lk(guard);
-                    back_buffer.emplace_back(tmp);
-                    current.exchange(t, std::memory_order_relaxed);
-                    return;
-                }
-                tmp.address = t.address;
-                tmp.mask = 0;
-            }
-            if ((tmp.mask | t.mask) == tmp.mask) {
-                return;
-            }
-            tmp.mask |= t.mask;
-        } while (!current.compare_exchange_weak(original, tmp, std::memory_order_release,
-                                                std::memory_order_relaxed));
+        while (size != 0) {
+            const size_t in_page = (std::min)(size, static_cast<size_t>(page_size - (address & page_mask)));
+            CollectInPage(address, in_page);
+            address += in_page;
+            size -= in_page;
+        }
     }
 
     /// Calls `callback` for each write collected and not yet applied, without consuming them: those
@@ -114,6 +103,32 @@ public:
     }
 
 private:
+    /// Records the part of a write that fits inside one page. Callers must keep their writes to a
+    /// page; Collect does the splitting.
+    void CollectInPage(PAddr address, size_t size) {
+        TransformAddress t = BuildTransform(address, size);
+        TransformAddress tmp, original;
+        do {
+            tmp = current.load(std::memory_order_acquire);
+            original = tmp;
+            if (tmp.address != t.address) {
+                if (IsValid(tmp.address)) {
+                    std::scoped_lock lk(guard);
+                    back_buffer.emplace_back(tmp);
+                    current.exchange(t, std::memory_order_relaxed);
+                    return;
+                }
+                tmp.address = t.address;
+                tmp.mask = 0;
+            }
+            if ((tmp.mask | t.mask) == tmp.mask) {
+                return;
+            }
+            tmp.mask |= t.mask;
+        } while (!current.compare_exchange_weak(original, tmp, std::memory_order_release,
+                                                std::memory_order_relaxed));
+    }
+
     struct alignas(8) TransformAddress {
         u32 address;
         u32 mask;
