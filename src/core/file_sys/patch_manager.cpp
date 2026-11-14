@@ -60,6 +60,7 @@ struct BuiltinPatchRecord {
     std::span<const u8> bytes;
     bool checked;
     u32 original;
+    std::span<const u8> original_bytes{}; ///< When set, the module must hold these bytes exactly.
 };
 
 struct BuiltinPatch {
@@ -190,9 +191,146 @@ constexpr std::array<u8, 128> WATER_ACCUMULATOR{
     0x00, 0x38, 0x21, 0x1E, 0x20, 0x09, 0x00, 0xBD, 0x29, 0x00, 0x38, 0x1E, 0xBC, 0x01,
     0x10, 0x17, // +0x7C b 0x475fc (from 0x3c46f0c; upstream, from 0x3c46280: 0x171004c0)
 };
+// The game, at high frame rates: the character controller scales its ground's velocity by 0.1
+// once the frame rate is over 100 (b.gt after fcmp with 100.0, three sites), so a moving platform
+// slides away under the player. FPS Unlock replaces the three branches with nop. zortos293/Lichii
+// #1679 (port of #1609).
+constexpr std::array<u8, 4> GROUND_VELOCITY_ORIGINAL_A{
+    0x6C, 0x19, 0x00, 0x54,
+};
+constexpr std::array<u8, 4> GROUND_VELOCITY_ORIGINAL_B{
+    0x2C, 0x1E, 0x00, 0x54,
+};
+constexpr std::array<u8, 4> GROUND_VELOCITY_ORIGINAL_C{
+    0xCC, 0x17, 0x00, 0x54,
+};
+constexpr std::array<u8, 4> GROUND_VELOCITY_NOP{
+    0x1F, 0x20, 0x03, 0xD5,
+};
+// A turn action (main+0x261E8E0, ExecuteASApproachStickX) ends by clamping its turn speed, kept
+// per 60 Hz frame, to the change it applied this frame times the frame step. The change already
+// carries the step, so below a step of 1 the speed decays by step^2 every frame (Gohma steering,
+// above 60 fps). The routine divides by the step there instead, and runs the game's two
+// instructions at a step of 1 and above.
+constexpr std::array<u8, 8> TURN_SPEED_ORIGINAL{0x01, 0x08, 0x21, 0x1E, 0x00, 0x08, 0x28, 0x1E};
+constexpr std::array<u8, 8> TURN_SPEED_HOOK{0xCA, 0x9F, 0x58, 0x14, 0x00, 0x08, 0x28, 0x1E};
+// fmov s1, #1.0 ; fcmp s8, s1 ; b.ge +0x10 ; fdiv s0, s0, s8 ; fneg s1, s0 ; b 0x261EB20 ;
+// ldr s1, [sp, #0xc] ; fmul s1, s0, s1 ; fmul s0, s0, s8 ; b 0x261EB20
+constexpr std::array<u8, 40> TURN_SPEED_ROUTINE{
+    0x01, 0x10, 0x2E, 0x1E, 0x00, 0x21, 0x21, 0x1E, 0x8A, 0x00, 0x00, 0x54, 0x00, 0x18,
+    0x28, 0x1E, 0x01, 0x40, 0x21, 0x1E, 0x33, 0x60, 0xA7, 0x17, 0xE1, 0x0F, 0x40, 0xBD,
+    0x01, 0x08, 0x21, 0x1E, 0x00, 0x08, 0x28, 0x1E, 0x2F, 0x60, 0xA7, 0x17,
+};
+// Truncated steps stall the pickup window count-up and ocarina playback tick above 60 fps.
+// The step rate manager counts down by max(round(step), 1) each frame and runs fast; the ambient
+// wave phase counts frames. Each now takes its ticks from a shared helper carrying a remainder
+// per counter, in the BSS state (from 0x4E9FE00). zortos293/Lichii#1663.
+constexpr std::array<u8, 4> STEP_HUD_ORIGINAL{
+    0x0C, 0x00, 0x38, 0x1E,
+};
+constexpr std::array<u8, 4> STEP_HUD_HOOK{
+    0x80, 0x79, 0xC7, 0x14,
+};
+// add x13, x19, #0x360 ; bl helper ; mov w12, w13 ; b 0xA68304
+constexpr std::array<u8, 40> STEP_HUD_ROUTINE{
+    0xED, 0x3B, 0xBD, 0xA9, 0xEF, 0x43, 0x01, 0xA9, 0xFE, 0x13, 0x00, 0xF9, 0x6D, 0x82,
+    0x0D, 0x91, 0x1C, 0x00, 0x00, 0x94, 0xEC, 0x03, 0x0D, 0x2A, 0xFE, 0x13, 0x40, 0xF9,
+    0xEF, 0x43, 0x41, 0xA9, 0xED, 0x3B, 0xC3, 0xA8, 0x78, 0x86, 0x38, 0x17,
+};
+constexpr std::array<u8, 4> STEP_REPLAY_ORIGINAL{
+    0x08, 0x00, 0x39, 0x1E,
+};
+constexpr std::array<u8, 4> STEP_REPLAY_HOOK{
+    0x46, 0xCD, 0x26, 0x14,
+};
+// add x13, x19, x20 ; bl helper ; mov w8, w13 ; b 0x3293414
+constexpr std::array<u8, 40> STEP_REPLAY_ROUTINE{
+    0xED, 0x3B, 0xBD, 0xA9, 0xEF, 0x43, 0x01, 0xA9, 0xFE, 0x13, 0x00, 0xF9, 0x6D, 0x02,
+    0x14, 0x8B, 0x12, 0x00, 0x00, 0x94, 0xE8, 0x03, 0x0D, 0x2A, 0xFE, 0x13, 0x40, 0xF9,
+    0xEF, 0x43, 0x41, 0xA9, 0xED, 0x3B, 0xC3, 0xA8, 0xB2, 0x32, 0xD9, 0x17,
+};
+constexpr std::array<u8, 44> STEP_HITSTOP_ORIGINAL{
+    0x00, 0xB9, 0xA1, 0x5E, 0x09, 0x01, 0x38, 0x1E, 0x00, 0xD8, 0x21, 0x5E, 0x00, 0x39,
+    0x20, 0x1E, 0x00, 0x20, 0x30, 0x1E, 0xAA, 0x17, 0x00, 0x54, 0x00, 0x20, 0x31, 0x1E,
+    0x09, 0x18, 0x00, 0x54, 0x0A, 0x9B, 0x40, 0xB9, 0x3F, 0x05, 0x00, 0x71, 0x29, 0xC5,
+    0x9F, 0x1A,
+};
+constexpr std::array<u8, 44> STEP_HITSTOP_HOOK{
+    0xBA, 0xCD, 0x33, 0x14, 0x09, 0x01, 0x38, 0x1E, 0x00, 0xD8, 0x21, 0x5E, 0x00, 0x39,
+    0x20, 0x1E, 0x00, 0x20, 0x30, 0x1E, 0xAA, 0x17, 0x00, 0x54, 0x00, 0x20, 0x31, 0x1E,
+    0x09, 0x18, 0x00, 0x54, 0x0A, 0x9B, 0x40, 0xB9, 0x3F, 0x05, 0x00, 0x71, 0x29, 0xC5,
+    0x9F, 0x1A,
+};
+// add x13, x24, #0x98 ; fmov s0, s8 ; bl helper ; mov w9, w13 ; ldr w10, [x24, #0x98] ; b 0x2F53294
+constexpr std::array<u8, 48> STEP_HITSTOP_ROUTINE{
+    0xED, 0x3B, 0xBD, 0xA9, 0xEF, 0x43, 0x01, 0xA9, 0xFE, 0x13, 0x00, 0xF9, 0x0D, 0x63,
+    0x02, 0x91, 0x00, 0x41, 0x20, 0x1E, 0x07, 0x00, 0x00, 0x94, 0xE9, 0x03, 0x0D, 0x2A,
+    0xFE, 0x13, 0x40, 0xF9, 0xEF, 0x43, 0x41, 0xA9, 0xED, 0x3B, 0xC3, 0xA8, 0x0A, 0x9B,
+    0x40, 0xB9, 0x46, 0x32, 0xCC, 0x17,
+};
+// add x13, x19, #0x360 ; bl helper ; mov w12, w13 ; b 0xA68304 (upstream's helper, 128 bytes)
+constexpr std::array<u8, 128> STEP_SHARED_ROUTINE{
+    0xE0, 0x07, 0xBF, 0xAD, 0xCE, 0x92, 0x00, 0xB0, 0xCE, 0x01, 0x3B, 0x91, 0x0F, 0x02,
+    0x80, 0x52, 0xD0, 0x01, 0x40, 0xF9, 0x1F, 0x02, 0x0D, 0xEB, 0x40, 0x02, 0x00, 0x54,
+    0x70, 0x01, 0x00, 0xB4, 0xCE, 0x41, 0x00, 0x91, 0xEF, 0x05, 0x00, 0x71, 0x41, 0xFF,
+    0xFF, 0x54, 0xCE, 0x41, 0x04, 0xD1, 0xD0, 0x01, 0x40, 0xB9, 0x0F, 0x06, 0x00, 0x11,
+    0xEF, 0x0D, 0x00, 0x12, 0xCF, 0x01, 0x00, 0xB9, 0xCE, 0x41, 0x00, 0x91, 0xCE, 0x11,
+    0x10, 0x8B, 0xCD, 0x01, 0x00, 0xF9, 0xDF, 0x09, 0x00, 0xB9, 0x0D, 0x00, 0x38, 0x1E,
+    0xBF, 0x05, 0x00, 0x71, 0xAD, 0xA5, 0x9F, 0x1A, 0x07, 0x00, 0x00, 0x14, 0xC1, 0x09,
+    0x40, 0xBD, 0x00, 0x28, 0x21, 0x1E, 0x01, 0xC0, 0x25, 0x1E, 0x00, 0x38, 0x21, 0x1E,
+    0xC0, 0x09, 0x00, 0xBD, 0x2D, 0x00, 0x38, 0x1E, 0xE0, 0x07, 0xC1, 0xAC, 0xC0, 0x03,
+    0x5F, 0xD6,
+};
+constexpr std::array<u8, 4> STEP_AMBIENT_ORIGINAL{
+    0x7A, 0x07, 0x00, 0x11,
+};
+constexpr std::array<u8, 4> STEP_AMBIENT_HOOK{
+    0x3B, 0x1C, 0xDC, 0x14,
+};
+// add x13, x28, x1, lsl #2 ; load raw step ; bl helper ; add w26, w27, w13 ; ldr s0, [x0, #0x18] ; b 0x53F918
+constexpr std::array<u8, 60> STEP_AMBIENT_ROUTINE{
+    0xED, 0x3B, 0xBD, 0xA9, 0xEF, 0x43, 0x01, 0xA9, 0xFE, 0x13, 0x00, 0xF9, 0x8D, 0x0B,
+    0x01, 0x8B, 0xCE, 0x81, 0x00, 0x90, 0xCE, 0x49, 0x44, 0xF9, 0xCE, 0x01, 0x40, 0xF9,
+    0xC0, 0x11, 0x40, 0xBD, 0xD8, 0xFF, 0xFF, 0x97, 0x7A, 0x03, 0x0D, 0x0B, 0x00, 0x18,
+    0x40, 0xBD, 0xFE, 0x13, 0x40, 0xF9, 0xEF, 0x43, 0x41, 0xA9, 0xED, 0x3B, 0xC3, 0xA8,
+    0xB8, 0xE3, 0x23, 0x17,
+};
+
+constexpr std::array STEP_COUNTER_RECORDS{
+    BuiltinPatchRecord{.module_offset = 0xA68300, .bytes = STEP_HUD_HOOK, .checked = true, .original_bytes = STEP_HUD_ORIGINAL},
+    BuiltinPatchRecord{0x3C46900, STEP_HUD_ROUTINE, {}, true},
+    BuiltinPatchRecord{.module_offset = 0x3293410, .bytes = STEP_REPLAY_HOOK, .checked = true, .original_bytes = STEP_REPLAY_ORIGINAL},
+    BuiltinPatchRecord{0x3C46928, STEP_REPLAY_ROUTINE, {}, true},
+    BuiltinPatchRecord{.module_offset = 0x2F53268, .bytes = STEP_HITSTOP_HOOK, .checked = true, .original_bytes = STEP_HITSTOP_ORIGINAL},
+    BuiltinPatchRecord{0x3C46950, STEP_HITSTOP_ROUTINE, {}, true},
+    BuiltinPatchRecord{.module_offset = 0x53F914, .bytes = STEP_AMBIENT_HOOK, .checked = true, .original_bytes = STEP_AMBIENT_ORIGINAL},
+    BuiltinPatchRecord{0x3C46A00, STEP_AMBIENT_ROUTINE, {}, true},
+    BuiltinPatchRecord{0x3C46980, STEP_SHARED_ROUTINE, {}, true},
+};
+// The platform and steering fixes (zortos293/Lichii#1679, port of #1609 and #1645): moving
+// platforms carry the player again above 100 fps, and Gohma steers above 60 fps. #1609's three
+// branches become nops; #1645's turn speed divides by the step at 0x261EB18.
+constexpr std::array PLATFORM_STEER_RECORDS{
+    BuiltinPatchRecord{.module_offset = 0x13A070, .bytes = GROUND_VELOCITY_NOP, .checked = true, .original_bytes = GROUND_VELOCITY_ORIGINAL_A},
+    BuiltinPatchRecord{.module_offset = 0x13D710, .bytes = GROUND_VELOCITY_NOP, .checked = true, .original_bytes = GROUND_VELOCITY_ORIGINAL_B},
+    BuiltinPatchRecord{.module_offset = 0x389AC2C, .bytes = GROUND_VELOCITY_NOP, .checked = true, .original_bytes = GROUND_VELOCITY_ORIGINAL_C},
+    BuiltinPatchRecord{.module_offset = 0x261EB18, .bytes = TURN_SPEED_HOOK, .checked = true, .original_bytes = TURN_SPEED_ORIGINAL},
+    BuiltinPatchRecord{0x3C46A40, TURN_SPEED_ROUTINE, {}, true},
+};
+// The records appended to the FPS Unlock built-ins above Dark's two: the counters (#1663) and the
+// platform/steering fixes (#1679).
+constexpr auto OOT_EXTRA_RECORDS = [] {
+    std::array<BuiltinPatchRecord, STEP_COUNTER_RECORDS.size() + PLATFORM_STEER_RECORDS.size()> out{};
+    std::ranges::copy(STEP_COUNTER_RECORDS, out.begin());
+    std::ranges::copy(PLATFORM_STEER_RECORDS, out.begin() + STEP_COUNTER_RECORDS.size());
+    return out;
+}();
+
 // Dark's timer state and the ripple slots (ldr/str through adrp 0x4e9f000 + 0xe00 / + 0xe20).
 constexpr size_t HIGH_REFRESH_STATE_OFFSET = 0x4E9FE00;
-constexpr size_t HIGH_REFRESH_STATE_SIZE = 0xA0;
+// upstream's extended timer state: Dark's timer state from 0, the water slots to 0x98, the
+// sound gate's accumulator at 0xA0, the step counters from 0xB0 (upstream #1663).
+constexpr size_t HIGH_REFRESH_STATE_SIZE = 0x1C0;
 
 // Our cave (main+0x3C46E00, executable padding after the end of the code: the text page runs on to
 // main+0x3C47000) as the high refresh rate mode leaves it: its routine, a zero word, the water
@@ -260,6 +398,7 @@ constexpr auto WATER_RIPPLE_RECORDS = [] {
 constexpr std::string_view WATER_RIPPLE_NAME = "Water ripples at any frame rate (built-in)";
 constexpr std::string_view DYNAMIC_FPS_NAME = "Dynamic FPS by Dark (built-in)";
 constexpr std::string_view HIGH_REFRESH_NAME = "High refresh rate (built-in, experimental)";
+constexpr std::string_view FPS_UNLOCK_RECORDS_NAME = "FPS Unlock fixes (built-in)";
 
 bool HighRefreshSettingOn() {
     // Tests boot either way without touching the player's config: EDEN_NX2_OOT_HIGH_REFRESH=0/1.
@@ -337,6 +476,21 @@ constexpr std::array BUILTIN_PATCHES{
         .module = "main",
         .build_id = "E0F3CCFAF50065AE4EA01EB5AEB13B1A45DA3348",
         .records = DYNAMIC_FPS_RECORDS,
+    },
+    // The FPS Unlock fixes (#1663, #1679): four step-driven counters no longer freeze or run fast
+    // above 60 fps (pickup windows, ocarina tick, step rate manager countdown in hitstop, ambient
+    // wave phases), the moving platforms stop sliding out from under the player above 100 fps,
+    // and Gohma steers above 60 fps. Off-state twin to Dark's pair since upstream shares one
+    // cave; here they're a separate built-in applied after Dark's, so Dark's stays exactly his
+    // pair for the user-mod replacement logic.
+    BuiltinPatch{
+        .name = FPS_UNLOCK_RECORDS_NAME,
+        .title_id = 0x0400486024DEC000,
+        .module = "main",
+        .build_id = "E0F3CCFAF50065AE4EA01EB5AEB13B1A45DA3348",
+        .records = OOT_EXTRA_RECORDS,
+        .state_offset = HIGH_REFRESH_STATE_OFFSET,
+        .state_size = HIGH_REFRESH_STATE_SIZE,
     },
     // After Dark's (v5.8, zortos293/Lichii#1180's finding): his mode ran trunc(step) ripple
     // passes, so at a 60 fps cap some frames ran none and below 60 the ripples ran slow.
@@ -903,14 +1057,36 @@ std::vector<u8> PatchManager::PatchNSO(const std::vector<u8>& nso, const std::st
                 break;
             }
             if (record.checked) {
-                u32 original;
-                std::memcpy(&original, nso.data() + offset, sizeof(original));
-                if (original != record.original) {
-                    LOG_WARNING(Loader,
-                                "    - Skipping \"{}\": {}+{:#x} holds {:#010x}, expected {:#010x}",
-                                patch.name, name, record.module_offset, original, record.original);
-                    apply = false;
-                    break;
+                if (!record.original_bytes.empty()) {
+                    const size_t module_offset = record.module_offset;
+                    const size_t original_size = record.original_bytes.size();
+                    if (module_offset + original_size > nso.size() - sizeof(Loader::NSOHeader)) {
+                        LOG_WARNING(Loader, "    - Skipping \"{}\": {}+{:#x} holds past the "
+                                            "module's end",
+                                    patch.name, name, module_offset);
+                        apply = false;
+                        break;
+                    }
+                    const u8* const held = nso.data() + sizeof(Loader::NSOHeader) + module_offset;
+                    if (std::memcmp(held, record.original_bytes.data(), original_size) != 0) {
+                        LOG_WARNING(Loader, "    - Skipping \"{}\": {}+{:#x} does not hold the "
+                                            "expected {} bytes",
+                                    patch.name, name, module_offset, original_size);
+                        apply = false;
+                        break;
+                    }
+                } else {
+                    u32 original;
+                    std::memcpy(&original, nso.data() + offset, sizeof(original));
+                    if (original != record.original) {
+                        LOG_WARNING(Loader,
+                                    "    - Skipping \"{}\": {}+{:#x} holds {:#010x}, expected "
+                                    "{:#010x}",
+                                    patch.name, name, record.module_offset, original,
+                                    record.original);
+                        apply = false;
+                        break;
+                    }
                 }
             }
             if (!std::equal(nso.begin() + offset, nso.begin() + offset + record.bytes.size(),

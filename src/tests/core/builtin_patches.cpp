@@ -31,6 +31,7 @@ constexpr u64 OcarinaTitleId = 0x0400486024DEC000;
 constexpr u64 OtherTitleId = 0x0100000000010000;
 constexpr std::string_view MaxResolution = "Max Resolution (built-in)";
 constexpr std::string_view DynamicFps = "Dynamic FPS by Dark (built-in)";
+constexpr std::string_view FpsUnlock = "FPS Unlock fixes (built-in)";
 constexpr std::string_view OcarinaBuildIdHex = "E0F3CCFAF50065AE4EA01EB5AEB13B1A45DA3348";
 constexpr FileSys::PatchManager::BuildID OcarinaBuildId{
     0xE0, 0xF3, 0xCC, 0xFA, 0xF5, 0x00, 0x65, 0xAE, 0x4E, 0xA0,
@@ -335,9 +336,32 @@ TEST_CASE("Built-in Max Resolution patch is listed and loaded for Ocarina's main
 
 namespace {
 
+constexpr size_t StepStateSize = 0x1C0;
+constexpr size_t StepRoutineOffset = sizeof(Loader::NSOHeader) + 0x3C46900;
+constexpr size_t HudHookOffset = sizeof(Loader::NSOHeader) + 0xA68300;
+constexpr u32 HudOriginalInstruction = 0x1E38000C;
+constexpr u32 HudHookInstruction = 0x14C77980;
+constexpr size_t ReplayHookOffset = sizeof(Loader::NSOHeader) + 0x3293410;
+constexpr u32 ReplayOriginalInstruction = 0x1E390008;
+constexpr u32 ReplayHookInstruction = 0x1426CD46;
+constexpr size_t HitstopHookOffset = sizeof(Loader::NSOHeader) + 0x2F53268;
+constexpr u32 HitstopHookInstruction = 0x1433CDBA;
+constexpr size_t AmbientHookOffset = sizeof(Loader::NSOHeader) + 0x53F914;
+constexpr u32 AmbientOriginalInstruction = 0x1100077A;
+constexpr u32 AmbientHookInstruction = 0x14DC1C3B;
+constexpr u32 TurnSpeedOriginal1 = 0x1E210800 /* placeholder, replaced below */;
+constexpr size_t GroundVelocityA = sizeof(Loader::NSOHeader) + 0x13A070;
+constexpr u32 GroundVelocityInstructionA = 0x5400196C;
+constexpr size_t GroundVelocityB = sizeof(Loader::NSOHeader) + 0x13D710;
+constexpr u32 GroundVelocityInstructionB = 0x54001E2C;
+constexpr size_t GroundVelocityC = sizeof(Loader::NSOHeader) + 0x389AC2C;
+constexpr u32 GroundVelocityInstructionC = 0x540017CC;
+constexpr size_t TurnSpeedHook = sizeof(Loader::NSOHeader) + 0x261EB18;
+constexpr std::array<u8, 8> TurnSpeedOriginal{0x01, 0x08, 0x21, 0x1E, 0x00, 0x08, 0x28, 0x1E};
+
 std::vector<u8> MakeDynamicMain() { // fork: OoT Dynamic FPS built-in patch tests
     auto nso = MakeMain(OcarinaBuildId, TbzInstruction);
-    nso.resize(DynamicStateOffset + 16);
+    nso.resize(DynamicStateOffset + StepStateSize);
     Loader::NSOHeader header;
     std::memcpy(&header, nso.data(), sizeof(header));
     header.segments[0].size = 63201744;
@@ -349,6 +373,23 @@ std::vector<u8> MakeDynamicMain() { // fork: OoT Dynamic FPS built-in patch test
     std::memcpy(nso.data(), &header, sizeof(header));
     std::memcpy(nso.data() + DynamicCallOffset, &DynamicOriginalInstruction,
                 sizeof(DynamicOriginalInstruction));
+    const auto write_word = [&nso](size_t offset, u32 word) {
+        std::memcpy(nso.data() + offset, &word, sizeof(u32));
+    };
+    write_word(HudHookOffset, HudOriginalInstruction);
+    write_word(ReplayHookOffset, ReplayOriginalInstruction);
+    write_word(AmbientHookOffset, AmbientOriginalInstruction);
+    write_word(GroundVelocityA, GroundVelocityInstructionA);
+    write_word(GroundVelocityB, GroundVelocityInstructionB);
+    write_word(GroundVelocityC, GroundVelocityInstructionC);
+    std::memcpy(nso.data() + TurnSpeedHook, TurnSpeedOriginal.data(), TurnSpeedOriginal.size());
+    constexpr std::array<u8, 44> hitstop_original{
+        0x00, 0xB9, 0xA1, 0x5E, 0x09, 0x01, 0x38, 0x1E, 0x00, 0xD8, 0x21, 0x5E,
+        0x00, 0x39, 0x20, 0x1E, 0x00, 0x20, 0x30, 0x1E, 0xAA, 0x17, 0x00, 0x54,
+        0x00, 0x20, 0x31, 0x1E, 0x09, 0x18, 0x00, 0x54, 0x0A, 0x9B, 0x40, 0xB9,
+        0x3F, 0x05, 0x00, 0x71, 0x29, 0xC5, 0x9F, 0x1A,
+    };
+    std::copy(hitstop_original.begin(), hitstop_original.end(), nso.begin() + HitstopHookOffset);
     return nso;
 }
 
@@ -395,7 +436,7 @@ TEST_CASE("Built-in Dynamic FPS defaults on and can be disabled in Add-Ons", "[p
 TEST_CASE("Built-in Dynamic FPS rejects mismatched or truncated modules transactionally",
           "[patch_manager]") {
     PatchManagerTestContext context;
-    Settings::values.disabled_addons[OcarinaTitleId] = {std::string{MaxResolution}};
+    Settings::values.disabled_addons[OcarinaTitleId] = {std::string{MaxResolution}, std::string{FpsUnlock}};
     auto nso = MakeDynamicMain();
     std::string module = "main";
     u64 title = OcarinaTitleId;
@@ -540,7 +581,7 @@ TEST_CASE("Built-in Dynamic FPS replaces a mod that rewrites its records", "[pat
         offset = DynamicStateOffset;
     }
     PatchManagerTestContext context{mod_word, offset};
-    Settings::values.disabled_addons[OcarinaTitleId] = {std::string{MaxResolution}};
+    Settings::values.disabled_addons[OcarinaTitleId] = {std::string{MaxResolution}, std::string{FpsUnlock}};
     const auto nso = MakeDynamicMain();
     auto expected = nso;
     std::memcpy(expected.data() + DynamicCallOffset, DynamicFpsCall.data(), DynamicFpsCall.size());
@@ -831,11 +872,11 @@ TEST_CASE("High refresh rate mode switches live between the two boot layouts",
         REQUIRE_FALSE(FileSys::OotHighRefreshScaleOffset(cut));
     }
 
-    SECTION("Its state (Dark's timer, the ripple slots, 0x4E9FE00..0x4E9FEA0) must lie in BSS") {
-        REQUIRE(FileSys::OotHighRefreshStateInBss(0x4100000, 0x5100000));
-        REQUIRE(FileSys::OotHighRefreshStateInBss(0x4E9FE00, 0x4E9FEA0));
-        REQUIRE_FALSE(FileSys::OotHighRefreshStateInBss(0x4E9FE01, 0x5100000));
-        REQUIRE_FALSE(FileSys::OotHighRefreshStateInBss(0x4100000, 0x4E9FE9F));
+    SECTION("Its state (Dark's timer, the ripple slots, 0x4E9FE00..0x4EA00C0) must lie in BSS") {
+        REQUIRE(FileSys::OotHighRefreshStateInBss(0x4100000, 0x5200000));
+        REQUIRE(FileSys::OotHighRefreshStateInBss(0x4E9FE00, 0x4EA00C0));
+        REQUIRE_FALSE(FileSys::OotHighRefreshStateInBss(0x4E9FE01, 0x5200000));
+        REQUIRE_FALSE(FileSys::OotHighRefreshStateInBss(0x4100000, 0x4E9FEFF));
         REQUIRE_FALSE(FileSys::OotHighRefreshStateInBss(0, 0));
     }
 }
