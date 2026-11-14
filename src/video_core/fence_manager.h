@@ -144,6 +144,7 @@ public:
             if (delay_fence) {
                 uncommitted_operations.emplace_back(std::move(func));
             }
+            // Keeps capacity: the lists the fencing thread ran are reused (TakeUncommittedOperations).
             pending_operations.emplace_back(TakeUncommittedOperations());
         }
         pending_flushes.push_back(committed_flushes);
@@ -161,8 +162,13 @@ public:
             rasterizer.FlushCommands();
         }
         if constexpr (can_async_check) {
+            // The fencing thread waits for the host GPU while it has fences: it needs waking (a
+            // system call) only when it waits for fences to be made.
+            const bool wake = fence_thread_waiting;
             guard.unlock();
-            cv.notify_all();
+            if (wake) {
+                cv.notify_all();
+            }
         }
         if (delay_fence) {
             // Its callback runs on the fencing thread once the fence's work is done, and the
@@ -377,9 +383,11 @@ private:
                 {
                     // Fences come from SignalFence (the split's back).
                     Common::Nx2Timeline::Span wait_span{"fence: wait for work"};
+                    fence_thread_waiting = !stop_token.stop_requested();
                     cv.wait(lock, [&] {
                         return stop_token.stop_requested() || (!fences.empty() && !inline_running);
                     });
+                    fence_thread_waiting = false;
                 }
                 if (stop_token.stop_requested()) [[unlikely]] {
                     return;
@@ -435,6 +443,15 @@ private:
                 std::scoped_lock lock{uncommitted_guard};
                 for (Released& released : batch) {
                     KeepSpareOperations(released.operations);
+                }
+            }
+            {
+                std::scoped_lock lock{uncommitted_guard};
+                for (Released& released : batch) {
+                    if (spare_operations.size() < MaxSpareOperationLists &&
+                        released.operations.capacity() != 0) {
+                        spare_operations.push_back(std::move(released.operations));
+                    }
                 }
             }
             {
@@ -569,6 +586,7 @@ private:
 
     static constexpr u8 TextureFlushes = 1;
     static constexpr u8 BufferFlushes = 2;
+    static constexpr size_t MaxSpareOperationLists = 32;
 
     /// committed: what CommitAsyncFlushes returned for this fence.
     void PopAsyncFlushes(u8 committed) {
@@ -695,7 +713,8 @@ private:
     std::queue<TFence> fences;
     OperationList uncommitted_operations;
     std::deque<OperationList> pending_operations;
-    /// Lists whose operations ran, kept with their capacity for the next fences.
+    /// Lists the fencing thread ran, kept with their capacity for the next fences (a list grew
+    /// from 64 operations at most fences: ~30 a fence at Ocarina of Time's water, in bursts).
     std::vector<OperationList> spare_operations; ///< Guarded by uncommitted_guard
     std::deque<u8> pending_flushes; ///< Per fence: the caches that committed downloads
     std::deque<u32> pending_query_pops; ///< Async check, per fence: query cache entries to pop
@@ -711,6 +730,7 @@ private:
     std::mutex ring_guard;
     std::mutex uncommitted_guard; ///< Guards uncommitted_operations
     std::condition_variable cv;
+    bool fence_thread_waiting{}; ///< The fencing thread waits on cv for fences (guarded by guard)
 
     std::jthread fence_thread;
 
