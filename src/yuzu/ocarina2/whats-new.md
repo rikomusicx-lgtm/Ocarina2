@@ -14,7 +14,12 @@ owner says so, after the items below are fixed and tested on real hardware.
 
 - **Hyrule Town (and first large town) texture glitch on first load** - the one the owner
   reproduced on his machine. Textures in Hyrule Town look stretched/garbage on the first entry
-  after a cold boot and settle afterwards. Tracked in NX2_NOTES.
+  after a cold boot and settle afterwards. Tracked in NX2_NOTES. Owner re-tested on the running
+  1.4 build on 2026-11-13 and it still happens.
+- **Title screen buttons look finicky** - the button text will fade or just look weird on the
+  title screen. Owner noted 2026-11-13.
+- **Title screen is not as fluid as it should be** - note taken 2026-11-13; likely related to
+  the same UI/renderer path as the buttons above.
 - **Lossless Scaling (LSFG) frame generation is buggy** - flagged by the owner for 1.4.
   Optical Flow (FSR3) is the reliable default in 1.3 and stays that way until LSFG is fixed.
 - **Lower-hardware pass** - another round of performance tuning aimed at entry-level cards

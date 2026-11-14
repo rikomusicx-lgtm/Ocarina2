@@ -1449,3 +1449,23 @@ Status:
   tree is C:/Users/rikom/OneDrive/Documents/Default Project/Ocarina2, like before. The merge-build
   tree had a stale SDL3 PCH; the tests-local tree linked final because it reused that build cache.
 - No release: no tag, no dispatch, nothing published.
+
+## 2026-11-13 (late night) - owner bug notes after playing the 1.4 build
+
+Owner played the freshly launched 1.4 build (pid 10216, "Ocarina2 1.4" on nx2-1.4) and gave
+notes:
+
+- Title screen buttons act finicky - the text will fade or just look weird.
+- First Hyrule Town load - textures still bug (reproduced on this build).
+- Title screen is not as fluid as it should be.
+- Per-game VRAM Cap override was pinning OoT to 8 GB over his global 6 GB; per-game ini
+  set to 6 GB at the owner's request (backup .bak-6gb). Note: the running instance loaded
+  8 GB and a clean emulator exit may write it back - re-apply if it reverts.
+- LSFG frame generation remains known-buggy; Optical Flow (FSR3) stays the default.
+
+Owner also asked for: web search for upstream performance-focused commits (lower-hardware
+and general), code-level optimization work only (no settings knobs unless we patch the
+emulator ourselves), CI stays green, and NO release or tag until he absolutely says so.
+
+The three game bugs are tracked as v1.4 targets in whats-new.md. Optimization hunt
+outlined below in the 2026-11-14 entries.
