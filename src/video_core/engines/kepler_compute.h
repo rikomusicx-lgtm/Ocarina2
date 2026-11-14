@@ -271,6 +271,10 @@ public:
     /// dispatch of the game's network is skipped, or its output pass replaced by a copy of the
     /// tonemapped image.
     bool BypassOotNetwork(u64 program_id, u64 native_key);
+    /// The base (v1.0) output pass, before shader translation can reject it (the translator
+    /// may reject its per-tap gathers). Matches on the program bytes and replaces it with the
+    /// same copy of the tonemapped image. zortos293/Lichii#1137.
+    bool BypassOotBaseNetwork();
     void TraceDlssContract(u64 native_key, bool warn_unvalidated = true);
 
     /// GPU thread split with macros on its front half (gpu_split.h, EDEN_NX2_SPLIT=2), called by

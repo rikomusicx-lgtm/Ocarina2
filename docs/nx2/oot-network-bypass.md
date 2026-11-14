@@ -50,7 +50,11 @@ null and No sharpening does nothing, because DLSS replaces the same output pass
 for the session or its evaluation fails, No sharpening takes over from the next frame.
 
 The game's constants (shader hashes, program keys, the cb0 offset) are in
-`src/video_core/oot_network.h`.
+`src/video_core/oot_network.h`. The base (v1.0) game's output passes are recognized by their
+bytes as well (`BaseOutputPrograms`: three known native programs that sample cb0+0xc0 and store to
+cb0+0xd0) — the translator may reject their per-tap gathers, so they are matched before
+translation rather than by the "skip after translation" path; they are copied with a bilinear
+filter since the base game's tonemap can run smaller than the output.
 
 ## Results (Ryzen 7 9800X3D, RTX 5090, Kokiri Forest, 1x)
 
