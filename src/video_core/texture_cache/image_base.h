@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <vector>
@@ -128,7 +129,11 @@ struct ImageBase {
     VAddr cpu_addr = 0;
     VAddr cpu_addr_end = 0;
 
+    /// Set through SetModificationTick.
     u64 modification_tick = 0;
+    /// At least the newest modification_tick among aliased_images (raised when an alias's tick is
+    /// set or an alias is added): SynchronizeAliases has nothing to do while it is not newer.
+    u64 newest_alias_tick = 0;
     size_t lru_index = SIZE_MAX;
 
     /// Render target relocation guard (EXP43): the frame the GPU last wrote the image (~0 =
@@ -179,6 +184,16 @@ struct ImageMapView {
     ImageId image_id;
     bool picked{};
 };
+
+/// Sets an image's modification tick and raises its aliases' newest_alias_tick to it.
+template <typename Images>
+void SetModificationTick(Images& images, ImageBase& image, u64 tick) {
+    image.modification_tick = tick;
+    for (const AliasedImage& alias : image.aliased_images) {
+        u64& newest = images[alias.id].newest_alias_tick;
+        newest = (std::max)(newest, tick);
+    }
+}
 
 struct ImageAllocBase {
     std::vector<ImageId> images;
