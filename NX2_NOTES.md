@@ -1430,3 +1430,22 @@ Not yet validated: the Hyrule Town first-load glitch has not been observed in a 
 so the root cause is still unknown; the Texture Pool patch is the adjacent allocator-blowup
 fix and is on by default now. The full 1.4 plan needs the owner's play test to localize it
 (by area and by render-path: FSR3 vs LSFG, preload vs cold, Max Resolution on/off).
+
+## 2026-11-13 (evening) - 1.4 build green across the board; ownership of stale local trees
+
+Owner asked for "push it and build it - make sure everythings green. DONT RELEASE ANYTHING".
+
+Status:
+- 1.3 release (build-27) stands published; no changes pushed to it.
+- 1.4 chain on nx2 (5ea7140040 -> 630f549c83 -> 3fef0fb679 -> 742588adbc -> b363992218 -> 6a06b6a551
+  -> 0c7e88b379 -> a7bf371e14 -> b1e635a031 -> a2e080ddd4): every commit green on Linux/Windows
+  build-check and every release-binaries run green (publish skipped).
+- Local tests (tests-local binary 11/13 09:40) tar the fork's nx2 tree and pass:
+  1052 test cases / 70790323 assertions green.
+- Local Ocarina2.exe rebuilt 11/13 19:14 using the fork source (the tests-local tree hangs off the
+  same project) - contains the VRAM Cap dropdown, the FG static-frame detector, the Dynamic FPS
+  100 ms clock clamp and the Texture Pool x2 patch.
+- Stale clones D:\Ocarina2-merge-build and D:\Ocarina2-1.4-build-test stay untouched; the working
+  tree is C:/Users/rikom/OneDrive/Documents/Default Project/Ocarina2, like before. The merge-build
+  tree had a stale SDL3 PCH; the tests-local tree linked final because it reused that build cache.
+- No release: no tag, no dispatch, nothing published.
