@@ -1628,3 +1628,34 @@ Skipped (recorded): #1520/#1519/#1521 (#1161 fast-draw chain), #1155, #948 RADV-
 #1485/#1523, #1462, #1531, #1508, #1586, #1515. #1218 previously listed here as deferred; it is
 now ported. #1663/#1679 landed earlier today as the FPS Unlock fixes built-in.
 Local tests: 1081/1081 green.
+
+## 2026-11-14 (night) - Ocarina2 v1.4 released (build-57)
+
+Owner said go. Dispatched release-binaries with publish_release=true on nx2 HEAD (991593d695).
+Release tag build-57, title "Ocarina2 v1.4" (dist/ocarina2_version.txt), 10 assets published:
+Windows x86_64 + PGO, Linux x86_64 AppImage/tar.gz + PGO, Linux ARM (aarch64) AppImage/tar.gz +
+PGO, no macOS package (hosted arm64 runners too scarce, same policy as v1.2/v1.3). Publish
+verified green: build-check green on both platforms, release-binaries all green; the workflow
+then verified the published tag and title.
+Release body carries the v1.4 whats-new (DLSS forced on in the OoT preset with the per-game
+selector back, camera/foliage/No Sharpening/sound/FPS Unlock/memory-path fixes, built-in
+Texture Pool x2 patch on by default, FG_IDLE diagnostic switch) with known issues stated
+honestly (Hyrule Town first-load glitch, title screen buttons/fluidity, white flash rare
+cases, LSFG buggy), then the package table unchanged from the template. Credits name
+rikomusicx-lgtm and the people who helped: Camille LaVey (Eglantine), the Eden team
+(yuzu/Sudachi), Lichii (zortos293, Djihads80), Frizti (Fritchii), Dark, EvilOOT, RsMan-Dev,
+the community testers and the Ocarina of Forks Discord. No language about merging other
+people's work.
+
+Release notes hygiene this pass:
+- whats-new.md and the release body: the "in development / nothing has shipped" framing is
+  gone; 1.4 is written as shipped, with known issues still open and named.
+- DLSS claim trimmed to what the preset actually does (nvidia_dlss=true; quality is the
+  user-switchable setting, Automatic by default) after the overclaim was caught pre-release.
+- dist/ocarina2_version.txt was committed as UTF-16LE with BOM (PowerShell default); the
+  contents API transcoded it with U+FFFD so the workflow titled the release
+  "Ocarina2 v<U+FFFD><U+FFFD>1.4". File rewritten as ASCII (0cdb9767df); the published build-57
+  title was patched to exactly "Ocarina2 v1.4" via the API.
+- In-app credits gained RsMan-Dev (Texture Pool x2).
+
+The 1.4 recipe remains owner-distributed only; the release ships no game data.
