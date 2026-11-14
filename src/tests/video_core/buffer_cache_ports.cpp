@@ -97,6 +97,16 @@ struct Runtime {
             ++downloads;
         }
     }
+    void ClearBuffer(Buffer& dst, u32 offset, size_t size, u32) {
+        std::memset(dst.bytes.data() + offset, 0, size);
+    }
+    void PostCopyBarrier() {}
+    void CopyBuffer(Buffer& dst, Buffer& src, std::span<const VideoCommon::BufferCopy> copies,
+                    bool) {
+        (void)copies;
+        (void)dst;
+        (void)src;
+    }
     void CopyBuffer(Buffer& dst, Buffer* src, std::span<const VideoCommon::BufferCopy> copies, bool,
                     bool) {
         for (const auto& copy : copies) {
@@ -234,6 +244,15 @@ struct BufferCacheTestAccess {
     static void NextFrame(Cache&) {}
     static u32 CpuMarks(Cache& cache) {
         return cache.memory_tracker.cpu_marks;
+    }
+    static BufferCacheChannelInfo& Channel(Cache& cache, s32 bind_id) {
+        return cache.channel_storage[cache.channel_map.find(bind_id)->second];
+    }
+    static void Delete(Cache& cache, BufferId id) {
+        cache.DeleteBuffer(id);
+    }
+    static void UpdateUniforms(Cache& cache, size_t stage) {
+        cache.UpdateUniformBuffers(stage);
     }
 };
 
@@ -640,4 +659,64 @@ TEST_CASE("Downloads keep CPU writes collected and not yet applied", "[buffer_po
     REQUIRE(f.bytes[0x20ff7] == 0x34);
     REQUIRE(std::all_of(f.bytes + 0x20ff8, f.bytes + 0x21008, [](u8 b) { return b == 0xee; }));
     REQUIRE(f.bytes[0x21008] == 0x34);
+}
+
+TEST_CASE("Deleting a buffer clears its id from every channel's bindings", "[buffer_ports]") {
+    struct ChannelsFixture : Fixture {
+        ChannelsFixture() {
+            for (auto* state : {&first, &second}) {
+                state->memory_manager = &*memory;
+                state->payload.emplace(system, *memory, *state);
+                cache->CreateChannel(*state);
+            }
+        }
+        ~ChannelsFixture() {
+            cache.reset();
+        }
+        Tegra::Control::ChannelState first{0};
+        Tegra::Control::ChannelState second{1};
+    } f;
+    namespace Dirty = VideoCommon::Dirty;
+    const auto id = Access::Add(*f.cache, 0x10000, 0x10000);
+    const VideoCommon::Binding bound{.device_addr = 0x10800, .size = 0x100, .buffer_id = id};
+    auto& current = Access::Channel(*f.cache, 0);
+    auto& other = Access::Channel(*f.cache, 1);
+    current.uniform_buffers[0][0] = bound;
+    other.index_buffer = bound;
+    other.vertex_buffers[2] = bound;
+    other.uniform_buffers[0][0] = bound;
+    other.storage_buffers[4][1] = bound;
+    other.transform_feedback_buffers[3] = bound;
+    other.indirect_buffer_binding = bound;
+    other.compute_uniform_buffers[5] = bound;
+    other.enabled_uniform_buffer_masks[0] = 1;
+    auto& flags = other.maxwell3d.dirty.flags;
+    flags.reset();
+
+    // Deleted while channel 0 is current; the next buffer takes its slot.
+    f.cache->BindToChannel(0);
+    Access::Delete(*f.cache, id);
+    REQUIRE(Access::Add(*f.cache, 0x30000, 0x10000) == id);
+
+    REQUIRE(!current.uniform_buffers[0][0].buffer_id);
+    for (const auto* binding :
+         {&other.index_buffer, &other.vertex_buffers[2], &other.uniform_buffers[0][0],
+          &other.storage_buffers[4][1], &other.transform_feedback_buffers[3],
+          &other.indirect_buffer_binding, &other.compute_uniform_buffers[5]}) {
+        REQUIRE(!binding->buffer_id);
+        REQUIRE(binding->device_addr == 0x10800);
+    }
+    REQUIRE(flags[Dirty::IndexBuffer]);
+    REQUIRE(flags[Dirty::VertexBuffers]);
+    REQUIRE(flags[Dirty::VertexBuffer0 + 2]);
+    REQUIRE(!flags[Dirty::VertexBuffer0 + 1]);
+
+    // Channel 1's next draw resolves its uniform buffer again, to a buffer that holds the range.
+    f.cache->BindToChannel(1);
+    Access::UpdateUniforms(*f.cache, 0);
+    const auto resolved = other.uniform_buffers[0][0].buffer_id;
+    REQUIRE(resolved);
+    REQUIRE(resolved != VideoCommon::NULL_BUFFER_ID);
+    REQUIRE(resolved != id);
+    REQUIRE(Access::Get(*f.cache, resolved).IsInBounds(0x10800, 0x100));
 }
