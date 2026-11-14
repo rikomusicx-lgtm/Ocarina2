@@ -140,7 +140,13 @@ void ThreadManager::StartThread(VideoCore::RendererBase& renderer, Core::Fronten
                     if (poll == 2 || idle_for < std::chrono::microseconds{500}) {
                         std::this_thread::yield();
                     } else if (poll == 1 || idle_for < std::chrono::seconds{2}) {
+#ifdef _WIN32
+                        // sleep_for(50us) rounds up to Sleep(1) (>= 1 ms) on Windows; one
+                        // high-res timer tick instead (zortos293/Lichii#621).
+                        Common::Windows::SleepForOneTick();
+#else
                         std::this_thread::sleep_for(std::chrono::microseconds{50});
+#endif
                     } else {
                         state.pending_wake.WaitFor(std::chrono::milliseconds{1});
                     }
