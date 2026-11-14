@@ -131,4 +131,11 @@ void SetCurrentThreadToAllCores();
 void RefreshThreadPolicies();
 void PollThreadPolicies();
 
+/// Waits in hardware until `flag` is true or the deadline passes, and returns whether `flag`
+/// ended up set. Where the CPU has a user-mode wait on an address (MWAITX on AMD, UMWAIT on
+/// Intel) the thread waits in it: a store to the flag's cache line ends the wait within a few
+/// hundred nanoseconds, and the core neither issues instructions nor enters the OS meanwhile.
+/// Other CPUs yield-poll until then. zortos293/Lichii#1373's WaitForFlag.
+bool WaitForFlag(const std::atomic<bool>& flag, std::chrono::steady_clock::time_point deadline);
+
 } // namespace Common

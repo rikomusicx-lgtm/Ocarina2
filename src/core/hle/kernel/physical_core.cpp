@@ -17,6 +17,7 @@
 #include "common/nx2_timeline.h"
 #include "common/scope_exit.h"
 #include "common/settings.h"
+#include "common/thread.h"
 #include "core/arm/debug.h"
 #include "core/core.h"
 #include "core/debugger/debugger.h"
@@ -386,10 +387,9 @@ void PhysicalCore::Idle(KernelCore& kernel) {
                 }
             }
         } else {
-            while (!m_is_interrupted.load(std::memory_order_acquire) &&
-                   std::chrono::steady_clock::now() < deadline) {
-                std::this_thread::yield();
-            }
+            // Wait for the interrupt in hardware (MWAITX/UMWAIT), which ends at once on the
+            // interrupt's store and burns no CPU meanwhile. zortos293/Lichii#1373.
+            Common::WaitForFlag(m_is_interrupted, deadline);
         }
     }
     if (m_core_lock) {

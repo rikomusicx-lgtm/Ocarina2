@@ -80,7 +80,10 @@ private:
     std::condition_variable m_on_interrupt;
     Core::ArmInterface* m_arm_interface{};
     KThread* m_current_thread{};
-    std::atomic<bool> m_is_interrupted{};
+    // Benched away from its neighbours on purpose: the Idle spin watches it with MONITORX/
+    // UMWAIT, and a store anywhere on its line ends the wait (repeatedly) before anything stores
+    // here. zortos293/Lichii#1373.
+    alignas(64) std::atomic<bool> m_is_interrupted{};
     bool m_is_single_core{};
 };
 

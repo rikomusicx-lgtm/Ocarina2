@@ -11,6 +11,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
@@ -1083,6 +1084,57 @@ bool Event::WaitFor(const std::chrono::nanoseconds time) {
     is_set = false;
     return true;
 #endif
+}
+#endif
+
+#ifdef ARCHITECTURE_x86_64
+// Hardware wait on an address (MWAITX on AMD, UMWAIT on Intel): a store to the flag's cache line
+// ends it within a few hundred nanoseconds. CPUs without either still yield until then. This is
+// Event::WaitFor's intrinsics on a raw std::atomic<bool>, for the guest-core idle spin.
+#ifdef __clang__
+__attribute__((target("waitpkg,mwaitx")))
+#elif defined(__GNUC__)
+#pragma GCC target("waitpkg")
+#pragma GCC target("mwaitx")
+#endif
+bool WaitForFlag(const std::atomic<bool>& flag, std::chrono::steady_clock::time_point deadline) {
+    if (const auto& caps = Common::g_cpu_caps; caps.monitorx || caps.waitpkg) {
+        auto* const line = const_cast<std::atomic<bool>*>(std::addressof(flag));
+        const u64 ticks_per_second = Common::g_wall_clock.NsToTicks(std::chrono::seconds{1});
+        while (true) {
+            if (caps.monitorx) {
+                _mm_monitorx(line, 0, 0);
+            } else {
+                _umonitor(line);
+            }
+            if (flag.load(std::memory_order_acquire)) {
+                return true;
+            }
+            const u32 cycles = MwaitxTimeoutCycles(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    deadline - std::chrono::steady_clock::now()),
+                ticks_per_second);
+            if (cycles == 0) {
+                return flag.load(std::memory_order_acquire);
+            }
+            if (caps.monitorx) {
+                _mm_mwaitx(1 << 1, 0u, cycles);
+            } else {
+                _umwait(0, Common::X64::FencedRDTSC() + cycles);
+            }
+        }
+    }
+    while (!flag.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::yield();
+    }
+    return flag.load(std::memory_order_acquire);
+}
+#else
+bool WaitForFlag(const std::atomic<bool>& flag, std::chrono::steady_clock::time_point deadline) {
+    while (!flag.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::yield();
+    }
+    return flag.load(std::memory_order_acquire);
 }
 #endif
 
