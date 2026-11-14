@@ -220,6 +220,13 @@ void DeviceMemoryManager<Traits>::HintCold(DAddr address, size_t size) {
     if (!Common::IsHostLowOnMemory()) {
         return;
     }
+    // Images at GPU addresses without memory get placeholder addresses past the device address
+    // space, which have no pages to look up (Lichii#1568).
+    constexpr DAddr address_space_end = DAddr{1} << AS_BITS;
+    if (address >= address_space_end) {
+        return;
+    }
+    size = static_cast<size_t>((std::min)(DAddr{size}, address_space_end - address));
     struct Run {
         u64 physical_offset;
         VAddr virtual_address; ///< 0: no CPU mapping known
