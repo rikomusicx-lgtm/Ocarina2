@@ -313,8 +313,15 @@ size_t FrameGen::WantedGenerations(size_t capacity) {
         plan = {};
         return 0;
     }
+    // EDEN_NX2_FG_IDLE=0 disables the static-screen detector (live, for diagnosis): the raw
+    // frame idles there now, at the game's own rate (30 Hz for Ocarina of Time; the title screen
+    // felt choppy on 1.4).
+    static const bool idle_allowed = [] {
+        const char* value = std::getenv("EDEN_NX2_FG_IDLE");
+        return value == nullptr || value[0] != '0';
+    }();
     plan = pacer.Plan(capacity);
-    if (ContentIsStatic() && plan.generations > 0) {
+    if (idle_allowed && ContentIsStatic() && plan.generations > 0) {
         // Content unchanged for about a second (title screens, menus, loading screens): the
         // interpolated frames would be pixel-identical to the raw frame, FG idles and the raw
         // base frame is presented at its own pace instead.
