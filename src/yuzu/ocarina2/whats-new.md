@@ -26,7 +26,15 @@ owner says so, after the items below are fixed and tested on real hardware.
   (RDNA 2/integrated, small-cache 6 GB cards), while keeping the same output we can hold.
 - **Deeper emulation work** - bring in more upstream fixes from the Lichii family forks
   (Lichii-, Eglantine-, Fritchii lineage), careful about merge scope; CI stays green or nothing
-  lands.
+  lands. As of 2026-11-14: the DLSS path (quality modes scale the render resolution:
+  Balanced 2276x1280 / Performance 1920x1080 / Ultra Performance 1280x720), DLSS image
+  sanitizing, FPS Unlock fixes (step counters, platforms, Gohma steering, the sound manager at
+  60 Hz so music and voices don't stop above 60 fps), the Ocarina camera read from its raw
+  buffer binding (no more upscale dropouts in the Temple of Time's camera angles), points and
+  lines through the mesh compute fallback (foliage shadows), the base v1.0 game's output passes
+  handled by No Sharpening, the GPU memory registry delivering listener calls in order and
+  outside its lock (no more frozen sessions), and the Windows host crash report (a log line and
+  eden_crash.dmp) if a build ever dies.
 
 Bugs already carried by 1.3 (the white flash) are on the list to re-verify; the release notes
 will name which ones are done.

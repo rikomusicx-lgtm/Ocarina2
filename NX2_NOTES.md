@@ -1577,10 +1577,13 @@ Deferred (fork lacks the machinery or it conflicts with fork work):
 - #1654 legacy pipeline cache migration / #1619/skipped-prebuild / #1620 precache marker:
   no shader_cache_v2 (recipe pipeline cache instead); #1620's lowering/emission stamp infra
   does not exist either.
-- #1413 sparse-block GPU kernel-lock waits / #1218 listener-outside-locks: our nvgsv/stub
-  path and registry are fork-divergent; needs owner + live lock worry review, not a blind port.
-- #1663/#1679 Ocarina FPS Unlock record families: upstream's cave overlaps this fork's
-  HIGH_REFRESH cave; needs re-derivation + builtin_patches fingerprint alignment.
+- #1413 sparse-block GPU kernel-lock waits: still open (upstream waits outside kernel locks;
+  our sparse-back path differs; needs owner + live review).
+- #1155 descriptor pool 4 MiB flush: fork has no TranslateStages/StageTranslation framework.
+- #1520/#1519/#1521 fast-draw/snapshot chain (#1161): no fast-draw subsystem here; too big.
+- #1485/#1523 dark grid descriptor-table rework: incompatible with this fork's handle path.
+- #948 ASTC RGBA8->BC under 6 GiB: AMD RADV-only at this layer; NVIDIA kept RGBA8.
+- #1462 eglantine-scale rework / #1531 x86-64 JIT rewrite: skipped by design.
 
 ## 2026-11-14 (DLSS quality + Windows minidump)
 
@@ -1593,3 +1596,35 @@ Ported the two remaining Lichii build-177 items the owner asked for today ("i me
 
 Wrote oxbroken notes, all green on local tests 1065/1065. DLSS is off in owner's OoT config today
 ("nvidia_dlss=false"); nothing in this will trigger anything until he toggles it.
+
+## 2026-11-14 (round 2 of the Lichii build-177 ports: the OoT bug-queue)
+
+All of these were landed on nx2 today (nothing released or tagged; dispatch-only CI):
+
+- #1468 SSA phis only when needed + unused identities dropped (shader translation time; fork's
+  Windows small_vector stack path preserved; upstream's ssa_fixed_variables test was never
+  built here, dropped with the cherry-pick).
+- #1672 sanitize NaN/Inf + clamp the Ocarina DLSS colour input (Hyrule Field black blocks);
+  new ocarina_dlss_effects_base.comp snapshot keeps the unclamped scene compare.
+- #1659 track the Ocarina camera from the guest CB3 register binding instead of the
+  buffer-cache view (Water Temple camera-angle upscale dropouts); shared decoder + 4 tests.
+- #1660 run Ocarina's sound manager at 60 Hz under FPS Unlock (#716, #1092: music/voices stop
+  after loading zones at >60 fps). SOUND_GATE PC-relative at 0x3C46800 (upstream's spot);
+  SOUND_FEED re-encoded to the fork's 0x3C4687C; records live in the FPS Unlock fixes built-in
+  alongside the #1663/#1679 records; Dark's built-in stays his pair only.
+- #863 points and lines through the mesh compute fallback (the foliage shadow map is a point
+  mesh program; empty on RADV without VK_EXT_mesh_shader).
+- #1137 base (v1.0) output passes in No Sharpening (matched by bytes pre-translation, bilinear
+  copy; update path unchanged).
+- #1008 IMAD/USHF/uniform-LEA write counts (two OoT compute programs stopped lowering).
+- #1181 SHF uniform shift (already in this fork, verified).
+- #1218 GPU memory registry and address space listeners outside their locks (temple-warp
+  deadlock, issue #1158). Ticket-ordered delivery, DeferScope for nx2:gpu's region mutex,
+  ReleaseBacking frees every range inside the released span, in-flight counting,
+  EDEN_NX2_BUFFER_TRACE ported verbatim. Our own release-backing path kept; upstream's
+  GpuOnlyRegion accounting split is left out.
+
+Skipped (recorded): #1520/#1519/#1521 (#1161 fast-draw chain), #1155, #948 RADV-only,
+#1485/#1523, #1462, #1531, #1508, #1586, #1515. #1218 previously listed here as deferred; it is
+now ported. #1663/#1679 landed earlier today as the FPS Unlock fixes built-in.
+Local tests: 1081/1081 green.
