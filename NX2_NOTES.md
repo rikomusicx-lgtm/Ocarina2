@@ -1522,3 +1522,20 @@ weird); first Hyrule Town textures still bug; title screen not fluid. Per-game V
 8 GB in 0400486024DEC000.ini over the global 6 GB; ini set to 6 GB at the owner's request (.bak-6gb
 backup). OoT ran Cap_8Gb for that session; restart picks up 6 GB. A clean emulator exit can rewrite
 the per-game ini back to 3.
+
+## 2026-11-14 (late) - stale remote branches deleted per owner
+
+Owner authorized deleting the leftover branches now we build from nx2. Before deleting:
+- fix/oot-fps-perf-timing (Nov 8, tip: 3 test-tuning commits pin NVDEC to CPU / skip AV1 hwaccel
+  on GPU-less / match fork defaults). Content only here; NOT in nx2: font_merge.cpp (Switch 2
+  controller button icons, Lichii#691, Mario Tennis Fever) and nup_read_bench.cpp (NUP zstd
+  lazy-decode benchmark, #885).
+- fritchii-merge (Nov 9): pre-squash Frizti-merge snapshot; unrelated git history vs nx2
+  (the fork squashed lineage in Nov). Nothing from it is referenced by the 1.4 line.
+- nx2 root (0ca78eb998, "release: next build is Ocarina2 v1.3", Nov 12) is the squash commit;
+  fork history pre-squash lives on these two branches only.
+
+Deleted from origin: fix/oot-fps-perf-timing, fritchii-merge. Remote now holds only nx2
+(and release tags, untouched). Verified before deletion: qmd_prediction.cpp and eglantine.profdata
+are in nx2; font_merge.cpp and nup_read_bench.cpp are not, and were never re-landed there.
+Owner's decision, documented in session.
