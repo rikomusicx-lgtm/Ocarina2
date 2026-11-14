@@ -273,7 +273,7 @@ public:
                 if (IR::Value def{current_def.Def(block, variable)}; !def.IsEmpty()) {
                     if (def == pending_phi) {
                         // A cycle reached a pending phi: it needs to exist now
-                        def = IR::Value{MaterializePhi(PendingFrame(block), undef_opcode)};
+                        def = IR::Value{MaterializePhi(PendingFrame(stack, block), undef_opcode)};
                         WriteVariable(variable, block, def);
                     }
                     stack.back().result = def;
@@ -347,8 +347,8 @@ public:
     }
 
 private:
-    ReadState& PendingFrame(IR::Block* block) {
-        for (auto it = read_stack.rbegin(); it != read_stack.rend(); ++it) {
+    ReadState& PendingFrame(std::vector<ReadState>& stack, IR::Block* block) {
+        for (auto it = stack.rbegin(); it != stack.rend(); ++it) {
             if (it->block == block && it->pc == Status::PushPhiArgument && !it->phi) {
                 return *it;
             }
