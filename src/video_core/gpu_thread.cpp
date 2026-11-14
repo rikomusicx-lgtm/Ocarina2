@@ -12,6 +12,8 @@
 
 #ifdef __linux__
 #include <sys/prctl.h>
+#elif defined(_WIN32)
+#include "common/windows/timer_resolution.h"
 #endif
 
 #include "common/assert.h"

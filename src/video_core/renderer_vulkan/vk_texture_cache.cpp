@@ -5358,7 +5358,6 @@ void TextureCacheRuntime::TranscodeAstcToBcn(
                 .initialized = base != 0,
                 .level_view = [&pending](s32 level) { return *pending.views[level]; },
                 .wait = true,
-                .levels = levels,
             },
             batch_map, swizzles);
         for (u32 level = 0; level < levels; ++level) {
