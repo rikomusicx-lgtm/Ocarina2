@@ -86,9 +86,11 @@ inline void SetOcarinaOfTimePerformanceSettings(Values& settings, bool global,
     const auto layout = host_ram >= (u64{16} << 30) ? MemoryLayout::Memory_12Gb
                                                    : MemoryLayout::Memory_8Gb;
     session(settings.memory_layout_mode, layout);
+    // Docked mode is left to the player's own choice (or the Frizti restore). The fork's
+    // Ocarina profile no longer forces handheld; on a desktop with a GPU the docked path
+    // (and its DLSS support) wins on low-end cards.
     session(settings.cpu_accuracy, CpuAccuracy::Unsafe);
     session(settings.sync_core_speed, true);
-    session(settings.use_docked_mode, ConsoleMode::Handheld);
     // Max Resolution is on by default: it fixes the render at the full scale for the console
     // mode, which is what users on a 3050-class card want. Turning it off only lowers internal
     // resolution (about 2-3 fps).

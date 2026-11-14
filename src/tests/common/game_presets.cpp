@@ -66,8 +66,8 @@ TEST_CASE("OOT 60 FPS preset restores Max Resolution and enables frame generatio
     CHECK(settings->oot_dynamic_fps_preset_enabled);
     CHECK(settings->oot_preflush_preset_enabled);
     CHECK(settings->oot_max_resolution_preset_enabled);
-    // The preset mirrors the owner's tuned handheld session (2026-11-09): Fast mode, immediate
-    // fences/VSync, unsafe DMA, aggressive VRAM, 4 GB layout, handheld console mode, DLSS off.
+    // The preset was originally handheld-only (owner mirror), but forces nothing
+    // that overrides the player's own console mode or DLSS choice any more.
     CHECK(settings->renderer_backend.GetValue() == Settings::RendererBackend::Vulkan);
     CHECK(settings->resolution_setup.GetValue() == Settings::ResolutionSetup::Res1X);
     CHECK(settings->gpu_accuracy.GetValue() == Settings::GpuAccuracy::Low);
@@ -86,7 +86,7 @@ TEST_CASE("OOT 60 FPS preset restores Max Resolution and enables frame generatio
                                                              : Settings::MemoryLayout::Memory_8Gb;
     CHECK(settings->memory_layout_mode.GetValue() == expected_layout);
     CHECK(settings->cpu_accuracy.GetValue() == Settings::CpuAccuracy::Unsafe);
-    CHECK(settings->use_docked_mode.GetValue() == Settings::ConsoleMode::Handheld);
+    CHECK(settings->use_docked_mode.GetValue() == Settings::ConsoleMode::Docked);
     CHECK(settings->oot_split_disabled);
     for (const auto& restore : settings->linkage.restore_functions) {
         restore();
