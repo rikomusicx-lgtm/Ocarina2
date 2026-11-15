@@ -114,9 +114,9 @@ void CheckUnchangedProfile() {
     CHECK(values.turbo_speed_limit.GetValue() == 200);
     CHECK_FALSE(values.sync_core_speed.GetValue());
     // v1.1 baked the Frizti-tuned desktop defaults into the linkage: 8 GB layout (OoT is the
-    // size it is tuned for) and Immediate presentation paced by the host frame pacer.
+    // size it is tuned for); v1.4 switched presentation pacing to Mailbox.
     CHECK(values.memory_layout_mode.GetValue() == Settings::MemoryLayout::Memory_8Gb);
-    CHECK(values.vsync_mode.GetValue() == Settings::VSyncMode::Immediate);
+    CHECK(values.vsync_mode.GetValue() == Settings::VSyncMode::Mailbox);
     CHECK(values.fsr_sharpening_slider.GetValue() == 25);
     CHECK(values.dma_accuracy.GetValue() == Settings::DmaAccuracy::Default);
     CHECK(values.gpu_fence_behavior.GetValue() == Settings::GpuFenceBehavior::Default);
@@ -132,7 +132,7 @@ void CheckUnchangedProfile() {
     CHECK_FALSE(values.use_video_framerate.GetValue());
     CHECK_FALSE(values.mkw_30fps.GetValue());
     CHECK_FALSE(values.mkw_dynamic_fps.GetValue());
-    CHECK(values.use_reactive_flushing.GetValue());
+    CHECK_FALSE(values.use_reactive_flushing.GetValue());
     CHECK(values.barrier_feedback_loops.GetValue());
     CHECK_FALSE(values.enable_buffer_history.GetValue());
     CHECK_FALSE(values.skip_cpu_inner_invalidation.GetValue());
