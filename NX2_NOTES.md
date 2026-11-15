@@ -1766,3 +1766,17 @@ Kept-pipelines path hot, zero crashes/refusals with the preset applied.
 
 Diagnostic added (vulkan_device.cpp): ComputeIsOptimalAstcSupported logs which requirement
 fails (LDR feature vs per-format tiling bits) so the cause shows in the log directly.
+
+## 2026-11-15 (night) - EXP42 2, Kokiri-per-zone VRAM profile measured
+
+Raised the Frizti EXP42 default 1 -> 2: dedicated render targets pool too.
+Measured in this build at Kokiri (pid 14668, idle at the forest mouth):
+- 1000+ images in D32_FLOAT (105) 960x540/640x360 and HDR (16/21) 960x540
+  re-created per 600 frames and never given back - the game allocates its
+  per-frame render-target heap a few hundred KB forward every frame, so each
+  frame gets a fresh shape set; the GC cannot evict them early (used per frame)
+  so they accumulate in the zone until pressure forces eviction.
+- Device budget at idle Kokiri: ~0.9 GiB used; the peak is the entry streaming.
+- Pool: 68 asked / 0 given by the zone end - nothing is being deleted here, so
+  pooling is starving; the fix above reuses what deletes DO flow (they flow at
+  zone transitions under pressure, where the 4 fps dips come from).
