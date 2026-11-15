@@ -16,7 +16,7 @@ void CompressBCN(std::span<const uint8_t> data, uint32_t width, uint32_t height,
                  std::span<uint8_t> output, BCNCompressor f) {
     constexpr u8 alpha_threshold = 128;
     constexpr u32 bytes_per_px = 4;
-    const u32 plane_dim = width * height;
+    const size_t plane_dim = static_cast<size_t>(width) * height;
 
     Common::ThreadWorker& workers{GetThreadWorkers()};
 
@@ -31,7 +31,9 @@ void CompressBCN(std::span<const uint8_t> data, uint32_t width, uint32_t height,
                     for (u32 j = 0; j < 4; j++) {
                         for (u32 i = 0; i < 4; i++) {
                             const size_t coord =
-                                (z * plane_dim + (y + j) * width + (x + i)) * bytes_per_px;
+                                (size_t{z} * plane_dim + static_cast<size_t>(y + j) * width +
+                                 (x + i)) *
+                                bytes_per_px;
 
                             if ((x + i < width) && (y + j < height)) {
                                 if constexpr (ThresholdAlpha) {
@@ -55,8 +57,9 @@ void CompressBCN(std::span<const uint8_t> data, uint32_t width, uint32_t height,
 
                     const u32 bytes_per_row = BytesPerBlock * Common::DivideUp(width, 4U);
                     const u32 bytes_per_plane = bytes_per_row * Common::DivideUp(height, 4U);
-                    f(output.data() + z * bytes_per_plane + (y / 4) * bytes_per_row +
-                          (x / 4) * BytesPerBlock,
+                    f(output.data() + static_cast<size_t>(z) * bytes_per_plane +
+                          static_cast<size_t>(y / 4) * bytes_per_row +
+                          static_cast<size_t>(x / 4) * BytesPerBlock,
                       reinterpret_cast<u8*>(input_colors), any_alpha);
                 }
             };

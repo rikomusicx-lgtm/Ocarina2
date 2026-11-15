@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
+﻿// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: 2014 Citra Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
@@ -240,6 +240,6 @@ bool IsPixelFormatInteger(PixelFormat format);
 bool IsPixelFormatSignedInteger(PixelFormat format);
 size_t PixelComponentSizeBitsInteger(PixelFormat format);
 std::pair<u32, u32> GetASTCBlockSize(PixelFormat format);
-u64 TranscodedAstcSize(u64 base_size, PixelFormat format);
+u64 TranscodedAstcSize(u64 base_size, PixelFormat format, bool opaque);
 
 } // namespace VideoCore::Surface

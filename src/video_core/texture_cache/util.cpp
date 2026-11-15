@@ -618,11 +618,7 @@ u32 CalculateConvertedSizeBytes(const ImageInfo& info) noexcept {
     static constexpr Extent2D TILE_SIZE{1, 1};
     if (IsPixelFormatASTC(info.format) &&
         Settings::GetAstcRecompression() != Settings::AstcRecompression::Uncompressed) {
-        const u32 bpp_div =
-            Settings::GetAstcRecompression() == Settings::AstcRecompression::Bc1 ||
-                    info.astc_opaque
-                ? 2
-                : 1;
+        const u64 bpp_div = info.astc_opaque ? 2 : 1;
         // NumBlocksPerLayer doesn't account for this correctly, so we have to do it manually.
         u32 output_size = 0;
         for (s32 i = 0; i < info.resources.levels; i++) {
@@ -1332,6 +1328,43 @@ void ConvertImage(std::span<const u8> input, const ImageInfo& info, std::span<u8
         ASSERT(copy.buffer_row_length == Common::AlignUp(mip_size.width, tile_size.width));
         ASSERT(copy.buffer_image_height == Common::AlignUp(mip_size.height, tile_size.height));
 
+        // A mismatch between the buffers and the layout would walk the workers off the end of a
+        // decode buffer and crash the process on the ImageTranscode thread. Refuse to convert
+        // (with the details in the log) rather than take the emulator down.
+        const u64 copy_layers =
+            static_cast<u64>(copy.image_subresource.num_layers) * copy.image_extent.depth;
+        const bool copy_is_astc = IsPixelFormatASTC(info.format);
+        u64 expected_out;
+        if (copy_is_astc &&
+            Settings::GetAstcRecompression() == Settings::AstcRecompression::Uncompressed) {
+            expected_out = u64{static_cast<u64>(copy.image_extent.width) *
+                               copy.image_extent.height} *
+                           copy_layers * BytesPerBlock(PixelFormat::A8B8G8R8_UNORM);
+        } else if (copy_is_astc) {
+            expected_out = u64{Common::AlignUp(copy.image_extent.width, 4U)} *
+                           Common::AlignUp(copy.image_extent.height, 4U) * copy_layers /
+                           (info.astc_opaque ? 2 : 1);
+        } else {
+            expected_out = u64{static_cast<u64>(copy.image_extent.width) *
+                               copy.image_extent.height} *
+                           copy_layers * ConvertedBytesPerBlock(info.format);
+        }
+        const u64 remaining = output.size() - ((output_offset <= output.size()) ? output_offset : output.size());
+        const bool input_ok = static_cast<u64>(copy.buffer_offset) <= input.size();
+        const bool output_ok = static_cast<u64>(output_offset) <= output.size() &&
+                               expected_out <= remaining;
+        if (!input_ok || !output_ok) {
+            LOG_CRITICAL(HW_GPU,
+                         "ConvertImage: refusing image (format {} type {} {}x{} depth {} levels {} "
+                         "layers {} astc_opaque {}): copy {} input offset {} of {} bytes, output "
+                         "offset {} of {} bytes, expected {} — skipping the conversion",
+                         static_cast<u32>(info.format), static_cast<u32>(info.type), info.size.width,
+                         info.size.height, info.size.depth, info.resources.levels,
+                         info.resources.layers, info.astc_opaque, level, copy.buffer_offset,
+                         input.size(), output_offset, output.size(), expected_out);
+            return;
+        }
+
         const auto input_offset = input.subspan(copy.buffer_offset);
         copy.buffer_offset = output_offset;
 
@@ -1355,8 +1388,8 @@ void ConvertImage(std::span<const u8> input, const ImageInfo& info, std::span<u8
                 bc1 ? Tegra::Texture::BCN::CompressBC1 : Tegra::Texture::BCN::CompressBC3;
             const auto bpp_div = bc1 ? 2 : 1;
 
-            const u32 plane_dim = copy.image_extent.width * copy.image_extent.height;
-            const u32 level_size = plane_dim * copy.image_extent.depth *
+            const u64 plane_dim = static_cast<u64>(copy.image_extent.width) * copy.image_extent.height;
+            const u64 level_size = plane_dim * copy.image_extent.depth *
                                    copy.image_subresource.num_layers *
                                    BytesPerBlock(PixelFormat::A8B8G8R8_UNORM);
             decode_scratch.resize_destructive(level_size);
@@ -1370,7 +1403,7 @@ void ConvertImage(std::span<const u8> input, const ImageInfo& info, std::span<u8
                      copy.image_subresource.num_layers * copy.image_extent.depth,
                      output.subspan(output_offset));
 
-            const u32 aligned_plane_dim = Common::AlignUp(copy.image_extent.width, 4) *
+            const u64 aligned_plane_dim = static_cast<u64>(Common::AlignUp(copy.image_extent.width, 4)) *
                                           Common::AlignUp(copy.image_extent.height, 4);
 
             copy.buffer_size =

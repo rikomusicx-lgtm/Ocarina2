@@ -3520,7 +3520,7 @@ u64 TextureCache<P>::ImageMemoryBytes(const Image& image) const {
     if ((IsPixelFormatASTC(image.info.format) &&
          True(image.flags & ImageFlagBits::AcceleratedUpload)) ||
         True(image.flags & ImageFlagBits::Converted)) {
-        tentative_size = TranscodedAstcSize(tentative_size, image.info.format);
+        tentative_size = TranscodedAstcSize(tentative_size, image.info.format, image.info.astc_opaque);
     }
     return Common::AlignUp(tentative_size, 1024);
 }

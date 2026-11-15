@@ -528,19 +528,18 @@ std::pair<u32, u32> GetASTCBlockSize(PixelFormat format) {
     return {DefaultBlockWidth(format), DefaultBlockHeight(format)};
 }
 
-u64 TranscodedAstcSize(u64 base_size, PixelFormat format) {
+u64 TranscodedAstcSize(u64 base_size, PixelFormat format, bool opaque) {
     constexpr u64 RGBA8_PIXEL_SIZE = 4;
     const u64 base_block_size = static_cast<u64>(DefaultBlockWidth(format)) *
                                 static_cast<u64>(DefaultBlockHeight(format)) * RGBA8_PIXEL_SIZE;
     const u64 uncompressed_size = (base_size * base_block_size) / BytesPerBlock(format);
 
+    // Same rule the encoder uses: alpha-carrying ASTC goes to BC3, opaque to BC1.
     switch (Settings::GetAstcRecompression()) {
-    case Settings::AstcRecompression::Bc1:
-        return uncompressed_size / 8;
-    case Settings::AstcRecompression::Bc3:
-        return uncompressed_size / 4;
-    default:
+    case Settings::AstcRecompression::Uncompressed:
         return uncompressed_size;
+    default:
+        return opaque ? uncompressed_size / 8 : uncompressed_size / 4;
     }
 }
 
