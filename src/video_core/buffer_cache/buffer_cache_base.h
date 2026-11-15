@@ -616,6 +616,12 @@ public:
         size_t count = 0;
     };
 
+    /// Whether constant buffer data written to [device_addr, device_addr + size) must reach
+    /// WriteMemory. Pages no buffer was ever uploaded from and the GPU never wrote are
+    /// CPU-modified still, so WriteMemory would change nothing there that the streamed uniform
+    /// buffers reading them need: those read guest memory. Drawing thread, without the lock.
+    [[nodiscard]] bool ConstantDataReachesBuffers(DAddr device_addr, u64 size) const;
+
 private:
     template <typename Mask, typename Func>
     static void ForEachEnabledBit(Mask enabled_mask, Func&& func) {

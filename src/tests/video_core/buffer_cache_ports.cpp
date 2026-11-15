@@ -55,6 +55,9 @@ struct Staging {
 };
 
 struct Runtime {
+    u64 CurrentTick() const {
+        return 1;
+    }
     bool CanReportMemoryUsage() const {
         return false;
     }
@@ -196,6 +199,18 @@ struct BufferCacheTestAccess {
         cache.Register(id);
         cache.memory_tracker.ForEachUploadRange(address, size, [](auto, auto) {});
         return id;
+    }
+    /// Add without the upload: guest memory not yet read into the buffer.
+    static BufferId Register(Cache& cache, DAddr address, u32 size) {
+        const auto id = cache.slot_buffers.insert(cache.runtime, address, size, false);
+        cache.Register(id);
+        return id;
+    }
+    static void Upload(Cache& cache, BufferId id, DAddr address, u32 size) {
+        (void)cache.SynchronizeBuffer(cache.slot_buffers[id], address, size);
+    }
+    static void MarkWritten(Cache& cache, BufferId id, DAddr address, u32 size) {
+        cache.MarkWrittenBuffer(id, address, size);
     }
     static Buffer& Get(Cache& cache, BufferId id) {
         return cache.slot_buffers[id];
@@ -719,4 +734,26 @@ TEST_CASE("Deleting a buffer clears its id from every channel's bindings", "[buf
     REQUIRE(resolved != VideoCommon::NULL_BUFFER_ID);
     REQUIRE(resolved != id);
     REQUIRE(Access::Get(*f.cache, resolved).IsInBounds(0x10800, 0x100));
+}
+
+TEST_CASE("Constant buffer data skips WriteMemory only on pages no other buffer use reached",
+          "[buffer_ports]") {
+    Fixture f;
+    // A buffer that only streamed uniform buffers read: its pages are still CPU-modified.
+    const auto id = Access::Register(*f.cache, 0x20000, 0x10000);
+    REQUIRE_FALSE(f.cache->ConstantDataReachesBuffers(0x20100, 0x40));
+    REQUIRE_FALSE(f.cache->ConstantDataReachesBuffers(0x22000, 0x1000));
+
+    // A vertex, index or storage buffer (or the cached uniform path) uploads a range of it: those
+    // pages need the CPU-modified mark again.
+    Access::Upload(*f.cache, id, 0x20f00, 0x200);
+    REQUIRE(f.cache->ConstantDataReachesBuffers(0x20000, 4));
+    REQUIRE(f.cache->ConstantDataReachesBuffers(0x21ffc, 4));
+    REQUIRE_FALSE(f.cache->ConstantDataReachesBuffers(0x22000, 0x1000));
+    REQUIRE(f.cache->ConstantDataReachesBuffers(0x21f00, 0x200));
+
+    // GPU-written pages keep their downloads and GPU-modified ranges right.
+    Access::MarkWritten(*f.cache, id, 0x24010, 0x10);
+    REQUIRE(f.cache->ConstantDataReachesBuffers(0x24ff0, 4));
+    REQUIRE_FALSE(f.cache->ConstantDataReachesBuffers(0x25000, 4));
 }

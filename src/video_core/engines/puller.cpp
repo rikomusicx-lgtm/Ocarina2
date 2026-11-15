@@ -1068,6 +1068,7 @@ void Puller::ProcessFenceActionMethod(DmaPusher& dma_pusher) {
         // WaitFence(regs.fence_action.syncpoint_id, regs.fence_value);
         OnBack([rasterizer = dma_pusher.rasterizer] { rasterizer->ReleaseFences(); });
         VideoCommon::GpuSplit::Get().NoteSync();
+        VideoCommon::Nx2FastDraw::NoteSync();
         break;
     case Puller::FenceOperation::Increment:
         OnBack([rasterizer = dma_pusher.rasterizer, id = static_cast<u32>(regs.fence_action.syncpoint_id.Value())] {
@@ -1120,6 +1121,7 @@ void Puller::ProcessSemaphoreTriggerMethod(DmaPusher& dma_pusher) {
         // Switch 2 waits on semaphores the CPU (or another channel) releases, e.g. once it has
         // written the commands this channel runs next: suspend the channel until the value is
         // met instead of reading ahead (approach from changes.patch).
+        VideoCommon::Nx2FastDraw::NoteSync();
         PendingAcquire acquire{
             .address = regs.semaphore_address.SemaphoreAddress(),
             .value = regs.semaphore_sequence,
@@ -1138,13 +1140,16 @@ void Puller::ProcessSemaphoreTriggerMethod(DmaPusher& dma_pusher) {
         u64 read_done = 0;
         const bool readable = SemaphoreReadableNow(dma_pusher, acquire.address, word, &read_done);
         if (readable && acquire.Matches(word)) {
+            VideoCommon::Nx2FastDraw::NoteSync();
             return;
         }
         u32 miss = 0;
         if (MetByQueuedRelease(dma_pusher, acquire, &miss)) {
+            VideoCommon::Nx2FastDraw::NoteSync();
             return;
         }
         if (MetByQmdPrediction(dma_pusher, acquire, false)) {
+            VideoCommon::Nx2FastDraw::NoteSync();
             return;
         }
         if (op == GpuSemaphoreOperation::AcquireGequal &&
@@ -1152,10 +1157,12 @@ void Puller::ProcessSemaphoreTriggerMethod(DmaPusher& dma_pusher) {
                                   readable ? std::optional<ReadableRead>{ReadableRead{
                                                  .word = word, .done = read_done}}
                                            : std::nullopt)) {
+            VideoCommon::Nx2FastDraw::NoteSync();
             return;
         }
         if (op == GpuSemaphoreOperation::AcquireEqual &&
             EqualMetWithoutDrain(dma_pusher, acquire.address, acquire.value)) {
+            VideoCommon::Nx2FastDraw::NoteSync();
             return;
         }
         const bool trace = AcquireTrace::Enabled();
@@ -1217,6 +1224,7 @@ void Puller::ProcessSemaphoreTriggerMethod(DmaPusher& dma_pusher) {
         } else {
             DrainBack();
             if (acquire.Matches(ReadSemaphoreWord(dma_pusher, acquire.address))) {
+                VideoCommon::Nx2FastDraw::NoteSync();
                 VideoCommon::Nx2Profile::Add(VideoCommon::Nx2Profile::Counter::AcquireMetAfterDrain, 1);
                 record(AcquireTrace::MetAfterDrain);
                 if (learn) {
@@ -1262,6 +1270,7 @@ void Puller::ProcessSemaphoreTriggerMethod(DmaPusher& dma_pusher) {
         }
     } else {
         DrainBack();
+        VideoCommon::Nx2FastDraw::NoteSync();
         do {
             const u32 word = dma_pusher.memory_manager.Read<u32>(regs.semaphore_address.SemaphoreAddress());
             regs.acquire_source = true;

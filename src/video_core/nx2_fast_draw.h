@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstdlib>
@@ -86,7 +87,28 @@ inline std::atomic<u64> g_serial{1};
 /// The last break's reason and, for Register and Method, its 3D method (diagnostics).
 inline std::atomic<u32> g_last_break{};
 
+/// Bumped where the guest CPU may have synchronised with the GPU: fences, semaphores, syncpoints,
+/// reports, frames, other engines and requests from other threads. After one the guest may have
+/// written memory the caches were not told about (pages that aren't write-protected), so uniform
+/// keeps read their buffers again.
+inline std::atomic<u64> g_sync_serial{1};
+
+inline void NoteSync() {
+    g_sync_serial.fetch_add(1, std::memory_order_relaxed);
+}
+
+[[nodiscard]] inline u64 SyncSerial() {
+    return g_sync_serial.load(std::memory_order_acquire);
+}
+
 inline void Break(Reason reason, u32 method = 0) {
+    // 3D methods that let the CPU synchronise (reports, syncpoints) note it where they reach the
+    // rasterizer. Invalidations end image and shader lifetimes, not guest memory writes.
+    if (reason != Reason::Register && reason != Reason::Method && reason != Reason::ConstantData &&
+        reason != Reason::TextureHeaders && reason != Reason::DeltaOverflow &&
+        reason != Reason::Invalidation) {
+        NoteSync();
+    }
     if (Enabled()) {
         g_serial.fetch_add(1, std::memory_order_relaxed);
         g_last_break.store(static_cast<u32>(reason) | (method << 8), std::memory_order_relaxed);
@@ -130,6 +152,8 @@ struct Delta {
     std::array<DAddr, MaxWrites> device_begin{};
     std::array<DAddr, MaxWrites> device_end{};
     u32 num_device_writes{};
+    /// A write didn't fit: the lists miss some (uniform keeps then keep nothing).
+    bool overflow{};
 
     [[nodiscard]] bool Empty() const {
         return num_writes == 0 && (binds[0] | binds[1] | binds[2] | binds[3] | binds[4]) == 0;
@@ -153,6 +177,24 @@ struct Delta {
 };
 
 inline Delta g_delta;
+
+/// Moves g_delta into `out` and clears it, copying only the ranges in use (Delta is ~0.5 KiB and
+/// taken for every draw).
+inline void TakeDelta(Delta& out) {
+    Delta& delta = g_delta;
+    out.binds = delta.binds;
+    out.num_writes = delta.num_writes;
+    std::copy_n(delta.write_begin.begin(), delta.num_writes, out.write_begin.begin());
+    std::copy_n(delta.write_end.begin(), delta.num_writes, out.write_end.begin());
+    out.num_device_writes = delta.num_device_writes;
+    std::copy_n(delta.device_begin.begin(), delta.num_device_writes, out.device_begin.begin());
+    std::copy_n(delta.device_end.begin(), delta.num_device_writes, out.device_end.begin());
+    out.overflow = delta.overflow;
+    delta.binds = {};
+    delta.num_writes = 0;
+    delta.num_device_writes = 0;
+    delta.overflow = false;
+}
 
 /// Appends [begin, end) to a delta's range list, or extends its last range when that ends at
 /// begin. False when the list is full.
@@ -184,6 +226,7 @@ inline void NoteConstantData(GPUVAddr begin, GPUVAddr end) {
     }
     Delta& delta = g_delta;
     if (!AppendRange(delta.write_begin, delta.write_end, delta.num_writes, begin, end)) {
+        delta.overflow = true;
         Break(Reason::DeltaOverflow);
     }
 }
@@ -195,6 +238,7 @@ inline void NoteDeviceData(DAddr begin, DAddr end) {
     }
     Delta& delta = g_delta;
     if (!AppendRange(delta.device_begin, delta.device_end, delta.num_device_writes, begin, end)) {
+        delta.overflow = true;
         Break(Reason::DeltaOverflow);
     }
 }

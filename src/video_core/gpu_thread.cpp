@@ -31,6 +31,7 @@
 #include "video_core/gpu_thread.h"
 #include "video_core/gpu_split.h"
 #include "video_core/nx2.h"
+#include "video_core/nx2_fast_draw.h"
 #include "video_core/nx2_profile.h"
 #include "video_core/host1x/host1x.h"
 #include "video_core/renderer_base.h"
@@ -169,6 +170,10 @@ void ThreadManager::StartThread(VideoCore::RendererBase& renderer, Core::Fronten
                 // in order, and so does the signal that the command ran.
                 auto* const rasterizer_ptr = renderer.ReadRasterizer();
                 if (auto* submit_list = std::get_if<SubmitListCommand>(&next.data)) {
+                    // The guest may have written pages the caches don't watch since the lists
+                    // before it: uniform keeps end here, in order on the back.
+                    split.Defer([] { VideoCommon::Nx2FastDraw::NoteSync(); },
+                                VideoCommon::GpuSplit::FastDrawNeutral);
                     const bool timeline = Common::Nx2Timeline::Active();
                     if (timeline) {
                         // The list's sequence number (PushCommand's "submit list") on each
@@ -220,6 +225,7 @@ void ThreadManager::StartThread(VideoCore::RendererBase& renderer, Core::Fronten
                 continue;
             }
             if (auto* submit_list = std::get_if<SubmitListCommand>(&next.data)) {
+                VideoCommon::Nx2FastDraw::NoteSync();
                 const bool timeline = Common::Nx2Timeline::Active();
                 if (timeline) {
                     Common::Nx2Timeline::Instant("front: list begin", {"seq", next.fence},

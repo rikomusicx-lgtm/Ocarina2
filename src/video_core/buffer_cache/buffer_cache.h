@@ -4677,6 +4677,30 @@ bool BufferCache<P>::HasFastUniformBufferBound(size_t stage, u32 binding_index) 
 }
 
 template <class P>
+bool BufferCache<P>::ConstantDataReachesBuffers(DAddr device_addr, u64 size) const {
+    if (memory_tracker.IsRegionEverSynchronized(device_addr, size) ||
+        Tegra::Nx2MayBeGpuWritten(device_addr, size)) {
+        return true;
+    }
+    // Guest memory newer than a command list copy of the page (Nx2NoteListHostWrite).
+    if (Tegra::g_nx2_has_command_list_pages.load(std::memory_order_relaxed)) {
+        for (DAddr page = Common::AlignDown(device_addr, DEVICE_PAGESIZE);
+             page < device_addr + size; page += DEVICE_PAGESIZE) {
+            if (Tegra::Nx2IsCommandListPage(page)) {
+                return true;
+            }
+        }
+    }
+    // Repacked vertex buffers read guest memory again only when marked stale.
+    if constexpr (requires { runtime.AnyVertexRepacked(); }) {
+        if (runtime.AnyVertexRepacked()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+template <class P>
 std::pair<typename BufferCache<P>::Buffer*, u32> BufferCache<P>::GetDrawIndirectCount() {
     auto& buffer = slot_buffers[channel_state->count_buffer_binding.buffer_id];
     return std::make_pair(&buffer, buffer.Offset(channel_state->count_buffer_binding.device_addr));

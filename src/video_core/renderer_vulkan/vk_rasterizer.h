@@ -124,6 +124,8 @@ public:
                           VideoCommon::CacheType which = VideoCommon::CacheType::All) override;
     void PrepareRegionWrite(DAddr addr, u64 size, VideoCommon::CacheType which) override;
     void InnerInvalidation(std::span<const std::pair<DAddr, std::size_t>> sequences) override;
+    void InvalidateConstantBufferData(
+        std::span<const std::pair<DAddr, std::size_t>> sequences) override;
     void OnCacheInvalidation(DAddr addr, u64 size) override;
     void OnCacheInvalidations(std::span<const std::pair<DAddr, u64>> ranges) override;
     bool TryCacheInvalidation(DAddr addr, u64 size) override;
@@ -471,6 +473,8 @@ private:
     GraphicsPipeline* TakeReusableDraw(bool is_indexed, bool is_indirect);
     void NoteResolvedDraw(GraphicsPipeline* pipeline, bool is_indexed, bool is_indirect);
     void ReportFastDraws();
+    void InvalidateCachedWrites(std::span<const std::pair<DAddr, std::size_t>> sequences,
+                                bool constant_buffer_data);
     ReusableDraw reusable_draw;
     /// Device memory of the constant buffers TakeReusableDraw checks for texture handle writes.
     std::array<std::array<VideoCommon::Nx2FastDraw::DeviceSpans, Maxwell::MaxConstBuffers>,
