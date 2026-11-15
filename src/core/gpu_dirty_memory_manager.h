@@ -209,7 +209,11 @@ public:
             const u64 mask = (bits == 64 ? ~u64{0} : (u64{1} << bits) - 1) << first_bit;
             std::atomic<u64>& word = words[page / 64];
             if ((word.load(std::memory_order_relaxed) & mask) != mask) {
-                word.fetch_or(mask, std::memory_order_seq_cst);
+                // Both RMWs below are single words and each word has a modification order, so a
+                // relaxed RMW sees a value in that order: no stronger ordering is needed here.
+                // The byte-race between a flagged write and a compare is closed by the
+                // recheck-next-bind rule (see buffer_cache.h) and by DownloadLanding.
+                word.fetch_or(mask, std::memory_order_relaxed);
             }
             page += bits;
         }
@@ -226,7 +230,7 @@ public:
         if ((word.load(std::memory_order_relaxed) & bit) == 0) {
             return false;
         }
-        return (word.fetch_and(~bit, std::memory_order_seq_cst) & bit) != 0;
+        return (word.fetch_and(~bit, std::memory_order_relaxed) & bit) != 0;
     }
 
 private:

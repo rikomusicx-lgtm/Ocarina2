@@ -13,6 +13,7 @@
 #include <type_traits>
 
 #include "common/common_types.h"
+#include "video_core/buffer_cache/nx2_bytes_equal.h"
 #include "video_core/nx2_profile.h"
 
 namespace VideoCommon {
@@ -171,7 +172,7 @@ template <class Runtime, class DeviceMemory>
     const u64 tick = runtime.CurrentTick();
     const auto same_bytes = [&](size_t copy_index) {
         return reuse.copies[copy_index].size == size &&
-               std::memcmp(reuse.Bytes(copy_index), guest, size) == 0;
+               Nx2BytesEqual(reuse.Bytes(copy_index), guest, size);
     };
     const auto rebind = [&](size_t copy_index) {
         const typename Reuse::Copy& copy = reuse.copies[copy_index];

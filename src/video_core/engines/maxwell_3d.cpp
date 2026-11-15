@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include "common/assert.h"
 #include "common/bit_util.h"
+#include "common/container/unordered_map.h"
 #include "common/scope_exit.h"
 #include "common/settings.h"
 #include "core/core.h"
@@ -1193,7 +1194,9 @@ struct Maxwell3D::FrontState {
         u64 writer_ranges;
         u64 dispatch_writes;
     };
-    std::unordered_map<u64, DmaSnapshot> dma_snapshots;
+    /// Flat map with an identity hash for the page key (MSVC's node map with FNV-1a-over-u64
+    /// std::hash spent ~20% of a lookup; the map is cleared at 8192 entries).
+    ::Common::unordered_map<u64, DmaSnapshot> dma_snapshots;
 };
 
 namespace {
