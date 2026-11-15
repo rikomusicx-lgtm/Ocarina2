@@ -1659,3 +1659,57 @@ Release notes hygiene this pass:
 - In-app credits gained RsMan-Dev (Texture Pool x2).
 
 The 1.4 recipe remains owner-distributed only; the release ships no game data.
+
+
+## Performance pass â€” 2026-11-14 (Ocarina2 2.4, `nx2`)
+
+Target: 40%+ over the previous build, from code; no setting knobs. Kokiri benchmark is the metric
+(was ~15-27 fps in the last measurement).
+
+### Landed
+
+- **Crash fix (bc205229b3)**: hard `abort()` in OoT, reached through the draw path:
+  `BitsPerBlock(PixelFormat::Invalid = 0xff)`, called from `FullUploadSwizzles` via
+  `UploadImageContents`, reached via `RefreshContents` from `PrepareImage` in the
+  "fill image views" step of `GraphicsPipeline::ConfigureImpl` (module+RVA frames from
+  the crash dump matched against the PE's `.pdata`). Every `ImageInfo` constructor leaves a
+  valid format (TIC/RT/zeta fall back on unimplemented values; the DMA operand logs its assert),
+  so the image reaching the upload with format 255 comes from a null or stale image slot bound
+  as a view for the draw. It is not attributed yet. The upload is now dropped with a
+  rate-limited `LOG_CRITICAL` (image identity: gpu/cpu address, size, levels, layers, flags)
+  instead of aborting, and the unknown-format asserts in
+  `DefaultBlockWidth/Height/BitsPerBlock` log the stack they came through (module+offset,
+  matchable offline against `.pdata`). Suite: 1102 green.
+- **Ports #1441 + #1521 (862131bc44)**: constant buffer writes now go through the bound buffer's
+  one-time translation to device memory; the fast draw delta and `FlushCaching` use the same
+  merged range; `InvalidateConstantBufferData` otherwise behaves as `InnerInvalidation`.
+  Switch 2 sparse memory and CB ranges overlapping the texture/sampler header tables take the
+  general path; an unmapped device page logs and drops the bytes. From #1521: `TakeDelta` (fast
+  draw delta takes only the ranges in use) and the semaphore acquire/submit `NoteSync` points on
+  the "found met" paths and submits. Local suite: 1105 green. Note: the uniform keep subsystem
+  that consumes `SyncSerial`, `NoteUniformWrite` and the keep verifier does not exist on this
+  fork yet (upstream #1161 chain); the hooks are armed but have no consumers, so the port's win
+  today is the bound-buffer write path (fewer translation walks, one merged invalidation) plus
+  the delta memcpy cut. Not ported: uniform keeps, `RebindKeptUniform`/`KeptUniformMatches`,
+  DMA/InlineMemory uniform-write notes, uniform keep tests. Upstream `kept_pages` machinery for
+  unmapped device pages is absent here too; `mapped_normal` in `WriteBlockImpl` already drops on
+  a null pointer, so the boundary matches the fork's existing semantics.
+
+### MME / macro interpreter â€” where the time lives on nx2
+
+`EDEN_NX2_MME_JIT` is on by default (x86-64 JIT, `macro_turing_jit.h`), and both engines of a
+channel get `native_turing = true` (control/channel_state.cpp), so OoT runs the native path:
+per call, roughly: refresh parameters (one bool check), memo-less JIT execute of the macro code,
+then one `CallMethod` per emitted method write (that traffic is counted as the Method zone,
+~246 ms/s in the last profile, not the macro zone). The macro zone (~121 ms/s) is the native-code
+entry, the fifo copy and the emit callbacks themselves. The memo/`macro_turing.h` SIMD
+interpreter remain as fallback only (EDEN_NX2_MME_JIT=0 or unJIT-able code). Practical levers,
+in order of expected value:
+
+1. Reduce per-`CallMethod` work (dirty-flag bookkeeping, render-enable override and report
+   paths); this is also what the freshly landed constant-buffer fast path bypasses.
+2. Keep the JIT on and the macro memo out of the way (already the default).
+3. Measure `EDEN_NX2_MME_LOG`/zones before touching the JIT.
+
+Do not rewrite the interpreter; it is not on the OoT path.
+
