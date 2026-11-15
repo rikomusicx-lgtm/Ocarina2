@@ -1183,11 +1183,17 @@ void TextureCache<P>::TickRenderClock() {
 
 template <class P>
 const typename P::ImageView& TextureCache<P>::GetImageView(ImageViewId id) const noexcept {
+    if (id == NULL_IMAGE_VIEW_ID || !slot_image_views.contains(id)) {
+        return slot_image_views[NULL_IMAGE_VIEW_ID];
+    }
     return slot_image_views[id];
 }
 
 template <class P>
 typename P::ImageView& TextureCache<P>::GetImageView(ImageViewId id) noexcept {
+    if (id == NULL_IMAGE_VIEW_ID || !slot_image_views.contains(id)) {
+        return slot_image_views[NULL_IMAGE_VIEW_ID];
+    }
     return slot_image_views[id];
 }
 
@@ -1195,7 +1201,10 @@ template <class P>
 typename P::ImageView& TextureCache<P>::GetImageView(u32 index) noexcept {
     // Not compute!
     const auto image_view_id = VisitImageView(index, false);
-    return slot_image_views[image_view_id];
+    return slot_image_views[image_view_id == NULL_IMAGE_VIEW_ID ||
+                                    !slot_image_views.contains(image_view_id)
+                                ? NULL_IMAGE_VIEW_ID
+                                : image_view_id];
 }
 
 template <class P>
@@ -5700,6 +5709,10 @@ void TextureCache<P>::SynchronizeAliases(ImageId image_id) {
 
 template <class P>
 void TextureCache<P>::PrepareImage(ImageId image_id, bool is_modification, bool invalidate) {
+    if (image_id == NULL_IMAGE_ID) {
+        // The null image carries no contents: nothing to refresh, mark or track.
+        return;
+    }
     Image& image = slot_images[image_id];
     CheckCrossFrameUse(image, is_modification, invalidate);
     if (!tombstone_born.empty()) {
@@ -5763,8 +5776,31 @@ void TextureCache<P>::PrepareImageView(ImageViewId image_view_id, bool is_modifi
     if (!image_view_id) {
         return;
     }
+    if (!slot_image_views.contains(image_view_id)) {
+        // A view id a path kept past image deletion (the sampled texture memo does): the tables
+        // are invalidated on each delete, so this is a stale id. Force the full resolve.
+        static std::atomic<u32> logged{0};
+        if (logged.fetch_add(1, std::memory_order_relaxed) < 8) {
+            LOG_CRITICAL(HW_GPU,
+                         "PrepareImageView: view {} is not live; skipping the prepare",
+                         image_view_id.Value());
+        }
+        has_deleted_images = true;
+        return;
+    }
     const ImageViewBase& image_view = slot_image_views[image_view_id];
     if (image_view.IsBuffer()) {
+        return;
+    }
+    if (image_view.image_id == NULL_IMAGE_ID || !slot_images.contains(image_view.image_id)) {
+        static std::atomic<u32> logged{0};
+        if (logged.fetch_add(1, std::memory_order_relaxed) < 8) {
+            LOG_CRITICAL(HW_GPU,
+                         "PrepareImageView: view {} points at a dead image ({}); skipping the "
+                         "prepare",
+                         image_view_id.Value(), image_view.image_id.Value());
+        }
+        has_deleted_images = true;
         return;
     }
     PrepareImage(image_view.image_id, is_modification, invalidate);
