@@ -408,7 +408,14 @@ inline void LoadExperiments() {
         // predecessors). Castle Town live toggles: EXP43 0/3 46.3 -> 49.3 fps, EXP42 0/1 on top
         // 44.7 -> 47.9 (each won all 4 pairs); 21 loads 0 washed out; owner playtest: no visual
         // bugs, rarely under 40 fps.
-        g_experiments[42].store(1, std::memory_order_relaxed);
+        // EXP42 = 2 (2026-11-08); raised from 1 on 2026-11-15 after the Kokiri churn was
+        // measured at 176+176+121+95+89 of the (format, width) families per 600 frames in this
+        // game alone: Ocarina's per-frame allocator bumps the per-frame render targets a few
+        // hundred KB forward every frame (Skulltula House said as much), so the re-created HDR
+        // targets never get a slot back with 1. With 2 the pool also absorbs the dedicated-block
+        // ones, giving the per-frame heap a handful of images to recycle instead of live-allocate
+        // and delete per frame (the frame dips when a zone transition evects them).
+        g_experiments[42].store(2, std::memory_order_relaxed);
         g_experiments[43].store(3, std::memory_order_relaxed);
         // EXP56 = 1 (2026-11-09): a cleared depth target larger than its colour targets is not
         // uploaded from guest memory first (TextureCache::JoinImages, overwritten_by_clear).
