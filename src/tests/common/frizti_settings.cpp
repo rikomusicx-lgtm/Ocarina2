@@ -25,7 +25,7 @@ void CheckFriztiValues(const Settings::Values& values) {
     CHECK(values.gpu_accuracy.GetValue() == Settings::GpuAccuracy::Low);
     CHECK(values.dma_accuracy.GetValue() == Settings::DmaAccuracy::Default);
     CHECK(values.gpu_fence_behavior.GetValue() == Settings::GpuFenceBehavior::Default);
-    CHECK(values.vsync_mode.GetValue() == Settings::VSyncMode::Immediate);
+    CHECK(values.vsync_mode.GetValue() == Settings::VSyncMode::Mailbox);
     CHECK(values.async_presentation.GetValue());
     CHECK(values.use_asynchronous_shaders.GetValue());
     CHECK(values.use_docked_mode.GetValue() == Settings::ConsoleMode::Docked);
@@ -71,10 +71,10 @@ TEST_CASE("Between revisions only another build's changes are undone", "[frizti_
     const auto changes = Frizti::ReconcileGlobal(tuned, record, false);
     REQUIRE(changes.size() == 2);
     CHECK(values->gpu_accuracy.GetValue() == Settings::GpuAccuracy::High);
-    CHECK(values->vsync_mode.GetValue() == Settings::VSyncMode::Immediate);
+    CHECK(values->vsync_mode.GetValue() == Settings::VSyncMode::Mailbox);
     CHECK(values->scaling_filter.GetValue() == Settings::ScalingFilter::SgsrEdge);
     CHECK(Frizti::FormatChanges(changes) ==
-          "use_vsync: Fifo -> Immediate, scaling_filter: Fsr3 -> SgsrEdge");
+          "use_vsync: Fifo -> Mailbox, scaling_filter: Fsr3 -> SgsrEdge");
 }
 
 TEST_CASE("Ocarina's per-game overrides go back to global", "[frizti_settings]") {

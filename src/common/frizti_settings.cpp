@@ -28,7 +28,7 @@ std::vector<BasicSetting*> TunedSettings(Values& values) {
         &values.gpu_accuracy,             // Low
         &values.dma_accuracy,             // Default
         &values.gpu_fence_behavior,       // Default
-        &values.vsync_mode,               // Immediate: the host frame pacer times presents
+        &values.vsync_mode,               // Linkage default (Mailbox): the host frame pacer times presents
         &values.async_presentation,       // On: the host frame pacer runs on the present thread
         &values.use_asynchronous_shaders, // On: unbuilt pipelines skip draws, no freeze
         &values.use_docked_mode,          // Docked
