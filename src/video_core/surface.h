@@ -148,6 +148,10 @@ enum class PixelFormat : u32 {
 };
 constexpr std::size_t MaxPixelFormat = std::size_t(PixelFormat::Max);
 
+/// Reports an unknown PixelFormat reaching the block-size switches, with the stack it came
+/// from (defined in surface.cpp). The callers abort right after the report.
+void ReportUnknownPixelFormat(const char* what, u32 value) noexcept;
+
 enum class SurfaceType {
     ColorTexture = 0,
     Depth = 1,
@@ -172,7 +176,10 @@ constexpr u32 DefaultBlockWidth(PixelFormat format) noexcept {
 #define PIXEL_FORMAT_ELEM(name, width, height, bits) case PixelFormat::name: return width;
     PIXEL_FORMAT_LIST
 #undef PIXEL_FORMAT_ELEM
-    default: UNREACHABLE();
+    default: {
+        ReportUnknownPixelFormat("DefaultBlockWidth", static_cast<u32>(format));
+        UNREACHABLE();
+    }
     }
 }
 
@@ -181,7 +188,10 @@ constexpr u32 DefaultBlockHeight(PixelFormat format) noexcept {
 #define PIXEL_FORMAT_ELEM(name, width, height, bits) case PixelFormat::name: return height;
     PIXEL_FORMAT_LIST
 #undef PIXEL_FORMAT_ELEM
-    default: UNREACHABLE();
+    default: {
+        ReportUnknownPixelFormat("DefaultBlockHeight", static_cast<u32>(format));
+        UNREACHABLE();
+    }
     }
 }
 
@@ -190,7 +200,10 @@ constexpr u32 BitsPerBlock(PixelFormat format) noexcept {
 #define PIXEL_FORMAT_ELEM(name, width, height, bits) case PixelFormat::name: return bits;
     PIXEL_FORMAT_LIST
 #undef PIXEL_FORMAT_ELEM
-    default: UNREACHABLE();
+    default: {
+        ReportUnknownPixelFormat("BitsPerBlock", static_cast<u32>(format));
+        UNREACHABLE();
+    }
     }
 }
 

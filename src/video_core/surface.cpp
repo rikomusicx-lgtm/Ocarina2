@@ -4,8 +4,13 @@
 // SPDX-FileCopyrightText: 2014 Citra Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <cstring>
+#include <cstdio>
 #include <mutex>
 #include <set>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #include "common/common_types.h"
 #include "common/logging.h"
@@ -14,6 +19,40 @@
 #include "video_core/surface.h"
 
 namespace VideoCore::Surface {
+
+// Prints the frames the caller of the unknown-format assert came through, module+offset. The
+// build has no line symbols, so the addresses are matched offline against the PE's .pdata.
+void ReportUnknownPixelFormat(const char* what, u32 value) noexcept {
+#ifdef _WIN32
+    void* frames[24]{};
+    const USHORT count = RtlCaptureStackBackTrace(1, 24, frames, nullptr);
+    char out[1024]{};
+    std::size_t used = 0;
+    for (USHORT i = 0; i < count && frames[i]; ++i) {
+        HMODULE module{};
+        char path[MAX_PATH]{};
+        if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                                    GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                static_cast<LPCSTR>(frames[i]), &module) ||
+            GetModuleFileNameA(module, path, sizeof(path)) == 0) {
+            continue;
+        }
+        const char* slash = std::strrchr(path, '\\');
+        const uintptr_t offset =
+            reinterpret_cast<uintptr_t>(frames[i]) - reinterpret_cast<uintptr_t>(module);
+        const int written = std::snprintf(out + used, sizeof(out) - used, " %s+%#zx",
+                                          slash ? slash + 1 : path, offset);
+        if (written < 0 || used + static_cast<std::size_t>(written) >= sizeof(out)) {
+            break;
+        }
+        used += static_cast<std::size_t>(written);
+    }
+    LOG_CRITICAL(HW_GPU, "{}: unknown PixelFormat 0x{:x} ({}); stack:{}", what, value, value,
+                 out);
+#else
+    LOG_CRITICAL(HW_GPU, "{}: unknown PixelFormat 0x{:x} ({})", what, value, value);
+#endif
+}
 
 SurfaceTarget SurfaceTargetFromTextureType(Tegra::Texture::TextureType texture_type) {
     switch (texture_type) {

@@ -2839,6 +2839,24 @@ void TextureCache<P>::DownloadImageIntoBuffer(typename TextureCache<P>::Image* i
 
 template <class P>
 void TextureCache<P>::RefreshContents(Image& image, ImageId image_id) {
+    if (image.info.format == VideoCore::Surface::PixelFormat::Invalid) {
+        // An image with a dead/unknown descriptor (or a null slot a stale id reached): the
+        // upload used to abort the process in FullUploadSwizzles. Log it (rate limited) and
+        // drop the upload; the image keeps its stale contents.
+        static std::atomic<u32> logged{0};
+        if (logged.fetch_add(1, std::memory_order_relaxed) < 8) {
+            LOG_CRITICAL(HW_GPU,
+                         "RefreshContents: image with unknown format, dropping the upload: "
+                         "gpu_addr={:#x} cpu_addr={:#x} size {}x{}x{} levels {} layers {} "
+                         "flags {:#x}",
+                         image.gpu_addr, image.cpu_addr, image.info.size.width,
+                         image.info.size.height, image.info.size.depth,
+                         image.info.resources.levels, image.info.resources.layers,
+                         static_cast<u32>(image.flags));
+        }
+        image.flags &= ~ImageFlagBits::CpuModified;
+        return;
+    }
     if (False(image.flags & ImageFlagBits::CpuModified)) {
         // Only upload modified images
         return;
@@ -3233,6 +3251,15 @@ void TextureCache<P>::UploadLayers(Image& image, std::span<const u32> layers) {
 template <class P>
 template <typename StagingBuffer>
 void TextureCache<P>::UploadImageContents(Image& image, StagingBuffer& staging) {
+    if (image.info.format == VideoCore::Surface::PixelFormat::Invalid) {
+        // Belt and braces for the RefreshContents guard above: never reach FullUploadSwizzles
+        // with an unknown format, even from a future caller.
+        LOG_CRITICAL(HW_GPU,
+                     "UploadImageContents: image with unknown format, dropping the upload: "
+                     "gpu_addr={:#x} cpu_addr={:#x} flags {:#x}",
+                     image.gpu_addr, image.cpu_addr, static_cast<u32>(image.flags));
+        return;
+    }
     const std::span<u8> mapped_span = staging.mapped_span;
     const GPUVAddr gpu_addr = image.gpu_addr;
 
