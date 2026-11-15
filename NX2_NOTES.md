@@ -1713,3 +1713,39 @@ in order of expected value:
 
 Do not rewrite the interpreter; it is not on the OoT path.
 
+## 2026-11-15 - the Kokiri black UI and the intro crash root-caused and fixed
+
+Two bugs, one root. The Nov-14 settings bake flipped the OoT preset astc_recompression
+Bc3 -> Bc1. Opaque ASTC went BC1 (fine, the intended win), but the fork\'s decode/encode
+paths ignored the alpha scan entirely and BC1-encoded EVERY ASTC image - Kokiri Forest\'s
+hearts, Link\'s face and the UI/heart textures lost their alpha and rendered black.
+
+- Alpha fix (b109e1b4a3): every ASTC image carrying alpha is now BC3 end-to-end -
+  the CPU async decode sizing (ConvertedLayout), the encode path (ConvertImage), the
+  GPU transcode (TranscodeAstcToBcn), the async-decode staging sizing
+  (CalculateConvertedSizeBytes was missed in the first pass and every transparent ASTC
+  transcode wrote 2x its buffer on the ImageTranscode thread), the Vulkan image format,
+  the image-view formats and the GC memory accounting (TranscodedAstcSize). The sizing
+  and encode now route off the same cached astc_opaque bit everywhere.
+
+- **Crash root cause (dec6f0c772)**: Ocarina2.exe+0x198feb3 = stb__CompressAlphaBlock
+  (stb_dxt.cpp), the alpha-endpoint writer of the BC3/BC1 encoder. The converted-size
+  helper still used the Bc1 setting formula (0.5 byte per texel) for transparent images
+  while the encoder wrote BC3 (1 byte per texel) - 2x overflow per image into the next
+  heap block. The mangled minidump crashed at the same RVA from two different builds
+  because the TU never changed. The 08:48/10:24/11:17 crashes were all this. Fix: one
+  formula everywhere; the ConvertImage guard now refuses-and-logs instead of walking
+  off a heap end; u64 the transcode block/offset math; the queue-time diagnostic spam
+  added during the hunt is removed.
+
+- Verified on this machine (pid 3516, 00-lint build): intro AV1 completes, title screen
+  renders, Continue -> save -> Kokiri Forest loads, hearts/HUD/minimap render correct,
+  no crash dumps, no ConvertImage refusals (all sizes agree). Kokiri texture quality
+  still ramps over ~10-15 minutes because the CPU async ASTC transcode pool
+  (hardware_concurrency/4 = 3 workers here, one TextureDecoder orchestrator thread) is
+  outpaced by the streaming rate at r74 - the fork\'s own notes call this out (textures
+  arriving seconds late). Not a new bug and not caused by the fix; it settles once the
+  async queue drains.
+
+- 1.4 (build-57) remains the last published release. Everything here is on nx2,
+  unreleased; publish only on the owner\'s explicit word.
