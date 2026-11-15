@@ -361,12 +361,46 @@ constexpr std::array<VkFormat, 2> HugeAstcViewFormats{VK_FORMAT_A8B8G8R8_UNORM_P
 constexpr std::array<VkFormat, 2> OpaqueAstcViewFormats{VK_FORMAT_BC1_RGBA_UNORM_BLOCK,
                                                          VK_FORMAT_BC1_RGBA_SRGB_BLOCK};
 
+// ASTC image re-compressed on hardware without optimal ASTC support (transcode and CPU async
+// decode both land here). Alpha-carrying images must keep their alpha: BC1 discards it, so
+// only opaque ASTC shrinks to BC1 — everything else is BC3.
+[[nodiscard]] VkFormat AstcTranscodeVkFormat(const Device& device, const VideoCommon::ImageInfo& info) {
+    if (IsOpaqueBc1Astc(device, info)) {
+        return VideoCore::Surface::IsPixelFormatSRGB(info.format) ? VK_FORMAT_BC1_RGBA_SRGB_BLOCK
+                                                                  : VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
+    }
+    return VideoCore::Surface::IsPixelFormatSRGB(info.format) ? VK_FORMAT_BC3_SRGB_BLOCK
+                                                              : VK_FORMAT_BC3_UNORM_BLOCK;
+}
+
 [[nodiscard]] std::optional<VkFormat> AstcHostFormat(const Device& device, const ImageInfo& info) {
     if (IsOpaqueBc1Astc(device, info)) {
         return VideoCore::Surface::IsPixelFormatSRGB(info.format) ? VK_FORMAT_BC1_RGBA_SRGB_BLOCK
                                                                   : VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
     }
+    // Alpha-carrying ASTC on hardware without optimal support is transcoded to BC3 (BC1 would
+    // discard the alpha). Its image shares the transcode format.
+    if (!device.IsOptimalAstcSupported() && IsPixelFormatASTC(info.format) &&
+        Settings::GetAstcRecompression() != Settings::AstcRecompression::Uncompressed &&
+        !IsHugeAstcArray(device, info) && !IsUnevenMipRgba8Astc(device, info)) {
+        return AstcTranscodeVkFormat(device, info);
+    }
     return HugeAstcHostFormat(device, info);
+}
+
+inline constexpr std::array<VkFormat, 1> AstcTranscodeBc1Unorm{VK_FORMAT_BC1_RGBA_UNORM_BLOCK};
+inline constexpr std::array<VkFormat, 1> AstcTranscodeBc1Srgb{VK_FORMAT_BC1_RGBA_SRGB_BLOCK};
+inline constexpr std::array<VkFormat, 1> AstcTranscodeBc3Unorm{VK_FORMAT_BC3_UNORM_BLOCK};
+inline constexpr std::array<VkFormat, 1> AstcTranscodeBc3Srgb{VK_FORMAT_BC3_SRGB_BLOCK};
+[[nodiscard]] std::span<const VkFormat> AstcTranscodeViewFormats(const Device& device,
+                                                                 const VideoCommon::ImageInfo& info) {
+    switch (AstcTranscodeVkFormat(device, info)) {
+    case VK_FORMAT_BC1_RGBA_UNORM_BLOCK: return AstcTranscodeBc1Unorm;
+    case VK_FORMAT_BC1_RGBA_SRGB_BLOCK:  return AstcTranscodeBc1Srgb;
+    case VK_FORMAT_BC3_UNORM_BLOCK:      return AstcTranscodeBc3Unorm;
+    case VK_FORMAT_BC3_SRGB_BLOCK:       return AstcTranscodeBc3Srgb;
+    default: return {};
+    }
 }
 
 // ASTC that the GPU decodes and re-compresses to BC1/BC3 itself (TranscodeAstcToBcn): no CPU
@@ -3066,10 +3100,20 @@ Image::Image(TextureCacheRuntime& runtime_, const ImageInfo& info_, GPUVAddr gpu
                                IsHugeAstcArray(runtime_.device, info) ||
                                        IsUnevenMipRgba8Astc(runtime_.device, info)
                                    ? std::span<const VkFormat>{HugeAstcViewFormats}
+                               : !runtime_.device.IsOptimalAstcSupported() &&
+                                     VideoCore::Surface::IsPixelFormatASTC(info.format) &&
+                                     Settings::GetAstcRecompression() !=
+                                         Settings::AstcRecompression::Uncompressed
+                                   ? AstcTranscodeViewFormats(runtime_.device, info)
                                : IsOpaqueBc1Astc(runtime_.device, info)
                                    ? std::span<const VkFormat>{OpaqueAstcViewFormats}
                                    : runtime->ViewFormats(info.format),
-                               AstcHostFormat(runtime_.device, info),
+                               !runtime_.device.IsOptimalAstcSupported() &&
+                                       VideoCore::Surface::IsPixelFormatASTC(info.format) &&
+                                       Settings::GetAstcRecompression() !=
+                                           Settings::AstcRecompression::Uncompressed
+                                   ? std::optional<VkFormat>{AstcTranscodeVkFormat(runtime_.device, info)}
+                               : AstcHostFormat(runtime_.device, info),
                                UsesSparseLayers(runtime_.device, info, gpu_addr_) ||
                                    UsesSparseTiles(runtime_.device, info, gpu_addr_) ||
                                    IsUnwrittenSparse(runtime_.device, info, gpu_addr_),
@@ -4425,6 +4469,10 @@ ImageView::ImageView(TextureCacheRuntime& runtime, const VideoCommon::ImageViewI
         format_info.format = VideoCore::Surface::IsPixelFormatSRGB(format)
                                  ? VK_FORMAT_BC1_RGBA_SRGB_BLOCK
                                  : VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
+    } else if (!device->IsOptimalAstcSupported() && VideoCore::Surface::IsPixelFormatASTC(format) &&
+               Settings::GetAstcRecompression() != Settings::AstcRecompression::Uncompressed) {
+        // Transcoded ASTC on hardware without optimal support: alpha images carry BC3 data.
+        format_info.format = AstcTranscodeVkFormat(*device, image.info);
     }
     if (device->ApiVersion() >= VK_API_VERSION_1_3) {
         const VkFormatProperties3 properties3 =
@@ -5302,8 +5350,8 @@ void TextureCacheRuntime::TranscodeAstcToBcn(
         }
     }
     // Encode every level into one buffer, then copy it into the image.
-    const bool bc3 = !IsOpaqueBc1Astc(device, info) &&
-                     Settings::GetAstcRecompression() != Settings::AstcRecompression::Bc1;
+    // Alpha-carrying images must keep their alpha: BC1 discards it.
+    const bool bc3 = !IsOpaqueBc1Astc(device, info);
     const u64 block_bytes = bc3 ? 16 : 8;
     boost::container::small_vector<VideoCommon::BufferImageCopy, 16> copies;
     boost::container::small_vector<u64, 16> layer_bytes; // one encoded layer of each level

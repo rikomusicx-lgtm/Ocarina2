@@ -1300,8 +1300,9 @@ void ConvertedLayout(const ImageInfo& info, std::span<BufferImageCopy> copies) {
             size = u64{copy.image_extent.width} * copy.image_extent.height * layers *
                    BytesPerBlock(PixelFormat::A8B8G8R8_UNORM);
         } else if (astc) {
-            const u64 bpp_div =
-                recompression == Settings::AstcRecompression::Bc1 || info.astc_opaque ? 2 : 1;
+            // Size matches ConvertImage: alpha images are BC3 (1 byte per texel), only
+            // opaque ASTC shrinks to BC1.
+            const u64 bpp_div = info.astc_opaque ? 2 : 1;
             size = u64{Common::AlignUp(copy.image_extent.width, 4U)} *
                    Common::AlignUp(copy.image_extent.height, 4U) * layers / bpp_div;
         } else {
@@ -1334,10 +1335,9 @@ void ConvertImage(std::span<const u8> input, const ImageInfo& info, std::span<u8
         const auto input_offset = input.subspan(copy.buffer_offset);
         copy.buffer_offset = output_offset;
 
-        const auto recompression_setting = Settings::GetAstcRecompression();
         const bool astc = IsPixelFormatASTC(info.format);
 
-        if (astc && recompression_setting == Settings::AstcRecompression::Uncompressed) {
+        if (astc && Settings::GetAstcRecompression() == Settings::AstcRecompression::Uncompressed) {
             Tegra::Texture::ASTC::Decompress(
                 input_offset, copy.image_extent.width, copy.image_extent.height,
                 copy.image_subresource.num_layers * copy.image_extent.depth, tile_size.width,
@@ -1349,8 +1349,8 @@ void ConvertImage(std::span<const u8> input, const ImageInfo& info, std::span<u8
         } else if (astc) {
             // BC1 uses 0.5 bytes per texel
             // BC3 uses 1 byte per texel
-            const bool bc1 =
-                recompression_setting == Settings::AstcRecompression::Bc1 || info.astc_opaque;
+            // Alpha-carrying images must keep their alpha: BC1 discards it.
+            const bool bc1 = info.astc_opaque;
             const auto compress =
                 bc1 ? Tegra::Texture::BCN::CompressBC1 : Tegra::Texture::BCN::CompressBC3;
             const auto bpp_div = bc1 ? 2 : 1;
