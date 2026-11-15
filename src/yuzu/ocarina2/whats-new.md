@@ -1,8 +1,77 @@
-<!--
+﻿<!--
 The "What's new" notes shown on first launch after an update (Help > What's New). Paste the
 public release notes here when cutting a build. The download instructions at the top are
 dropped automatically in the app.
 -->
+## Ocarina2 v1.5
+
+Made by rikomusicx-lgtm. The Kokiri Forest build.
+
+**What every player notices**
+
+- **The Ocarina of Time preset decodes ASTC textures on the GPU at upload time.** Textures are ready the frame they first draw instead of waiting for the asynchronous CPU decode, which backed up for minutes in Kokiri Forest.
+- **Hearts, Link's face and the HUD render correctly in game.** Alpha-carrying ASTC images
+  (UI, hearts, surfaces with transparency) are re-compressed to BC3 end to end; BC1 keeps
+  alpha-free images only.
+- **The Ocarina of Time intro AV1 cutscene no longer crashes into a black screen.** The bug
+  was in the ASTC transcode path: the converted-size helper still sized alpha images as BC1
+  while the encoder wrote BC3, walking off a heap buffer on the ImageTranscode thread. The
+  sizing and the encoder now agree everywhere.
+- **Kokiri Forest uploads correctly from the point the zone loads** - the opacity scan the upload path did for every image is cached instead of re-reading the full image each time.
+- **Uploads no longer abort on odd images** - images with an unknown format drop the upload
+  with a logged reason instead of crashing the game.
+
+**Performance work**
+
+- **Faster constant-buffer writes** on the back thread (bound buffers translate once to
+  device memory; consecutive delta writes are merged; the fast draw path survives longer
+  between re-checks). Ported from upstream.
+- **Cheaper per-draw work on the split back thread** - the DK Bananza port (11.65 -> 14.83 fps
+  on the reference machine) is in this build.
+- **The shader compiler does less work**: SSA phis only where the value is actually live
+  across blocks, identity phis dropped, scalar constants and search pruning on raw IR.
+- **The texture cache drops VMA blocks on old-age eviction** instead of holding them forever.
+- **Writes and read traps no longer take the texture cache's lock on pages with no image,**
+  and the write-trap protection path tries a whole-range `VirtualProtect` before taking a
+  lock. Training the GC to evict at the mode's own age instead of the retention floor means
+  less churn on Kokiri's transient heap.
+- **GC now evicts at the right age, not the retention floor** (this build's Kokiri heap
+  evidence: ~176 HDR/depth targets created per 600 frames, owning different shapes).
+- **Dedicated render targets pool again** - the Frizti collector returns dedicated images to
+  the pool this time instead of destroying them every frame, saving live allocation at zone
+  transitions.
+
+**Robustness**
+
+- **The null-image path behind the upload guard is hardened** (views reject dead image ids,
+  the copy/image tree falls back safely).
+- **ASTC host image creation** always gets a consistent size - alpha images are BC3, opaque BC1,
+  and the staging buffer for a transcode is freed only after the encode copies complete.
+- **Fast draws reuse the size of the previous draw without re-verifying the vertex input**
+  on every call.
+
+**Still open (we are working on them)**
+
+- **Hyrule Town first-load texture glitch** - reduces to a narrow reproducer still being fixed.
+- **Title screen: buttons can fade and the screen isn't as fluid as it can be** - open.
+- **LSFG frame generation remains buggy.** Optical Flow (FSR3) is the reliable default.
+- **White flash mostly gone**, rare cases remain.
+
+**Credits**
+
+Made by **rikomusicx-lgtm**. Built on the work of:
+
+- **Eglantine** - Camille LaVey and contributors
+- **Eden** - the Eden team, the continuation of yuzu; yuzu-emu; **Sudachi** - Man Sorahia
+  and contributors
+- **Lichii** - zortos293 (maintainer) and the Lichii contributors; Djihads80
+- **Fritchii** - Frizti (5.8.4 is part of this build)
+- **Dark** - the Dynamic FPS timing patch
+- **RsMan-Dev** - Texture Pool x2
+- **janvitos, ProphetWild, 101Leafy, nyakuoff, monsterlag** - testing and bug reports
+- **Ocarina of Forks Discord** - testers and bug reporters
+
+Not affiliated with Nintendo. No games included.
 ## Ocarina2 v1.4
 
 Made by rikomusicx-lgtm.
@@ -20,11 +89,11 @@ Made by rikomusicx-lgtm.
 - **Foliage shadows draw again.** Points and lines route through the mesh compute fallback
   instead of disappearing.
 - **The base game's 1.0 output passes are handled correctly by No Sharpening.**
-- **The sound manager runs at 60 Hz under FPS Unlock** — music and voices no longer cut out
+- **The sound manager runs at 60 Hz under FPS Unlock** â€” music and voices no longer cut out
   above 60 fps.
-- **FPS Unlock behaves across the range** — the game's internal step counters, moving
+- **FPS Unlock behaves across the range** â€” the game's internal step counters, moving
   platforms and Gohma's steering all tick correctly at high frame rates (100 fps included).
-- **The GPU memory registry delivers its calls outside its lock** — addresses a frozen
+- **The GPU memory registry delivers its calls outside its lock** â€” addresses a frozen
   session caused by that path.
 - **Memory paths do less redundant work.** Large dirty guest writes are collected a page at
   a time; freed buffers are cleared from every channel's bindings; guest threads are
@@ -36,7 +105,7 @@ Made by rikomusicx-lgtm.
 - **Windows: a crash leaves evidence.** An unhandled exception writes a host crash line to
   the log and an `eden_crash.dmp` minidump.
 - **Texture Pool x2 is built in and on by default** (RsMan-Dev's patch). It targets
-  allocator failures mid-stream — the class of bug behind the town glitch reports — so
+  allocator failures mid-stream â€” the class of bug behind the town glitch reports â€” so
   streams that used to fail now have a second arena. Toggle it in Add-Ons if you want to
   compare.
 - **New `EDEN_NX2_FG_IDLE=0` switch** disables the static-screen frame-generation idle
@@ -45,11 +114,11 @@ Made by rikomusicx-lgtm.
 
 **Known issues (still open)**
 
-- **Hyrule Town texture glitch on first load** — still under investigation. The Texture
+- **Hyrule Town texture glitch on first load** â€” still under investigation. The Texture
   Pool x2 patch targets the allocator class of failure behind it; it is not confirmed as
   the fix yet. Owner reports keep coming in on this one.
 - **Title screen: buttons can fade or look weird, and the screen isn't as fluid as it could
-  be** — under investigation.
+  be** â€” under investigation.
 - **White flash is mostly gone (see 1.3); rare cases remain.**
 - **Lossless Scaling (LSFG) frame generation is still buggy.** Optical Flow (FSR3) is the
   reliable default and stays that way until LSFG is fixed.
@@ -58,16 +127,16 @@ Made by rikomusicx-lgtm.
 
 Made by **rikomusicx-lgtm**. Built on the work of:
 
-- **Eglantine** — Camille LaVey and contributors
-- **Eden** — the Eden team, the continuation of yuzu; yuzu-emu; **Sudachi** — Man Sorahia
+- **Eglantine** â€” Camille LaVey and contributors
+- **Eden** â€” the Eden team, the continuation of yuzu; yuzu-emu; **Sudachi** â€” Man Sorahia
   and contributors
-- **Lichii** — zortos293 (maintainer) and the Lichii contributors; Djihads80
-- **Fritchii** — Frizti (5.8.4 is part of this build)
-- **Dark** — the Dynamic FPS timing patch
-- **EvilOOT** — DMA snapshot research
-- **RsMan-Dev** — the Texture Pool x2 patch
-- **janvitos, ProphetWild, 101Leafy, nyakuoff, monsterlag** — testing and bug reports
-- **Ocarina of Forks Discord** — testers and bug reporters
+- **Lichii** â€” zortos293 (maintainer) and the Lichii contributors; Djihads80
+- **Fritchii** â€” Frizti (5.8.4 is part of this build)
+- **Dark** â€” the Dynamic FPS timing patch
+- **EvilOOT** â€” DMA snapshot research
+- **RsMan-Dev** â€” the Texture Pool x2 patch
+- **janvitos, ProphetWild, 101Leafy, nyakuoff, monsterlag** â€” testing and bug reports
+- **Ocarina of Forks Discord** â€” testers and bug reporters
 
 Not affiliated with Nintendo. No games included.
 
@@ -146,7 +215,7 @@ The v1.2 update: the "Ocarina2 v1" scale of fixes, kept short on purpose.
 **What's different compared to v1.1**
 
 - **Enter/Space handling works on every platform.** The pad's A button now ticks checkboxes and
-  radio buttons properly on Linux and macOS too — the filter used to exist only on Windows.
+  radio buttons properly on Linux and macOS too â€” the filter used to exist only on Windows.
 - **The window names the build correctly**: the app reports "Ocarina2 1.2" instead of the
   internal build number used by the release tooling.
 - **Build and test-suite fixes** so the release builds are gated on the full test suite again
@@ -158,7 +227,7 @@ The v1.2 update: the "Ocarina2 v1" scale of fixes, kept short on purpose.
 
 No gameplay changes in this update; Ocarina of Time plays the same.
 
-**We know there are more bugs — we are fixing them.**
+**We know there are more bugs â€” we are fixing them.**
 
 This build is better than v1.1, but it is not finished. We know there are bugs left: the
 intermittent white flash in combat-heavy scenes, first-boot shader compile hitches while the
@@ -173,24 +242,24 @@ Not affiliated with Nintendo. No games included.
 Made by rikomusicx-lgtm.
 
 The big GUI update: a new home screen, a dock to drive the app, and the worst v1 paper cuts
-ironed out. This update changes how Ocarina2 looks and feels — it is not the same app with new
+ironed out. This update changes how Ocarina2 looks and feels â€” it is not the same app with new
 paint.
 
 **The new GUI**
 
 - **Hyrule home screen.** The home page is a hand-drawn twilight scene of Hyrule Castle, drawn
   right into the window. Don't want it? Drop a `background.png` (or `.jpg` / `.jpeg`, up to
-  16 MB) into your ocarina2 folder and restart — your own picture becomes the backdrop.
+  16 MB) into your ocarina2 folder and restart â€” your own picture becomes the backdrop.
 - **The Switch 2-style dock.** A row of buttons across the bottom: Home, Games, Add games,
   Settings, What's new and More, with the bubbly little bounce when you hover or land focus on
-  one. The classic menus are all still there — behind More. The dock stays out of your game's
+  one. The classic menus are all still there â€” behind More. The dock stays out of your game's
   way.
 - **Top bar.** Triforce avatar, Home/Games switch, network glyphs and the clock.
 - **Games pane.** Games opens as its own pane with the games list controller-ready. Move focus
-  with the stick or D-pad — one press moves one row, never two — press A/Enter to launch the
+  with the stick or D-pad â€” one press moves one row, never two â€” press A/Enter to launch the
   highlighted game, and B/Escape (or Back) to go home again.
 - **Filter bar that tells the truth.** The filter bar and counter now show the real results on
-  every view — grid and carousel included — and no longer read "0 of 0 result(s)".
+  every view â€” grid and carousel included â€” and no longer read "0 of 0 result(s)".
 - **The hero card** is anchored to the artwork slot on every window size, and the hero art and
   vignette got reworked to look right on big screens.
 - **What's new in-app.** This very dialog. Open it from the dock's What's new button or Help >
@@ -199,7 +268,7 @@ paint.
 **Buttons and controls work more fluid**
 
 Menus answer the way you expect. The A button now works like a proper Select in checkboxes and
-radio buttons — settings tick and toggle when you press it, right on the pad — and focus never
+radio buttons â€” settings tick and toggle when you press it, right on the pad â€” and focus never
 gets lost or drops out of the window. Navigation feels snappier everywhere: the dock, the games
 list, the filter bar and the dialogs all react to single, clean presses.
 
@@ -213,7 +282,7 @@ between Optical Flow and Lossless Scaling (right-click the FG button) both work 
 **Bug fixes**
 
 - **Back button lost after the game closes.** In single-window mode the home screen and the dock
-  stayed hidden after the game exited — you were stranded on the games list with no way home.
+  stayed hidden after the game exited â€” you were stranded on the games list with no way home.
   The window now restores exactly what you had: the home screen, or the games pane with the
   Back button visible again.
 - **Games list stacked over the home screen on some boots.** Whichever of the two won the race
@@ -235,7 +304,7 @@ between Optical Flow and Lossless Scaling (right-click the FG button) both work 
 - The v1 graphics preset is now the default for new installs: Optical Flow (FSR3) frame generation
   x4, SGSR edge upscaling, FXAA, immediate vsync.
 - Built for low-end PCs: the 8 GB memory layout stays on machines under 16 GB of RAM (12 GB only
-  where it fits), handheld mode, BC3 ASTC textures and conservative VRAM for the texture cache —
+  where it fits), handheld mode, BC3 ASTC textures and conservative VRAM for the texture cache â€”
   8 GB cards should stay well under 4 GB of VRAM for this game.
 - The built-in Dynamic FPS patch now keeps Ocarina of Time at full speed even when the frame rate
   collapses: the tick delta is clamped to 100 ms per real frame (the same amount Lichii's #655
@@ -253,12 +322,12 @@ between Optical Flow and Lossless Scaling (right-click the FG button) both work 
   and buffer caches a bigger collector ceiling. Applies on the next launch; your own machine
   reports ~5 GB of budget, so 6 GB is the natural pick, and 4 GB is what 4 GB cards want.
 
-**We know there are more bugs — we are fixing them.**
+**We know there are more bugs â€” we are fixing them.**
 
 This build is better than v1, but it is not finished. We know there are bugs left in it: the
 intermittent white flash in combat-heavy scenes, first-boot shader compile hitches while the
 cache warms up, and anything else you hit. We will keep shipping fixes. The fastest way to
-help: **Help > Export Log** and send us the file — that is the one thing we need to fix things.
+help: **Help > Export Log** and send us the file â€” that is the one thing we need to fix things.
 
 Made by rikomusicx-lgtm. Built on Eglantine, Eden, Lichii and Frizti's Fritchii (5.8.4).
 Not affiliated with Nintendo. No games included.

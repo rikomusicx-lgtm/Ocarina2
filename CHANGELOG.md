@@ -1,9 +1,41 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to Eglantine are documented here. Each release's notes are taken from its
 `## [X.Y.Z]` section (release candidates use the section of the version they are a candidate for).
 New entries go under `## [Unreleased]`; `tools/ci/bump-version.sh` turns them into a version section.
 
+## [Ocarina2 v1.5] - 2026-11-15
+
+The Kokiri Forest release.
+
+Fixed:
+- Kokiri Forest HUD/hearts render black: alpha-carrying ASTC images go to BC3 everywhere
+  (converted-size math, the BC encoder, the GPU transcode, and the Vulkan image formats);
+  only genuinely opaque ASTC stays on BC1.
+- The Ocarina of Time intro cutscene crash: the ASTC transcoder wrote 2x its buffer on the
+  ImageTranscode thread (alpha images sized BC1, encoded BC3). Sized and encoded now agree
+  on every path.
+- Image uploads with an unknown format no longer abort the host process; the upload is
+  dropped with a logged reason.
+- Null-image view path hardened (PrepareImage/PrepareImageView guard for dead view ids).
+- Dedicated render targets reuse the image pool again instead of being re-created per
+  frame (Frizti EXP42 default raised to 2).
+- GC stops holding VMA blocks on old-age eviction.
+- ASTC opacity scans are cached instead of re-scanning every image at every creation.
+- Write traps no longer wait on the texture-cache's mutex on pages with no registered image.
+- VirtualProtect tries the whole range before the Protect placeholder lock.
+
+Changed:
+- The Ocarina of Time preset decodes ASTC textures on the GPU at upload time instead of
+  waiting for the asynchronous CPU decode.
+- Ocarina2 is now v1.5; "Ocarina2 1.5" is what the window title, the About dialog and the
+  update checker show.
+
+Upstream performance ports:
+- #1441 bound-buffer constant-buffer writes through one-time device translation, #1521
+  TakeDelta copying only in-use ranges, #1519 per-word uniform handle checks, vertex-input
+  draw parameters and fast-draw verification, #1516 fence bursts, #1731 collect-age GC fix,
+  #1320 constant search pruning, #1283 software HMMA rounding.
 ## [Ocarina2 v1.1] - 2026-11-12
 
 Made by rikomusicx-lgtm. The GUI update: a new home screen, a dock to drive the app, and the
@@ -50,16 +82,16 @@ New entries go under `## [Unreleased]`; `tools/ci/bump-version.sh` turns them in
 
 ## [Ocarina2 v1.0] - 2026-11-11
 
-First real release of Ocarina2 — our own fork of the Eglantine/Eden family, built on Frizti's
+First real release of Ocarina2 â€” our own fork of the Eglantine/Eden family, built on Frizti's
 Fritchii 5.8.4 (itself on Eglantine/Eden via Lichii). The Fritchii 5.8.4 feature set ships
-unchanged — the OoT performance path (handheld-tuned OOT 60 FPS preset at boot, 12 GB emulated
+unchanged â€” the OoT performance path (handheld-tuned OOT 60 FPS preset at boot, 12 GB emulated
 DRAM layout on 16 GB+ hosts with an 8 GB floor elsewhere, FSR anti-aliasing options, warm shader
 preload, DLSS off by default). What Ocarina2 adds on top:
 
 Added:
 - Lossless Scaling (LSFG) frame generation, selectable and switchable in game. F12 / L3+R3 quick
   menu cycles Frame generation between Optical Flow x3 (FSR3, zero extra files) and Lossless
-  Scaling x3 — applies live and saves. The FG status-bar button toggles on/off (left click) and
+  Scaling x3 â€” applies live and saves. The FG status-bar button toggles on/off (left click) and
   switches type (right click), both persisted.
 - LSFG auto-install from the user's own Steam install: the emulator locates the Steam library
   (registry SteamPath / libraryfolders.vdf), copies common/Lossless Scaling/Lossless.dll into the
@@ -174,3 +206,4 @@ still buggy (Optical Flow stays the default). See src/yuzu/ocarina2/whats-new.md
 ## [0.1.0]
 
 - Initial release candidate
+
