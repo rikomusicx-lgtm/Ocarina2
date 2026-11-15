@@ -26,6 +26,7 @@
 #include <boost/container/static_vector.hpp>
 #include <queue>
 
+#include "common/cityhash.h"
 #include "common/common_types.h"
 #include "common/spin_recursive_mutex.h"
 #include "common/hash.h"
@@ -206,6 +207,27 @@ class TextureCache : public VideoCommon::ChannelSetupCaches<TextureCacheChannelI
     u64 astc_opaque_images{};
     u64 astc_alpha_images{};
     std::vector<u8> astc_scan_buffer;
+    /// Key for AstcDataLooksOpaque cache entries: the full image geometry, plus a short content
+    /// probe (the first 512 bytes hashed) so an address reused for new data is re-scanned.
+    struct AstcOpaqueKey {
+        GPUVAddr gpu_addr{};
+        u32 format{};
+        u32 width{}, height{}, depth{};
+        u32 levels{}, layers{};
+        u64 probe{};
+
+        bool operator==(const AstcOpaqueKey&) const noexcept = default;
+    };
+    struct AstcOpaqueKeyHash {
+        std::size_t operator()(const AstcOpaqueKey& key) const noexcept {
+            u64 h = Common::CityHash64(reinterpret_cast<const char*>(&key), sizeof(key));
+            return static_cast<std::size_t>(h);
+        }
+    };
+    /// Hashed opacity results of recent ASTC images, keyed on probe + geometry. The same image
+    /// re-uploaded constantly in a zone (evicted, re-created) would otherwise be read fully every
+    /// few hundred frames; a probe keeps the answer fresh when the game rewrites the same address.
+    std::unordered_map<AstcOpaqueKey, bool, AstcOpaqueKeyHash> astc_opaque_cache;
     u64 images_deleted{};
     std::map<u64, std::pair<u32, GPUVAddr>> created_shapes;
     bool debug_stats{}; ///< Collect what only the debug statistics lines use

@@ -3913,9 +3913,31 @@ ImageId TextureCache<P>::JoinImages(const ImageInfo& info, GPUVAddr gpu_addr, DA
         if (IsPixelFormatASTC(new_info.format) && runtime.UseOpaqueAstcFormat()) {
             const size_t scan_bytes = CalculateGuestSizeInBytes(new_info);
             if (scan_bytes <= MaxScanBytes) {
-                astc_scan_buffer.resize(scan_bytes);
-                gpu_memory->ReadBlockUnsafe(gpu_addr, astc_scan_buffer.data(), scan_bytes);
-                new_info.astc_opaque = AstcDataLooksOpaque(astc_scan_buffer);
+                constexpr size_t ProbeBytes = 512;
+                alignas(16) std::array<u8, ProbeBytes> probe_bytes{};
+                gpu_memory->ReadBlockUnsafe(gpu_addr, probe_bytes.data(), ProbeBytes);
+                const AstcOpaqueKey astc_key{
+                    .gpu_addr = gpu_addr,
+                    .format = static_cast<u32>(new_info.format),
+                    .width = new_info.size.width,
+                    .height = new_info.size.height,
+                    .depth = new_info.size.depth,
+                    .levels = static_cast<u32>(new_info.resources.levels),
+                    .layers = static_cast<u32>(new_info.resources.layers),
+                    .probe = Common::CityHash64(reinterpret_cast<const char*>(probe_bytes.data()),
+                                                ProbeBytes),
+                };
+                if (const auto it = astc_opaque_cache.find(astc_key); it != astc_opaque_cache.end()) {
+                    new_info.astc_opaque = it->second;
+                } else {
+                    astc_scan_buffer.resize(scan_bytes);
+                    gpu_memory->ReadBlockUnsafe(gpu_addr, astc_scan_buffer.data(), scan_bytes);
+                    new_info.astc_opaque = AstcDataLooksOpaque(astc_scan_buffer);
+                    if (astc_opaque_cache.size() >= 512) {
+                        astc_opaque_cache.clear();
+                    }
+                    astc_opaque_cache.emplace(astc_key, new_info.astc_opaque);
+                }
                 ++(new_info.astc_opaque ? astc_opaque_images : astc_alpha_images);
             }
         }
