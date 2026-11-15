@@ -530,35 +530,69 @@ GraphicsPipeline::GraphicsPipeline(
     for (size_t stage = 0; stage < NUM_STAGES; ++stage) {
         const Shader::Info& info = stage_infos[stage];
         u32& handles = handle_constant_buffers[stage];
-        for (const auto& desc : info.texture_buffer_descriptors) {
+        auto& ranges = handle_ranges[stage];
+        std::array<boost::container::small_vector<std::pair<u32, u32>, 8>,
+                   Tegra::Engines::Maxwell3D::Regs::MaxConstBuffers>
+            words;
+        const auto add_range = [&](u32 slot, u32 begin, u32 end) {
+            handles |= 1U << slot;
+            auto& range = ranges[slot];
+            range = range.first == range.second
+                        ? std::pair{begin, end}
+                        : std::pair{(std::min)(range.first, begin), (std::max)(range.second, end)};
+            words[slot].emplace_back(begin, end);
+        };
+        // The words read_handle reads. Handles computed at draw time neither block delta draws
+        // nor take part: ComputedHandlesChanged evaluates them again for each delta draw, from
+        // the constant buffers bound and the data in memory then.
+        const auto add = [&](const auto& desc) {
             if (desc.handle_program != ~0U) {
-                block(DeltaBlocker::ComputedHandles);
+                return;
             }
-            handles |= 1U << desc.cbuf_index;
-            if (desc.has_secondary) {
-                handles |= 1U << desc.secondary_cbuf_index;
+            // Each element's word on its own: strided arrays leave words between the handles.
+            for (u32 index = 0; index < desc.count; ++index) {
+                // Read as a storage buffer address: the texture is the null one (ConfigureImpl).
+                if constexpr (std::is_same_v<std::remove_cvref_t<decltype(desc)>,
+                                             Shader::TextureDescriptor>) {
+                    if (VideoCommon::HandleIsStoragePointer(info, desc, index)) {
+                        continue;
+                    }
+                }
+                const u32 offset = desc.cbuf_offset + (index << desc.size_shift);
+                add_range(desc.cbuf_index, offset, offset + 4);
             }
+            if constexpr (requires { desc.has_secondary; }) {
+                if (desc.has_secondary) {
+                    add_range(desc.secondary_cbuf_index, desc.secondary_cbuf_offset,
+                              desc.secondary_cbuf_offset + 4);
+                }
+            }
+        };
+        for (const auto& desc : info.texture_buffer_descriptors) {
+            add(desc);
         }
         for (const auto& desc : info.image_buffer_descriptors) {
-            if (desc.handle_program != ~0U) {
-                block(DeltaBlocker::ComputedHandles);
-            }
-            handles |= 1U << desc.cbuf_index;
+            add(desc);
         }
         for (const auto& desc : info.texture_descriptors) {
-            if (desc.handle_program != ~0U) {
-                block(DeltaBlocker::ComputedHandles);
-            }
-            handles |= 1U << desc.cbuf_index;
-            if (desc.has_secondary) {
-                handles |= 1U << desc.secondary_cbuf_index;
-            }
+            add(desc);
         }
         for (const auto& desc : info.image_descriptors) {
-            if (desc.handle_program != ~0U) {
-                block(DeltaBlocker::ComputedHandles);
+            add(desc);
+        }
+        for (u32 slot = 0; slot < words.size(); ++slot) {
+            auto& list = words[slot];
+            std::ranges::sort(list);
+            const size_t first = handle_words.size();
+            for (const auto& range : list) {
+                if (handle_words.size() != first && range.first <= handle_words.back().second) {
+                    handle_words.back().second = (std::max)(handle_words.back().second, range.second);
+                } else {
+                    handle_words.push_back(range);
+                }
             }
-            handles |= 1U << desc.cbuf_index;
+            handle_word_index[stage][slot] = {static_cast<u16>(first),
+                                              static_cast<u16>(handle_words.size() - first)};
         }
     }
 
@@ -787,6 +821,8 @@ bool GraphicsPipeline::ConfigureImpl(bool is_indexed) {
     zero_texture_handles = 0;
     boost::container::small_vector<VideoCommon::ImageViewInOut, 160> views;
     boost::container::small_vector<VideoCommon::SamplerId, 96> samplers;
+    boost::container::small_vector<ComputedHandle, 16> computed_handles;
+    boost::container::small_vector<u32, 64> computed_values;
     views.reserve(num_image_elements);
     samplers.reserve(num_textures);
 
@@ -879,6 +915,29 @@ bool GraphicsPipeline::ConfigureImpl(bool is_indexed) {
             }
         }
         const auto& cbufs{maxwell3d->state.shader_stages[stage].const_buffers};
+        // Records each handle computed at draw time (ComputedHandlesChanged evaluates them again):
+        // one entry per descriptor, and its elements' values in order.
+        const auto note_computed{[&](const auto& desc, u32 element, u32 value) {
+            using Desc = std::remove_cvref_t<decltype(desc)>;
+            const auto [kind, first] = [&]() -> std::pair<ComputedHandleKind, const Desc*> {
+                if constexpr (std::is_same_v<Desc, Shader::TextureBufferDescriptor>) {
+                    return {TextureBuffer, info.texture_buffer_descriptors.data()};
+                } else if constexpr (std::is_same_v<Desc, Shader::ImageBufferDescriptor>) {
+                    return {ImageBuffer, info.image_buffer_descriptors.data()};
+                } else if constexpr (std::is_same_v<Desc, Shader::TextureDescriptor>) {
+                    return {Texture, info.texture_descriptors.data()};
+                } else {
+                    return {Image, info.image_descriptors.data()};
+                }
+            }();
+            if (element == 0) {
+                computed_handles.push_back({static_cast<u8>(stage), kind,
+                                            static_cast<u16>(&desc - first), 0,
+                                            static_cast<u32>(computed_values.size())});
+            }
+            ++computed_handles.back().count;
+            computed_values.push_back(value);
+        }};
         const auto read_handle{[&](const auto& desc, u32 index) {
             if (desc.handle_program != ~0U) {
                 // Read by the shader from a storage buffer: computed for this draw.
@@ -900,6 +959,7 @@ bool GraphicsPipeline::ConfigureImpl(bool is_indexed) {
                 }()};
                 const u64 storage_alignment{device.GetStorageBufferAlignment()};
                 const u32 raw{evaluate(align_storage ? storage_alignment : 1)};
+                note_computed(desc, index, raw);
                 if (raw == 0) {
                     ++zero_texture_handles;
                     static std::set<std::pair<u64, u32>> logged;
@@ -1128,6 +1188,8 @@ bool GraphicsPipeline::ConfigureImpl(bool is_indexed) {
         }
         delta_views.assign(views.begin(), views.end());
         delta_samplers.assign(samplers.begin(), samplers.end());
+        delta_computed_handles.assign(computed_handles.begin(), computed_handles.end());
+        delta_computed_values.assign(computed_values.begin(), computed_values.end());
         configured_stages = Spec::enabled_stages;
         delta_views_valid = true;
     }
@@ -1329,6 +1391,54 @@ bool GraphicsPipeline::ConfigureImpl(bool is_indexed) {
         }
     }
     return configured;
+}
+
+bool GraphicsPipeline::ComputedHandlesChanged() const {
+    // Whether a handle the last captured Configure computed at draw time (a handle program, which
+    // reads constant and storage buffers) evaluates to another value now: a delta draw would keep
+    // views and samplers resolved from the old one.
+    static const bool align_storage{[] {
+        const char* const value{std::getenv("EDEN_NX2_HANDLE_ALIGN")};
+        return value == nullptr || *value != '0';
+    }()};
+    for (const ComputedHandle& handle : delta_computed_handles) {
+        const Shader::Info& info{stage_infos[handle.stage]};
+        const auto& cbufs{maxwell3d->state.shader_stages[handle.stage].const_buffers};
+        u32 program{};
+        switch (handle.kind) {
+        case TextureBuffer:
+            program = info.texture_buffer_descriptors[handle.descriptor].handle_program;
+            break;
+        case ImageBuffer:
+            program = info.image_buffer_descriptors[handle.descriptor].handle_program;
+            break;
+        case Texture:
+            program = info.texture_descriptors[handle.descriptor].handle_program;
+            break;
+        default:
+            program = info.image_descriptors[handle.descriptor].handle_program;
+            break;
+        }
+        // The element the program evaluates the same value for. Storage-pointer arrays go the
+        // HandleIsStoragePointer path (checked word by word), not the note_computed path.
+        const u64 storage_alignment{
+            align_storage ? device.GetStorageBufferAlignment() : 1};
+        const u32 value{VideoCommon::EvaluateTextureHandle(
+            info, program, *gpu_memory,
+            [&](u32 cbuf) -> GPUVAddr {
+                return cbuf < cbufs.size() && cbufs[cbuf].enabled ? cbufs[cbuf].address
+                                                                 : GPUVAddr{};
+            },
+            storage_alignment)};
+        bool changed{};
+        for (u32 element = 0; element < handle.count && !changed; ++element) {
+            changed = value != delta_computed_values[handle.first_value + element];
+        }
+        if (changed) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /// Writes the descriptors the stages queued and the push constants, then records the draw's state

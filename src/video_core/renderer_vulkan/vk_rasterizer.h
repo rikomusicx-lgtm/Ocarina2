@@ -431,6 +431,9 @@ private:
         DeltaPipeline,
         HandleBind,
         HandleData,
+        SampledImages,
+        ComputedHandles,
+        VertexInput,
         Count,
     };
     /// Why a recorded draw can't be followed by a delta draw.
@@ -461,6 +464,7 @@ private:
         u64 pipeline_mismatches{};
         u64 view_mismatches{};
         u64 binding_mismatches{};
+        u64 vertex_input_mismatches{};
         /// DeltaPipeline draws by GraphicsPipeline::DeltaDrawBlocker.
         std::array<u64, static_cast<size_t>(GraphicsPipeline::DeltaBlocker::Count)> delta_blockers{};
         /// StateChanged draws by the reason of the last break, and by its 3D method.
@@ -484,6 +488,12 @@ private:
     /// Nx2FastDraw::Enabled and VerifyEnabled as the drawing thread last read them.
     bool fast_draw_on{};
     bool fast_draw_verify{};
+    /// EDEN_NX2_FAST_DRAW_VERIFY: the vertex input the draw before this one recorded, when the
+    /// flag was set for it; vertex attribute mismatches are counted against it.
+    bool verify_vertex_input{};
+    bool vertex_input_recorded{};
+    boost::container::static_vector<VkVertexInputBindingDescription2EXT, 32> recorded_bindings;
+    boost::container::static_vector<VkVertexInputAttributeDescription2EXT, 32> recorded_attributes;
 
     struct IndirectTrace {
         vk::Buffer readback;
