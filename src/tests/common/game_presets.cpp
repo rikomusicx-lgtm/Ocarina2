@@ -72,8 +72,8 @@ TEST_CASE("OOT 60 FPS preset restores Max Resolution and enables frame generatio
     CHECK(settings->resolution_setup.GetValue() == Settings::ResolutionSetup::Res1X);
     CHECK(settings->gpu_accuracy.GetValue() == Settings::GpuAccuracy::Low);
     CHECK(settings->use_asynchronous_shaders.GetValue());
-    CHECK(settings->astc_recompression.GetValue() == Settings::AstcRecompression::Bc3);
-    CHECK(settings->vsync_mode.GetValue() == Settings::VSyncMode::Immediate);
+    CHECK(settings->astc_recompression.GetValue() == Settings::AstcRecompression::Bc1);
+    CHECK(settings->vsync_mode.GetValue() == Settings::VSyncMode::Mailbox);
     CHECK(settings->gpu_fence_behavior.GetValue() == Settings::GpuFenceBehavior::Immediate);
     CHECK(settings->dma_accuracy.GetValue() == Settings::DmaAccuracy::Unsafe);
     CHECK(settings->vram_usage_mode.GetValue() == Settings::VramUsageMode::Aggressive);

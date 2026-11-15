@@ -220,7 +220,7 @@ struct Values {
     // current rule (hard 3.8 GB clamp below 10 GiB of budget, budget follower above); 4 GB is the
     // old smaller-card hard cap; 6 GB / 8 GB give bigger cards room to keep more resident.
     SwitchableSetting<VramCap, true> vram_cap{linkage,
-                                              VramCap::Auto,
+                                              VramCap::Cap_6Gb,
                                               "vram_cap",
                                               Category::Core,
                                               Specialization::Default,
@@ -365,9 +365,9 @@ struct Values {
     SwitchableSetting<ResolutionSetup> resolution_setup{linkage, ResolutionSetup::Res1X,
                                                         "resolution_setup", Category::Renderer};
 
-    // Immediate: the host frame pacer (vk_host_pacer.h) times presents to the display itself.
+    // Mailbox: raw rate (no FIFO blocking); the host frame pacer still times presents.
     SwitchableSetting<VSyncMode, true> vsync_mode{linkage,
-                                                  VSyncMode::Immediate,
+                                                  VSyncMode::Mailbox,
                                                   "use_vsync",
                                                   Category::Renderer,
                                                   Specialization::RuntimeList,
@@ -709,7 +709,7 @@ struct Values {
 
     // Threads of the shader warm-up (compute and graphics, each). EDEN_NX2_WARM_THREADS overrides.
     SwitchableSetting<u32, true> shader_warm_threads{linkage,
-                                                     4,
+                                                     1,
                                                      1,
                                                      32,
                                                      "shader_warm_threads",
@@ -761,7 +761,7 @@ struct Values {
 #ifdef __ANDROID__
                                                   false,
 #else
-                                                  true,
+                                                  false,
 #endif
                                                   "use_reactive_flushing",
                                                   Category::RendererAdvanced};

@@ -52,20 +52,20 @@ inline void SetOcarinaOfTimePerformanceSettings(Values& settings, bool global,
         setting.SetValue(value);
     };
     session(settings.renderer_backend, RendererBackend::Vulkan);
-    // The preset mirrors the owner's tuned handheld Ocarina of Time session: Fast GPU mode
-    // with immediate fences/VSync and unsafe DMA reads, the host-adaptive guest layout
-    // (12 GB on 16 GB+ machines, else 8 GB), aggressive VRAM
-    // usage and Force Max Clock.
+    // The preset mirrors the owner's tuned Ocarina of Time session: FSR3 in-game scaling with
+    // immediate fences and unsafe DMA reads, the host-adaptive guest layout
+    // (12 GB on 16 GB+ machines, else 8 GB), aggressive VRAM usage and Force Max Clock,
+    // Mailbox present pacing for raw frame rate.
     session(settings.resolution_setup, ResolutionSetup::Res1X);
     session(settings.gpu_accuracy, GpuAccuracy::Low);
     session(settings.use_asynchronous_gpu_emulation, true);
     session(settings.use_asynchronous_shaders, true);
-    session(settings.astc_recompression, AstcRecompression::Bc3);
-    session(settings.accelerate_astc, AstcDecodeMode::Gpu);
+    session(settings.astc_recompression, AstcRecompression::Bc1);
+    session(settings.accelerate_astc, AstcDecodeMode::CpuAsynchronous);
     session(settings.vram_usage_mode, VramUsageMode::Aggressive);
     session(settings.nvdec_emulation, NvdecEmulation::Gpu);
     session(settings.use_reactive_flushing, false);
-    session(settings.vsync_mode, VSyncMode::Immediate);
+    session(settings.vsync_mode, VSyncMode::Mailbox);
     session(settings.gpu_fence_behavior, GpuFenceBehavior::Immediate);
     session(settings.dma_accuracy, DmaAccuracy::Unsafe);
     session(settings.async_presentation, true);
@@ -76,7 +76,15 @@ inline void SetOcarinaOfTimePerformanceSettings(Values& settings, bool global,
     session(settings.anti_aliasing, AntiAliasing::Fxaa);
     session(settings.post_shader_enabled, false);
     session(settings.nvidia_dlss, true);
-    session(settings.max_anisotropy, AnisotropyMode::Automatic);
+    session(settings.nvidia_dlss_quality, NvidiaDlssQuality::UltraPerformance);
+    session(settings.oot_anti_aliasing, OotAntiAliasing::Fsr3);
+    session(settings.oot_movie_upscale, OotMovieUpscale::Bilinear);
+    session(settings.gpu_unswizzle_enabled, true);
+    session(settings.pin_gpu_threads, true);
+    session(settings.shader_warm_threads, 6);
+    session(settings.gpu_clock, GpuClock::Overclock);
+    session(settings.oot_high_refresh, true);
+    session(settings.max_anisotropy, AnisotropyMode::X16);
     session(settings.frame_pacing_mode, FramePacingMode::Target_Auto);
     session(settings.aspect_ratio, AspectRatio::R16_9);
     session(settings.gpu_unswizzle_texture_size, GpuUnswizzleSize::VeryLarge);
