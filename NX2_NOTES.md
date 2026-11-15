@@ -1749,3 +1749,20 @@ hearts, Link\'s face and the UI/heart textures lost their alpha and rendered bla
 
 - 1.4 (build-57) remains the last published release. Everything here is on nx2,
   unreleased; publish only on the owner\'s explicit word.
+
+## 2026-11-15 (later) - the preset was stomping the ini; GPU transcode is the OoT path now
+
+The "textures load instantly after my Gpu ini edit" test was a false positive: the Ocarina
+of Time preset forces accelerate_astc = CpuAsynchronous on every load (Frizti Rev 14 bake,
+session() = SetGlobal(false) + SetValue, applied on top of the per-game ini), which is why
+the settings log still printed CpuAsynchronous and the Kokiri ramp persisted no matter what
+the ini said. The vulkaninfo probe on this card shows the real reason the fork transcodes
+at all: NVIDIA\'s Vulkan driver reports textureCompressionASTC_LDR = false (driver
+621.24.0.0), so optimal ASTC is genuinely unavailable and GPU transcode is the only
+texture path (BC3 with alpha, BC1 opaque - my earlier fix). The OoT preset pins
+accelerate_astc = Gpu now (game_presets.h); the ini is irrelevant either way. Verified in
+this session: settings log prints "accelerate_astc: Gpu", title renders at 68-72 fps,
+Kept-pipelines path hot, zero crashes/refusals with the preset applied.
+
+Diagnostic added (vulkan_device.cpp): ComputeIsOptimalAstcSupported logs which requirement
+fails (LDR feature vs per-format tiling bits) so the cause shows in the log directly.

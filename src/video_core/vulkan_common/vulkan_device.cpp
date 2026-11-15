@@ -1157,15 +1157,22 @@ bool Device::ComputeIsOptimalAstcSupported() const {
         VK_FORMAT_ASTC_12x12_UNORM_BLOCK, VK_FORMAT_ASTC_12x12_SRGB_BLOCK,
     };
     if (!features.features.textureCompressionASTC_LDR) {
+        LOG_WARNING(Render_Vulkan, "IsOptimalAstcSupported: textureCompressionASTC_LDR is false");
         return false;
     }
-    const VkFormatFeatureFlags format_feature_usage{
-        VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT |
-        VK_FORMAT_FEATURE_TRANSFER_SRC_BIT | VK_FORMAT_FEATURE_TRANSFER_DST_BIT};
+    constexpr u32 required = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT |
+                             VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT |
+                             VK_FORMAT_FEATURE_TRANSFER_SRC_BIT |
+                             VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
     for (const auto format : astc_formats) {
         const auto physical_format_properties{physical.GetFormatProperties(format)};
-        if ((physical_format_properties.optimalTilingFeatures & format_feature_usage) !=
-            format_feature_usage) {
+        if ((physical_format_properties.optimalTilingFeatures & required) != required) {
+            LOG_WARNING(
+                Render_Vulkan,
+                "IsOptimalAstcSupported: format {} missing optimalTilingFeatures bits: has {:#x}, "
+                "needs {:#x}",
+                static_cast<u32>(format),
+                static_cast<u32>(physical_format_properties.optimalTilingFeatures), required);
             return false;
         }
     }

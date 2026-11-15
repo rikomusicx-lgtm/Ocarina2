@@ -61,7 +61,7 @@ inline void SetOcarinaOfTimePerformanceSettings(Values& settings, bool global,
     session(settings.use_asynchronous_gpu_emulation, true);
     session(settings.use_asynchronous_shaders, true);
     session(settings.astc_recompression, AstcRecompression::Bc1);
-    session(settings.accelerate_astc, AstcDecodeMode::CpuAsynchronous);
+    session(settings.accelerate_astc, AstcDecodeMode::Gpu);
     session(settings.vram_usage_mode, VramUsageMode::Aggressive);
     session(settings.nvdec_emulation, NvdecEmulation::Gpu);
     session(settings.use_reactive_flushing, false);
