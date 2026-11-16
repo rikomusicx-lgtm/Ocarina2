@@ -118,6 +118,7 @@ void MainWindow::SetUpOcarina2Ui() {
     Ocarina2Ui::HomeHooks home{
         .play = [this](const QString& path, u64 program_id) { OnGameListLoadFile(path, program_id); },
         .add_folder = [this] { OnGameListAddDirectory(); },
+        .add_file = [this] { ui->action_Load_File->trigger(); },
         .open_settings = [this] { OnConfigure(); },
         .game_settings =
             [this](u64 program_id, const std::string& path) {

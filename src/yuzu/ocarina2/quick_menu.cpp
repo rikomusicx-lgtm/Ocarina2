@@ -20,6 +20,7 @@
 #include "common/logging.h"
 #include "hid_core/hid_types.h"
 #include "yuzu/ocarina2/ocarina2_ui.h"
+#include "yuzu/ocarina2/sound.h"
 
 namespace Ocarina2Ui {
 
@@ -322,10 +323,16 @@ void QuickMenu::HandleKey(Qt::Key key) {
     const bool on_settings = pages && pages->currentIndex() == 1;
     switch (key) {
         case Qt::Key_Up:
+            SoundPlayer::Instance().Play(SoundPlayer::Effect::Navigate);
+            focusNextPrevChild(false);
+            return;
         case Qt::Key_Down:
-            focusNextPrevChild(key == Qt::Key_Down);
+            SoundPlayer::Instance().Play(SoundPlayer::Effect::Navigate);
+            focusNextPrevChild(true);
             return;
         case Qt::Key_Left:
+            SoundPlayer::Instance().Play(on_settings ? SoundPlayer::Effect::TabSwitch
+                                                      : SoundPlayer::Effect::Navigate);
             if (on_settings) {
                 cycleFocusedRow(-1);
                 return;
@@ -333,6 +340,8 @@ void QuickMenu::HandleKey(Qt::Key key) {
             focusNextPrevChild(false);
             return;
         case Qt::Key_Right:
+            SoundPlayer::Instance().Play(on_settings ? SoundPlayer::Effect::TabSwitch
+                                                      : SoundPlayer::Effect::Navigate);
             if (on_settings) {
                 cycleFocusedRow(+1);
                 return;
@@ -344,6 +353,7 @@ void QuickMenu::HandleKey(Qt::Key key) {
         case Qt::Key_Space:
             // A (the controller maps A to Enter): activate the focused row. If focus is somehow
             // elsewhere, fall back to Resume.
+            SoundPlayer::Instance().Play(SoundPlayer::Effect::Confirm);
             if (auto* button = qobject_cast<QAbstractButton*>(focusWidget())) {
                 button->click();
                 return;
@@ -354,6 +364,7 @@ void QuickMenu::HandleKey(Qt::Key key) {
             return;
         case Qt::Key_Escape:
         case Qt::Key_Home:
+            SoundPlayer::Instance().Play(SoundPlayer::Effect::Back);
             // B: on the settings page it steps back to the main page; on the main page it closes.
             if (on_settings) {
                 showPage(Page::Main);

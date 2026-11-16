@@ -19,10 +19,14 @@ class QToolButton;
 
 namespace Ocarina2Ui {
 
+class TileStrip;
+class HomePanel;
+
 /// What the home screen asks the main window to do.
 struct HomeHooks {
     std::function<void(const QString& path, u64 program_id)> play;
     std::function<void()> add_folder;
+    std::function<void()> add_file;  ///< "Open Game..." file picker
     std::function<void()> open_settings;
     std::function<void(u64 program_id, const std::string& path)> game_settings;
     std::function<void(u64 program_id)> delete_shader_cache; ///< after a confirmation
@@ -55,6 +59,9 @@ public:
     void OnEmulationStarting();
     /// Show the right page (home or the list) and put focus in the dock, console style.
     void Restore();
+    /// The dock's in-page panels (public for the debug auto-open hook).
+    Q_INVOKABLE void ShowAddGamesPanel();
+    Q_INVOKABLE void ShowWhatsNewPanel();
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -100,7 +107,7 @@ private:
     QToolButton* update_button = nullptr;
     QToolButton* settings_button = nullptr;
     QToolButton* menu_button = nullptr;
-    QToolButton* play = nullptr;  ///< the hero image, click to launch
+    TileStrip* tile_strip = nullptr;  ///< Switch-2-style tile strip, arrow Left/Right moves
     QList<QWidget*> nav_order_;  ///< Focus order: dock and hero.
     int nav_index_ = 0;
     QTimer* refresh_timer = nullptr;

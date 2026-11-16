@@ -547,3 +547,166 @@ QPushButton#Ocarina2Link:hover {
     color: #ffffff;
 }
 QPushButton#Ocarina2Link:pressed { background: #181720; border-color: #26222e; }
+
+/* ============ Settings, quick-menu style (ocarina2 configure dialog) ============ */
+QDialog#ConfigureDialog {
+    background: #141222;
+    border: 1px solid #35324d;
+    border-radius: 26px;
+}
+QDialog#ConfigureDialog QListWidget#selectorList::item {
+    padding: 15px 18px;
+    border-radius: 16px;
+    margin: 3px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #a8a4bb;
+    border: 1px solid transparent;
+}
+QDialog#ConfigureDialog QListWidget#selectorList::item:hover { background: #1e1c2b; color: #eceaf2; }
+QDialog#ConfigureDialog QListWidget#selectorList::item:selected {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #2e2848, stop: 1 #272140);
+    color: #ffffff;
+    border: 1px solid #3d365a;
+}
+QDialog#ConfigureDialog QTabBar::tab {
+    padding: 11px 30px;
+    margin: 3px;
+    border-radius: 14px;
+    background: #1e1c2b;
+    color: #9896ab;
+    border: 1px solid transparent;
+    font-size: 14px;
+    font-weight: 700;
+}
+QDialog#ConfigureDialog QTabBar::tab:hover { background: #262333; color: #e6e3ef; }
+QDialog#ConfigureDialog QTabBar::tab:selected {
+    background: #332c50;
+    color: #ffffff;
+    border: 1px solid #3d365a;
+}
+QDialog#ConfigureDialog QDialogButtonBox QPushButton {
+    border-radius: 15px;
+    padding: 11px 26px;
+    font-size: 14px;
+    font-weight: 700;
+}
+QDialog#ConfigureDialog QDialogButtonBox QPushButton:default {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #8b5cf6, stop: 0.5 #a78bfa, stop: 1 #c4b5fd);
+    color: #1c1433;
+    border: none;
+}
+QDialog#ConfigureDialog QDialogButtonBox QPushButton:hover:default {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #ab7efa, stop: 0.5 #bb9dfb, stop: 1 #d2c4ff);
+}
+C:\Users\rikom
+
+/* ============ Switch 2 home: circular dock, hint row, panels (2026-11) ============ */
+QWidget#Ocarina2TileStrip { background: transparent; }
+QScrollArea#Ocarina2TileScroll { background: transparent; border: none; }
+QWidget#Ocarina2TileContent { background: transparent; }
+
+QLabel#Ocarina2CurrentGame {
+    color: #3fd8ff;
+    background: transparent;
+    border: none;
+    padding: 0;
+    font-size: 17px;
+    font-weight: 700;
+}
+QLabel#Ocarina2HomeHintText {
+    color: #8f8ca6;
+    background: transparent;
+    font-size: 12px;
+    font-weight: 600;
+}
+QWidget#Ocarina2HomeHintBar { background: transparent; }
+
+QWidget#Ocarina2Dock {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 rgba(26, 24, 38, 235), stop: 1 rgba(13, 12, 21, 235));
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    border-radius: 46px;
+}
+QToolButton#Ocarina2DockCircle {
+    background: qradialgradient(cx: 0.5, cy: 0.38, radius: 0.72, fx: 0.5, fy: 0.34,
+        stop: 0 #38354f, stop: 1 #252333);
+    border: 1.5px solid #3f3c5a;
+    border-radius: 28px;
+    color: #d9d6e6;
+    padding: 0;
+}
+QToolButton#Ocarina2DockCircle:hover {
+    background: qradialgradient(cx: 0.5, cy: 0.38, radius: 0.72, fx: 0.5, fy: 0.34,
+        stop: 0 #443f5e, stop: 1 #2c2939);
+    border-color: #57536f;
+    color: #ffffff;
+}
+QToolButton#Ocarina2DockCircle:pressed { background: #221f2e; border-color: #46425e; }
+QToolButton#Ocarina2DockCircle:focus {
+    background: qradialgradient(cx: 0.5, cy: 0.38, radius: 0.72, fx: 0.5, fy: 0.34,
+        stop: 0 #39435c, stop: 1 #262c3c);
+    border: 3px solid #3fd8ff;
+}
+QToolButton#Ocarina2DockHome {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,
+        stop: 0 #b39dff, stop: 0.5 #9a7cf5, stop: 1 #7b5cf0);
+    border: 1.5px solid #cabffd;
+    border-radius: 32px;
+    color: #ffffff;
+    padding: 0;
+}
+QToolButton#Ocarina2DockHome:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,
+        stop: 0 #c2b1ff, stop: 0.5 #a98bfa, stop: 1 #8a6cf5);
+    border-color: #ded5ff;
+}
+QToolButton#Ocarina2DockHome:pressed { background: #6d4fe0; }
+QToolButton#Ocarina2DockHome:focus {
+    border: 3px solid #3fd8ff;
+}
+QToolButton#Ocarina2Avatar { border-radius: 21px; }
+
+/* In-page panels (ocarina2/home_panel.cpp) */
+QWidget#Ocarina2HomePanelCard {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #201d33, stop: 1 #151325);
+    border: 1px solid #38354f;
+    border-radius: 26px;
+}
+QScrollArea#Ocarina2HomePanelScroll,
+QWidget#Ocarina2HomePanelRows {
+    background: transparent;
+    border: none;
+}
+QWidget#Ocarina2HomePanelBody { background: transparent; }
+QPushButton#Ocarina2PanelRow {
+    background: transparent;
+    border: 2px solid transparent;
+    border-radius: 15px;
+    color: #e6e3ef;
+    font-size: 15px;
+    padding: 12px 14px;
+    text-align: left;
+}
+QPushButton#Ocarina2PanelRow:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #27243a, stop: 1 #201e2e);
+}
+QPushButton#Ocarina2PanelRow:pressed { background: #1c1a28; }
+QPushButton#Ocarina2PanelRow:focus { border: 2px solid #3fd8ff; background: #1d2029; }
+QPushButton#Ocarina2PanelRow:disabled { color: #54525f; }
+QLabel#Ocarina2PanelSection {
+    color: #8f8ca6;
+    background: transparent;
+    font-size: 10px;
+    font-weight: 800;
+}
+QTextBrowser#Ocarina2Notes {
+    background: transparent;
+    border: none;
+    color: #d8d5e6;
+}

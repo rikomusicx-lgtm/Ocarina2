@@ -45,6 +45,8 @@
 #include "yuzu/configuration/configure_web.h"
 #include "yuzu/hotkeys.h"
 #include "yuzu/ocarina2/ocarina2_ui.h"
+#include "yuzu/ocarina2/sound.h"
+#include <map>
 
 ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
                                  InputCommon::InputSubsystem* input_subsystem,
@@ -80,6 +82,33 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
 
     ui->setupUi(this);
     InstallRecursive(this, this);
+    if (Ocarina2Ui::Enabled()) {
+        // Full-page overlay instead of a window pull-up: translucent backdrop, rounded card,
+        // covers the whole main window like the quick menu does.
+        setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
+        setAttribute(Qt::WA_TranslucentBackground);
+        if (const QWidget* top = parentWidget()) {
+            setGeometry(top->geometry().adjusted(14, 12, -14, -12));
+        }
+        ui->tabWidget->setObjectName(QStringLiteral("Ocarina2SettingsTabs"));
+        // A console-style header above the categories, like the quick menu's pause page.
+        auto* header = new QWidget(this);
+        header->setObjectName(QStringLiteral("Ocarina2SettingsHeader"));
+        auto* header_layout = new QVBoxLayout(header);
+        header_layout->setContentsMargins(26, 22, 26, 6);
+        header_layout->setSpacing(2);
+        auto* eyebrow = new QLabel(header);
+        eyebrow->setObjectName(QStringLiteral("Ocarina2SettingsEyebrow"));
+        eyebrow->setText(QStringLiteral("O C A R I N A 2   S E T T I N G S"));
+        auto* title = new QLabel(header);
+        title->setObjectName(QStringLiteral("Ocarina2SettingsTitle"));
+        title->setText(QStringLiteral("Settings"));
+        header_layout->addWidget(eyebrow);
+        header_layout->addWidget(title);
+        if (auto* main = qobject_cast<QVBoxLayout*>(layout())) {
+            main->insertWidget(0, header);
+        }
+    }
 
     ui->tabWidget->addTab(applets_tab.get(), tr("Applets"));
     ui->tabWidget->addTab(audio_tab.get(), tr("Audio"));
@@ -133,17 +162,22 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
         setWindowTitle(tr("Settings"));
         ui->label->setText(tr("Some settings can't change while a game runs."));
         ui->label->setVisible(system.IsPoweredOn());
-        ui->selectorList->setFixedWidth(180);
+        ui->label->setContentsMargins(26, 10, 26, 0);
+        ui->selectorList->setFixedWidth(220);
         layout()->setSizeConstraint(QLayout::SetNoConstraint);
-        setMinimumSize(640, 460);
-        resize(940, 680);
+        setMinimumSize(880, 560);
+        if (const QWidget* top = parentWidget()) {
+            setGeometry(top->geometry().adjusted(14, 12, -14, -12));
+        } else {
+            resize(1400, 860);
+        }
 
         // OoT's own values (Configure Game) beat these, the usual "my settings didn't apply".
         if (const QStringList overrides = Ocarina2Ui::OcarinaGameOverrides();
             !overrides.isEmpty()) {
             auto* const banner = new QWidget(this);
             auto* const row = new QHBoxLayout(banner);
-            row->setContentsMargins(0, 0, 0, 8);
+            row->setContentsMargins(26, 8, 26, 8);
             auto* const text = new QLabel(
                 tr("Ocarina of Time keeps its own value for %n of these settings, so changes "
                    "here don't reach it.",
@@ -205,6 +239,7 @@ bool ConfigureDialog::eventFilter(QObject* watched, QEvent* event) {
         const int delta = key->key() == Qt::Key_PageUp ? -1 : 1;
         // Cycle the left-hand selector; it rebuilds the tab widget to match.
         const int target = (ui->selectorList->currentRow() + delta + count) % count;
+        Ocarina2Ui::SoundPlayer::Instance().Play(Ocarina2Ui::SoundPlayer::Effect::TabSwitch);
         ui->selectorList->setCurrentRow(target);
         return true;
     }
@@ -221,21 +256,25 @@ bool ConfigureDialog::eventFilter(QObject* watched, QEvent* event) {
     switch (key->key()) {
         case Qt::Key_Up:
         case Qt::Key_Left:
+            Ocarina2Ui::SoundPlayer::Instance().Play(Ocarina2Ui::SoundPlayer::Effect::Navigate);
             focusNextPrevChild(false);
             return true;
         case Qt::Key_Down:
         case Qt::Key_Right:
+            Ocarina2Ui::SoundPlayer::Instance().Play(Ocarina2Ui::SoundPlayer::Effect::Navigate);
             focusNextPrevChild(true);
             return true;
         case Qt::Key_Return:
         case Qt::Key_Enter:
         case Qt::Key_Space:
+            Ocarina2Ui::SoundPlayer::Instance().Play(Ocarina2Ui::SoundPlayer::Effect::Confirm);
             if (auto* button = qobject_cast<QAbstractButton*>(focus)) {
                 button->click();
                 return true;
             }
             return true;  // swallow any stray activate in this dialog
         case Qt::Key_Escape:
+            Ocarina2Ui::SoundPlayer::Instance().Play(Ocarina2Ui::SoundPlayer::Effect::Back);
             reject();
             return true;
         default:
@@ -327,11 +366,30 @@ void ConfigureDialog::PopulateSelectionList() {
         profile_tab->setAccessibleName(tr("Users"));
     }
 
+    const auto icon_for = [](const QString& name) {
+        return Ocarina2Ui::Enabled() ? Ocarina2Ui::Icon(name, 20) : QIcon();
+    };
+
     [[maybe_unused]] const QSignalBlocker blocker(ui->selectorList);
 
     ui->selectorList->clear();
+    ui->selectorList->setIconSize(QSize(22, 22));
     for (const auto& entry : Ocarina2Ui::Enabled() ? ocarina2_items : items) {
         auto* const item = new QListWidgetItem(entry.first);
+        if (Ocarina2Ui::Enabled()) {
+            // Switch 2-ish glyph per category so the settings rail reads at a glance.
+            static const std::map<QString, QString> icons{
+                {QStringLiteral("General"), QStringLiteral("triforce")},
+                {QStringLiteral("Graphics"), QStringLiteral("star")},
+                {QStringLiteral("Controls"), QStringLiteral("gamepad")},
+                {QStringLiteral("Audio"), QStringLiteral("pause")},
+                {QStringLiteral("System"), QStringLiteral("settings")},
+                {QStringLiteral("Advanced"), QStringLiteral("menu")},
+                {QStringLiteral("CPU"), QStringLiteral("restart")},
+            };
+            const auto found = icons.find(entry.first);
+            item->setIcon(icon_for(found != icons.end() ? found->second : QStringLiteral("settings")));
+        }
         item->setData(Qt::UserRole, QVariant::fromValue(entry.second));
 
         ui->selectorList->addItem(item);

@@ -41,11 +41,15 @@
 #include "common/fs/path_util.h"
 #include "common/logging.h"
 #include "qt_common/game_list/game_list_p.h"
+#include "yuzu/ocarina2/home_panel.h"
 #include "yuzu/ocarina2/ocarina2_ui.h"
 #include "yuzu/ocarina2/saves_window.h"
+#include "yuzu/ocarina2/sound.h"
+#include "yuzu/ocarina2/tile_strip.h"
 #include "yuzu/ocarina2/whats_new.h"
 #include <QStyle>
 #include <QStyleOption>
+#include <QTextBrowser>
 
 namespace Ocarina2Ui {
 namespace {
@@ -273,7 +277,27 @@ Home::Home(QMainWindow* window_, QBoxLayout* central, QWidget* game_list_, QWidg
     back_button->setFixedWidth(120);
     back_button->hide();
     back_button->installEventFilter(this);
-    connect(back_button, &QPushButton::clicked, this, &Home::ShowHome);
+    connect(back_button, &QPushButton::clicked, this, [this] {
+        SoundPlayer::Instance().Play(SoundPlayer::Effect::Back);
+        ShowHome();
+    });
+
+    // The game list builds itself on a worker after the UI comes up, so the first Refresh() can
+    // see an empty model. Poll a few times over the first seconds so the strip fills itself in.
+    auto* warmup = new QTimer(this);
+    warmup->setInterval(1500);
+    int calls = 0;
+    connect(warmup, &QTimer::timeout, this, [this, warmup, calls]() mutable {
+        if (++calls > 15 || (hooks.model && hooks.model->rowCount() > 0 && calls > 3)) {
+            warmup->stop();
+            if (hooks.model && hooks.model->rowCount() > 0) {
+                Refresh();
+            }
+            return;
+        }
+        Refresh();
+    });
+    warmup->start();
 
     refresh_timer = new QTimer(this);
     refresh_timer->setSingleShot(true);
@@ -297,65 +321,52 @@ QWidget* Home::MakeRail() {
     rail->setAttribute(Qt::WA_StyledBackground);
     rail->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
     auto* layout = new QHBoxLayout(rail);
-    layout->setContentsMargins(26, 14, 26, 14);
-    layout->setSpacing(18);
+    layout->setContentsMargins(18, 12, 18, 12);
+    layout->setSpacing(16);
     layout->setAlignment(Qt::AlignHCenter);
 
-    const auto make = [this](const QString& icon, const QString& caption, const QString& tip) {
-        auto* cell = new QWidget(rail);
-        cell->setObjectName(QStringLiteral("Ocarina2DockCell"));
-        auto* cell_layout = new QVBoxLayout(cell);
-        cell_layout->setContentsMargins(0, 6, 0, 0);
-        cell_layout->setSpacing(4);
-        cell_layout->setAlignment(Qt::AlignHCenter);
-
-        auto* button = new BounceToolButton(cell);
-        button->setObjectName(QStringLiteral("Ocarina2DockButton"));
+    const auto make = [this](const QString& icon, const QString& caption, const QString& tip,
+                             bool home) {
+        auto* button = new BounceToolButton(rail);
+        button->setObjectName(home ? QStringLiteral("Ocarina2DockHome")
+                                   : QStringLiteral("Ocarina2DockCircle"));
         button->setProperty("band", 4);
-        button->setFixedSize(84, 84);
+        button->setProperty("caption", caption);
+        button->setFixedSize(home ? 64 : 56, home ? 64 : 56);
         button->setToolButtonStyle(Qt::ToolButtonIconOnly);
-        button->setIcon(Icon(icon, 32));
-        button->setIconSize(QSize(32, 32));
+        button->setIcon(Icon(icon, home ? 26 : 22));
+        button->setIconSize(QSize(home ? 26 : 22, home ? 26 : 22));
         button->setToolTip(tip);
         button->setCursor(Qt::PointingHandCursor);
         button->setFocusPolicy(Qt::StrongFocus);
-        auto* shadow = new QGraphicsDropShadowEffect(button);
-        shadow->setBlurRadius(20);
-        shadow->setOffset(0, 3);
-        shadow->setColor(QColor(0, 0, 0, 140));
-        button->setGraphicsEffect(shadow);
-        cell_layout->addWidget(button, 0, Qt::AlignHCenter);
-
-        auto* label = new QLabel(cell);
-        label->setObjectName(QStringLiteral("Ocarina2DockLabel"));
-        label->setText(caption);
-        label->setAlignment(Qt::AlignHCenter);
-        cell_layout->addWidget(label, 0, Qt::AlignHCenter);
+        button->installEventFilter(this);
+        connect(button, &QToolButton::clicked, this,
+                [] { SoundPlayer::Instance().Play(SoundPlayer::Effect::Confirm); });
         return button;
     };
 
-    home_button = make(QStringLiteral("home"), tr("Home"), tr("Home screen"));
+    home_button = make(QStringLiteral("home"), tr("Home"), tr("Home screen"), /*home=*/true);
     connect(home_button, &QToolButton::clicked, this, &Home::ShowHome);
 
-    library_button = make(QStringLiteral("list"), tr("Games"), tr("Show every game"));
+    library_button = make(QStringLiteral("list"), tr("Games"), tr("Show every game"), false);
     connect(library_button, &QToolButton::clicked, this, &Home::ShowList);
 
-    folder_button = make(QStringLiteral("folder"), tr("Add games"), tr("Add a games folder"));
-    connect(folder_button, &QToolButton::clicked, this, [this] { hooks.add_folder(); });
+    folder_button = make(QStringLiteral("folder"), tr("Add games"), tr("Add games to the list"), false);
+    connect(folder_button, &QToolButton::clicked, this, [this] { ShowAddGamesPanel(); });
 
-    settings_button = make(QStringLiteral("settings"), tr("Settings"),
-                           tr("Open the configuration dialog"));
+    settings_button =
+        make(QStringLiteral("settings"), tr("Settings"), tr("Open settings"), false);
     connect(settings_button, &QToolButton::clicked, this, [this] { hooks.open_settings(); });
 
     update_button =
-        make(QStringLiteral("star"), tr("What's new"), tr("See what's new in this build"));
-    connect(update_button, &QToolButton::clicked, this, [this] { ShowWhatsNew(window); });
+        make(QStringLiteral("star"), tr("What's new"), tr("See what's new in this build"), false);
+    connect(update_button, &QToolButton::clicked, this, [this] { ShowWhatsNewPanel(); });
 
     auto* classic = new QMenu(rail);
     for (QMenu* menu : hooks.classic_menus) {
         classic->addMenu(menu);
     }
-    menu_button = make(QStringLiteral("menu"), tr("More"), tr("Show all menus"));
+    menu_button = make(QStringLiteral("menu"), tr("More"), tr("Show all menus"), false);
     connect(menu_button, &QToolButton::clicked, this, [classic, this] {
         const QSize size = classic->sizeHint();
         classic->exec(menu_button->mapToGlobal(QPoint(0, menu_button->height() - size.height())));
@@ -364,8 +375,7 @@ QWidget* Home::MakeRail() {
     for (QWidget* button :
          {home_button, library_button, folder_button, settings_button, update_button,
           menu_button}) {
-        layout->addWidget(button->parentWidget());
-        button->installEventFilter(this);
+        layout->addWidget(button);
     }
     return rail;
 }
@@ -452,94 +462,85 @@ QWidget* Home::MakePage() {
     });
     clock_timer->start();
 
-    // Hero and title are absolutely positioned on the page itself rather than fitted into
-    // the vertical layout - the window can be resized freely and they stay pinned to
-    // the artwork's centre line.
-    layout->addStretch(1);
-
-    play = new QToolButton(page);
-    play->setObjectName(QStringLiteral("Ocarina2Hero"));
-    play->setProperty("band", 1);
-    play->setCursor(Qt::PointingHandCursor);
-    play->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    play->setFocusPolicy(Qt::StrongFocus);
-    play->setIconSize(QSize(240, 240));
-    play->setFixedSize(252, 252);
-    play->installEventFilter(this);
-    connect(play, &QToolButton::clicked, this, [this] {
-        if (hero_path.isEmpty()) {
+    tile_strip = new TileStrip(page);
+    tile_strip->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    tile_strip->setProperty("band", 1);
+    tile_strip->installEventFilter(this);
+    connect(tile_strip, &TileStrip::Activated, this, [this](const QString& path, u64 program_id) {
+        if (path.isEmpty()) {
             hooks.add_folder();
         } else {
-            hooks.play(hero_path, hero_id);
+            hooks.play(path, program_id);
         }
     });
-    auto* play_effect = new QGraphicsDropShadowEffect;
-    play_effect->setBlurRadius(44);
-    play_effect->setOffset(0, 8);
-    play_effect->setColor(QColor(63, 216, 255, 120));
-    play->setGraphicsEffect(play_effect);
+    connect(tile_strip, &TileStrip::SelectionChanged, this,
+            [this](const QString& title, u64 program_id) {
+                hero_path = tile_strip->SelectedPath();
+                hero_id = program_id;
+                hero_title = title;
+                if (game_row_title) {
+                    game_row_title->setText(title);
+                    game_row_title->setVisible(!title.isEmpty());
+                }
+            });
+    layout->addWidget(tile_strip);
 
-    // The highlighted game's name, directly under the hero, parchment chip.
+    // The dock rides in the middle of the page, like the Switch 2 home screen: a rounded
+    // plate of round buttons; the focused item's name rides underneath it.
+    layout->addWidget(MakeRail(), 0, Qt::AlignHCenter);
+
+    // The focused item's name below the dock (the Switch 2 puts it exactly there).
     game_row = new QWidget(page);
     game_row->setObjectName(QStringLiteral("Ocarina2CurrentGameRow"));
     auto* rowl = new QHBoxLayout(game_row);
-    rowl->setContentsMargins(0, 0, 0, 0);
+    rowl->setContentsMargins(0, 6, 0, 0);
     rowl->setSpacing(0);
     rowl->setAlignment(Qt::AlignHCenter);
     game_row_title = new QLabel(game_row);
     game_row_title->setObjectName(QStringLiteral("Ocarina2CurrentGame"));
     game_row_title->setAlignment(Qt::AlignHCenter);
     QFont title_font = game_row_title->font();
-    title_font.setFamily(QStringLiteral("Georgia"));
-    title_font.setBold(true);
-    title_font.setPointSize(16);
-    title_font.setLetterSpacing(QFont::AbsoluteSpacing, 0.8);
+    title_font.setFamily(QStringLiteral("Inter"));
+    title_font.setWeight(QFont::DemiBold);
+    title_font.setPixelSize(17);
     game_row_title->setFont(title_font);
-    auto* name_glow = new QGraphicsDropShadowEffect(game_row_title);
-    name_glow->setBlurRadius(24);
-    name_glow->setOffset(0, 1);
-    name_glow->setColor(QColor(63, 216, 255, 150));  // aqua halo behind the title text
-    game_row_title->setGraphicsEffect(name_glow);
     rowl->addWidget(game_row_title, 0, Qt::AlignHCenter);
+    layout->addWidget(game_row, 0, Qt::AlignHCenter);
 
-    // The dock rides inside the page; a floating rounded plate carries the buttons, like the
-    // Switch 2 home screen.
-    layout->addWidget(MakeRail(), 0, Qt::AlignHCenter);
-    layout->setContentsMargins(0, 0, 0, 18);
+    // The very bottom hint row, above the status bar: the connected controller on the left,
+    // the console hints on the right (Switch 2 style).
+    auto* hint_bar = new QWidget(page);
+    hint_bar->setObjectName(QStringLiteral("Ocarina2HomeHintBar"));
+    auto* hint_layout = new QHBoxLayout(hint_bar);
+    hint_layout->setContentsMargins(24, 10, 24, 0);
+    hint_layout->setSpacing(8);
+    auto* pad = new QLabel(hint_bar);
+    pad->setPixmap(Glyph(QStringLiteral("gamepad"), 0x8f8ca6, 16).pixmap(16, 16));
+    pad->setToolTip(tr("Pro Controller - Player 1"));
+    hint_layout->addWidget(pad, 0, Qt::AlignVCenter);
+    auto* pad_label = new QLabel(QStringLiteral("Pro Controller"), hint_bar);
+    pad_label->setObjectName(QStringLiteral("Ocarina2HomeHintText"));
+    hint_layout->addWidget(pad_label, 0, Qt::AlignVCenter);
+    hint_layout->addStretch(1);
+    auto* hints = new QLabel(hint_bar);
+    hints->setObjectName(QStringLiteral("Ocarina2HomeHintText"));
+    hints->setText(QStringLiteral(
+        "<span style='color:#e6e3ef;font-weight:800'>+</span>&nbsp; Options&nbsp;&nbsp;&nbsp;"
+        "<span style='color:#e6e3ef;font-weight:800'>A</span>&nbsp; OK"));
+    hint_layout->addWidget(hints, 0, Qt::AlignVCenter);
+    hint_bar->setFixedHeight(38);
+    layout->addWidget(hint_bar);
+    layout->setContentsMargins(0, 0, 0, 4);
     return page;
 }
 
 void Home::FixHomeLayout() {
-    if (!page || !play) {
+    if (!page || !tile_strip) {
         return;
     }
-    const int page_h = page->height();
-    const int page_w = page->width();
-    const int topbar_h = topbar ? topbar->height() : 46;
-    const int rail_h = rail ? rail->height() : 108;
-    const int hero_h = play->height();
-
-    // Cover-scale exactly like the paint code: user override or built-in art, centred.
-    const QPixmap art = ResolveHomeBg();
-    const double art_w = art.isNull() ? 1920.0 : art.width();
-    const double art_h = art.isNull() ? 1080.0 : art.height();
-    const double scale = (std::max)(page_w / art_w, page_h / art_h);
-    const double scaled_h = art_h * scale;
-    const double art_top = (page_h - scaled_h) / 2.0;
-    const int slot_center_y = static_cast<int>(std::lround(art_top + scaled_h / 2.0));
-
-    int hero_top = slot_center_y - hero_h / 2;
-    hero_top = std::clamp(hero_top, topbar_h, (std::max)(topbar_h, page_h - hero_h));
-    play->move((page_w - play->width()) / 2, hero_top);
-
+    // The strip and title are laid out by the page; only the back button and dock need pinning.
     if (game_row) {
         game_row->adjustSize();
-        const int row_h = game_row->height();
-        // Text sits just above the dock plate's top edge (the layout has an 18px bottom margin).
-        int row_top = rail ? rail->pos().y() - row_h - 6
-                           : page_h - 18 - rail_h - row_h - 6;
-        row_top = (std::max)(row_top, hero_top + hero_h + 4);
-        game_row->move((page_w - game_row->width()) / 2, row_top);
     }
 }
 
@@ -576,36 +577,16 @@ void Home::ShowGameMenu(const QString& path, u64 program_id, const QPoint& globa
 void Home::Refresh() {
     const std::vector<Game> games = CollectGames(hooks.model, window->windowIcon().pixmap(256));
 
-    // The hero: the game picked last, else Ocarina of Time, else the first game.
-    const Game* hero = nullptr;
+    // The strip holds every game, like the Switch 2 home menu: tiles slide left as you move
+    // right, the focused tile gets the aqua ring and the game title under it.
+    std::vector<TileStrip::TileRow> rows;
+    rows.reserve(games.size());
     for (const Game& game : games) {
-        if (!hero_path.isEmpty() && game.path == hero_path) {
-            hero = &game;
-            break;
-        }
+        rows.push_back({game.title, game.path, game.program_id,
+                        RoundedCard(game.icon, QSize(176, 176), 18)});
     }
-    if (!hero) {
-        for (const Game& game : games) {
-            if (game.program_id == OcarinaOfTime) {
-                hero = &game;
-                break;
-            }
-        }
-    }
-    if (!hero && !games.empty()) {
-        hero = &games.front();
-    }
+    tile_strip->SetGames(rows);
 
-    if (hero) {
-        play->setIcon(QIcon(RoundedCard(hero->icon, QSize(240, 240), 18)));
-        SelectGame(hero->path, hero->program_id, hero->title);
-    } else {
-        SelectGame(QString(), 0, tr("Ocarina2"));
-        play->setIcon(Glyph(QStringLiteral("plus"), 0xffffff, 72));
-    }
-
-    // The games live behind the dock's Games button (a full list); there is no tile row
-    // duplicating the hero on the home screen.
     RebuildNavOrder();
 }
 
@@ -627,7 +608,11 @@ void Home::ShowHome() {
     rail->show();
     page->show();
     back_button->hide();
-    home_button->setFocus(Qt::OtherFocusReason);
+    if (tile_strip) {
+        tile_strip->setFocus(Qt::OtherFocusReason);
+    } else {
+        home_button->setFocus(Qt::OtherFocusReason);
+    }
     nav_index_ = 0;
     Refresh();
     FixHomeLayout();
@@ -664,6 +649,35 @@ void Home::ShowList() {
     } else {
         game_list->show();
     }
+}
+
+void Home::ShowAddGamesPanel() {
+    HomePanel panel(window, QStringLiteral("A D D   T O   Y O U R   L I B R A R Y"),
+                    tr("Add games"));
+    panel.AddRow(QStringLiteral("folder"), tr("Add games folder…"), [this] { hooks.add_folder(); });
+    if (hooks.add_file) {
+        panel.AddRow(QStringLiteral("plus"), tr("Add a game file…"),
+                     [this] { hooks.add_file(); });
+    }
+    panel.SetHints(QStringLiteral(
+        "<span style='color:#3fd8ff;font-weight:800'>A</span> Select&nbsp;&nbsp;&nbsp;"
+        "<span style='color:#3fd8ff;font-weight:800'>B</span> Back"));
+    panel.exec();
+}
+
+void Home::ShowWhatsNewPanel() {
+    HomePanel panel(window, QStringLiteral("W H A T ' S   N E W"), VersionName());
+    auto* notes = new QTextBrowser;
+    notes->setObjectName(QStringLiteral("Ocarina2Notes"));
+    notes->setFrameShape(QFrame::NoFrame);
+    notes->setOpenExternalLinks(true);
+    notes->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    const QString text = BundledNotes();
+    SetNotes(notes, text.isEmpty() ? tr("No notes for this version yet.") : text);
+    panel.SetBodyWidget(notes);
+    panel.SetHints(QStringLiteral(
+        "<span style='color:#3fd8ff;font-weight:800'>B</span> Back"));
+    panel.exec();
 }
 
 void Home::Restore() {
@@ -926,6 +940,7 @@ bool Home::HandleNavKey(QKeyEvent* event) {
         const int step = dx > 0 ? 1 : -1;
         const int next = ((i < 0 ? 0 : i) + step + row.size()) % row.size();
         row[next]->setFocus(Qt::OtherFocusReason);
+        SoundPlayer::Instance().Play(SoundPlayer::Effect::Navigate);
         return true;
     }
     // Up/Down: nearest non-empty row in that direction.
@@ -961,6 +976,7 @@ bool Home::HandleNavKey(QKeyEvent* event) {
     }
     if (best) {
         best->setFocus(Qt::OtherFocusReason);
+        SoundPlayer::Instance().Play(SoundPlayer::Effect::Navigate);
         return true;
     }
     return false;
@@ -991,7 +1007,10 @@ void Home::RebuildNavOrder() {
         if (avatar_button) {
             nav_order_.append(avatar_button);
         }
-        nav_order_.append(play);
+        if (tile_strip) {
+            tile_strip->setProperty("band", 1);
+            nav_order_.append(tile_strip);
+        }
         nav_order_.append(home_button);
         nav_order_.append(library_button);
         nav_order_.append(folder_button);
@@ -1006,6 +1025,18 @@ void Home::RebuildNavOrder() {
 }
 
 bool Home::eventFilter(QObject* watched, QEvent* event) {
+    // Focus follows the dock/strip, same as the console: the name under the dock is the
+    // focused item's name.
+    if (event->type() == QEvent::FocusIn) {
+        if (const auto* button = qobject_cast<const QToolButton*>(watched)) {
+            const QString caption = button->property("caption").toString();
+            if (!caption.isEmpty() && game_row_title) {
+                game_row_title->setText(caption);
+                game_row_title->setVisible(true);
+            }
+        }
+        return false;
+    }
     if (watched == window && event->type() == QEvent::Resize) {
         PositionBackButton();
         return false;
@@ -1040,16 +1071,26 @@ bool Home::eventFilter(QObject* watched, QEvent* event) {
                              button->mapToGlobal(button->rect().center()));
                 return true;
             }
-            if (watched == play) {
-                ShowGameMenu(hero_path, hero_id, play->mapToGlobal(play->rect().center()));
+            if (watched == tile_strip) {
+                ShowGameMenu(tile_strip->SelectedPath(), tile_strip->SelectedProgramId(),
+                             tile_strip->mapToGlobal(tile_strip->rect().center()));
                 return true;
             }
         }
-        // Home-screen navigation (dock, hero) in any mode outside the games pane.
+        // Home-screen navigation (avatar, strip, dock) outside the games pane. The tile strip
+        // keeps the arrow keys for the tiles themselves.
         if (!list_mode) {
             if (auto* widget = qobject_cast<QWidget*>(watched)) {
-                if (nav_order_.contains(widget) && HandleNavKey(key)) {
-                    return true;
+                if (nav_order_.contains(widget)) {
+                    if (widget == tile_strip &&
+                        (key->key() == Qt::Key_Left || key->key() == Qt::Key_Right ||
+                         key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter ||
+                         key->key() == Qt::Key_Space)) {
+                        return false;  // the strip handles arrows and confirm itself
+                    }
+                    if (HandleNavKey(key)) {
+                        return true;
+                    }
                 }
             }
         }

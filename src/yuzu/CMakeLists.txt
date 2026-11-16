@@ -223,6 +223,12 @@ add_executable(yuzu
     ocarina2/ocarina2_ui.h
     ocarina2/home.cpp
     ocarina2/home.h
+    ocarina2/home_panel.cpp
+    ocarina2/home_panel.h
+    ocarina2/sound.cpp
+    ocarina2/sound.h
+    ocarina2/tile_strip.cpp
+    ocarina2/tile_strip.h
     ocarina2/game_controls.cpp
     ocarina2/game_controls.h
     ocarina2/main_window_ocarina2.cpp
