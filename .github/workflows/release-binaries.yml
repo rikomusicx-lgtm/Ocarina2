@@ -117,9 +117,13 @@ jobs:
           # about the same speed. Both Windows builds are clang-cl with ThinLTO; windows-x86_64-pgo
           # adds ocarina2-windows.profdata, an MSVC-ABI profile trained on Ocarina of Time (see
           # docs/CI.md). The compiler is clang; the runner's VS 2022 toolchain provides the SDK.
-          - platform: linux-x86_64-pgo
-            runner: ubuntu-24.04
-            pgo: true
+          # The amd64 Linux PGO build is omitted from this release: the Ubuntu package mirrors it
+          # depends on have been unreachable from CI runners all day, so the target could not be
+          # built or verified. The -pgo justification that comment used to hold is equally true for
+          # the remaining PGO targets; re-enable this one when the mirror recovers.
+          # - platform: linux-x86_64-pgo
+          #   runner: ubuntu-24.04
+          #   pgo: true
           - platform: windows-x86_64
             runner: windows-2022
           - platform: windows-x86_64-pgo
@@ -732,6 +736,12 @@ jobs:
           in-page panels, controller-driven UI, a batch of shutdown/stability fixes and the Vulkan
           memory-robustness set from upstream. Full changelog below; the in-app What's New is the
           short version of the same list.
+
+          **Missing release package:** the Linux amd64 PGO build (\`ocarina2-linux-x86_64-pgo.*\`) is
+          not part of this release. The Ubuntu package mirrors it depends on have been unreachable
+          from CI runners all day, so that target could not be built or verified. Linux amd64 (non-PGO),
+          Linux aarch64 + its PGO build, and both Windows builds ship as usual; the amd64 PGO
+          package will be back as soon as the mirror recovers.
 
           ${changelog}
 
