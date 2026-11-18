@@ -283,13 +283,14 @@ static const QPixmap& CoverArtFor(const QString& key, const QSize& size) {
 }
 
 static void DrawCover(QPainter& painter, const QString& key, const QRect& rect, qreal opacity) {
-    const QPixmap& art = CoverArtFor(key, rect.size());
-    if (art.isNull()) {
+    // Pointer, not reference: GCC's -Wdangling-reference can't prove the cache outlives the call.
+    const QPixmap* art = &CoverArtFor(key, rect.size());
+    if (art->isNull()) {
         return;
     }
-    const QPoint pos(rect.center().x() - art.width() / 2, rect.center().y() - art.height() / 2);
+    const QPoint pos(rect.center().x() - art->width() / 2, rect.center().y() - art->height() / 2);
     painter.setOpacity(opacity);
-    painter.drawPixmap(QRect(pos, art.size()), art);
+    painter.drawPixmap(QRect(pos, art->size()), *art);
     painter.setOpacity(1.0);
 }
 
