@@ -3,6 +3,26 @@ The "What's new" notes shown on first launch after an update (Help > What's New)
 public release notes here when cutting a build. The download instructions at the top are
 dropped automatically in the app.
 -->
+## Ocarina2 v1.6
+
+Made by rikomusicx-lgtm.
+
+**What's in this release**
+
+- **The home screen is the Switch 2 home now.** Full-width tile strip with the full-bleed game
+  art, add-a-game slots, a circular dock in a pill, in-page panels instead of dialogs, and the
+  whole UI drives with the controller (A select, B back, LB/RB pages).
+- **Closing a game during shader load no longer hangs** on "Closing software...".
+- **Emulation stops cleanly**: guest threads are suspended before power-off and kernel objects
+  close before the kernel shuts down.
+- **Vulkan memory failures degrade instead of dying**: aligned buffers are retried outside the
+  budget, the staging buffer path survives instead of aborting, and staging memory is reclaimed
+  when a guest buffer can't allocate.
+- **Ocarina2 no longer opens off-screen** when a monitor was unplugged or the saved window
+  position points at a display that no longer exists — it comes back onto a screen you can see.
+- **Hover/scroll tick sounds no longer go "ding"** and the home screen got a coat of polish
+  (add-game cards, brighter art, haloed caption).
+
 ## Ocarina2 v1.5
 
 Made by rikomusicx-lgtm. The Kokiri Forest build.

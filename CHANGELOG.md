@@ -4,6 +4,50 @@ All notable changes to Eglantine are documented here. Each release's notes are t
 `## [X.Y.Z]` section (release candidates use the section of the version they are a candidate for).
 New entries go under `## [Unreleased]`; `tools/ci/bump-version.sh` turns them into a version section.
 
+## [Unreleased]
+
+## [Ocarina2 v1.6] - 2026-11-18
+
+The Switch 2 home release.
+
+Added:
+- The 1.6 home screen: the game strip is full width with full-bleed art, per-game palette
+  and empty-slot "add folder" tiles, aqua focus ring, OutCubic slide; the dock is circular
+  buttons in a pill with the focused item's name underneath, controller glyphs and a hint
+  row; dock buttons open in-page panels instead of separate windows (Add games, What's
+  new); Settings is a full-page frameless overlay with the quick-menu chrome and every
+  tab, and the page chips are controller-reachable; UI actions play synthesized
+  navigate/confirm/back/tab chimes; the games pane navigates single presses everywhere
+  (A/Enter confirm, B/Escape back) with no focus traps.
+
+Fixed:
+- Suppressed UI ticks no longer fall back to the Windows "ding" on every scroll.
+- Home polish: empty slots read as dashed add-game cards with a soft aura, the backdrop
+  veil lifted so the art breathes, the game caption carries an aqua halo, and the
+  status-bar text is brighter.
+- The home veil/vignette is prerendered once instead of rebuilt per frame, and the pixmap
+  cache raised to 256 MiB.
+- A window restored entirely off every screen (a monitor was unplugged, or the saved
+  position points at a display that no longer exists) is clamped back onto a visible
+  screen at startup; previously the game and the emulator could open on an invisible
+  display.
+
+Upstream robustness ports:
+- #1932 core: kernel objects are closed before the kernel shuts down at stop and at
+  failed loads.
+- #1934 vulkan: device loss ends the process instead of std::terminate.
+- #1931 vulkan: aligned buffers are retried outside the memory budget instead of aborting.
+- #1963 vulkan: staging memory is freed and the guest buffer retried when a guest buffer
+  has none.
+- #1870 vulkan: degrade instead of aborting when the staging buffer has no memory.
+- #1997 vulkan: do not submit mid-draw when the staging buffer has no memory.
+- #1580 common,core: the zero-page pass reads less, waits out bulk mapping, and backs off
+  to 5 minutes.
+- #1451 core: a failed zero-page trim no longer ends the emulator when Windows runs out
+  of commit.
+- #1417 core: closing the game during shader load no longer hangs.
+- #1450 core: guest threads are suspended before power-off.
+
 ## [Ocarina2 v1.5] - 2026-11-15
 
 The Kokiri Forest release.

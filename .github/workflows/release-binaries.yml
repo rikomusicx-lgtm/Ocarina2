@@ -714,8 +714,28 @@ jobs:
             pgo_note="The PGO builds are the same programs compiled with profile-guided optimization. Linux uses clang with Eglantine's profile; Windows uses clang-cl and ThinLTO with a profile trained in Ocarina2 on Ocarina of Time, so other games gain less. Prefer them when your CPU supports it."
           fi
 
+          # Releases are named after the version the binaries were built from
+          # (dist/ocarina2_version.txt), e.g. "Ocarina2 v1.2". The tag stays build-N for the
+          # update checker. Read it from the git blob for this commit so the job needs no checkout.
+          version=$(gh api "repos/${GITHUB_REPOSITORY}/contents/dist/ocarina2_version.txt?ref=${GITHUB_SHA}" --jq '.content' | base64 -d | tr -d '[:space:]')
+          # GitHub's notes carry the full changelog section for the version being published:
+          # far more descriptive than the in-app "What's new" (which stays deliberately brief).
+          changelog=$(gh api "repos/${GITHUB_REPOSITORY}/contents/CHANGELOG.md?ref=${GITHUB_SHA}" --jq '.content' | base64 -d |
+            awk -v ver="$version" '
+              $0 == "## [Ocarina2 v" ver "]" || index($0, "## [Ocarina2 v" ver "] - ") == 1 { found = 1; next }
+              found && /^## / { exit }
+              found { print }
+            ')
+
           cat > notes.md <<EOF
-          Automatic build of \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA}.
+          Ocarina2 v${version} — the Switch 2 home release. The new full-width tile strip,
+          in-page panels, controller-driven UI, a batch of shutdown/stability fixes and the Vulkan
+          memory-robustness set from upstream. Full changelog below; the in-app What's New is the
+          short version of the same list.
+
+          ${changelog}
+
+          ## Downloads
 
           ## Linux
 
@@ -739,12 +759,10 @@ jobs:
           $(row "arm64 (Apple Silicon)" "$(link zip ocarina2-macos-arm64.zip)" "" "macOS 15 or newer. Not notarized: right-click and choose Open the first time, or run \`xattr -dr com.apple.quarantine Ocarina2.app\`. \`eden-cli\` is inside the app, in \`Contents/MacOS\`" | table)
 
           ${pgo_note}
+
+          Built from \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA}. Tag stays build-N for the update checker; title is the version from dist/ocarina2_version.txt.
           EOF
 
-          # Releases are named after the version the binaries were built from
-          # (dist/ocarina2_version.txt), e.g. "Ocarina2 v1.2". The tag stays build-N for the
-          # update checker. Read it from the git blob for this commit so the job needs no checkout.
-          version=$(gh api "repos/${GITHUB_REPOSITORY}/contents/dist/ocarina2_version.txt?ref=${GITHUB_SHA}" --jq '.content' | base64 -d | tr -d '[:space:]')
           gh release create "${tag}" dist/* \
             --repo "${GITHUB_REPOSITORY}" \
             --verify-tag \
