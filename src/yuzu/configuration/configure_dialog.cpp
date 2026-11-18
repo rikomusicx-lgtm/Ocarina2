@@ -129,17 +129,6 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
         title->setGraphicsEffect(glow);
         header_layout->addWidget(title, 0, Qt::AlignHCenter);
 
-        const auto cycle_category = [this](int delta) {
-            QTimer::singleShot(0, this, [this, delta]() {
-                const int count = ui->selectorList->count();
-                if (count == 0) {
-                    return;
-                }
-                const int target = (ui->selectorList->currentRow() + delta + count) % count;
-                ui->selectorList->setCurrentRow(target);
-                FocusFirstControl();
-            });
-        };
         // No arrow buttons here - LB/RB cycles the categories already.
         auto* crumb = new QLabel(header);
         crumb->setObjectName(QStringLiteral("Ocarina2SettingsCrumb"));
