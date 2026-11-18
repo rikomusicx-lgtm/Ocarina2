@@ -129,6 +129,7 @@ bool HostOotMaxResolutionDefault() {
 #include "ocarina2/ocarina2_ui.h"
 #include "ocarina2/perf_overlay.h"
 #include "ocarina2/quick_menu.h"
+#include "ocarina2/console_settings.h"
 #include "util/overlay_dialog.h"
 
 #include "multiplayer/state.h"
@@ -1703,6 +1704,33 @@ void MainWindow::InitializeHotkeys() {
     });
 }
 
+// A window restored entirely off every screen (a monitor was unplugged, the saved state
+// points nowhere the user can see) traps the app off-screen: it still takes focus, so the
+// user's close/switch shortcuts hit an invisible window. Pull it back onto a visible screen.
+static void EnsureWindowOnScreen(QWidget* window) {
+    const QList<QScreen*> screens = QGuiApplication::screens();
+    if (screens.isEmpty()) {
+        return;
+    }
+    const QRect current = window->geometry();
+    for (const QScreen* screen : screens) {
+        if (screen->availableGeometry().intersects(current)) {
+            return; // at least partly visible somewhere
+        }
+    }
+    QScreen* primary = QGuiApplication::primaryScreen();
+    const QRect available = primary->availableGeometry();
+    QRect rect = current;
+    if (rect.width() > available.width()) {
+        rect.setWidth(available.width());
+    }
+    if (rect.height() > available.height()) {
+        rect.setHeight(available.height());
+    }
+    rect.moveCenter(available.center());
+    window->setGeometry(rect);
+}
+
 void MainWindow::SetDefaultUIGeometry() {
     // geometry: 53% of the window contents are in the upper screen half, 47% in the lower half
     const QRect screenRect = QGuiApplication::primaryScreen()->geometry();
@@ -1718,6 +1746,7 @@ void MainWindow::SetDefaultUIGeometry() {
 void MainWindow::RestoreUIState() {
     setWindowFlags(windowFlags() & ~Qt::FramelessWindowHint);
     restoreGeometry(UISettings::values.geometry);
+    EnsureWindowOnScreen(this);
     // Work-around because the games list isn't supposed to be full screen
     if (isFullScreen()) {
         showNormal();
@@ -1725,6 +1754,7 @@ void MainWindow::RestoreUIState() {
     restoreState(UISettings::values.state);
     render_window->setWindowFlags(render_window->windowFlags() & ~Qt::FramelessWindowHint);
     render_window->restoreGeometry(UISettings::values.renderwindow_geometry);
+    EnsureWindowOnScreen(render_window);
 
     game_list->LoadInterfaceLayout();
 
@@ -4219,6 +4249,10 @@ void MainWindow::ToggleShowGameName() {
 }
 
 void MainWindow::OnConfigure() {
+    OpenOcarinaSettings(0);
+}
+
+void MainWindow::OpenOcarinaSettings(int ocarina_group) {
     const auto old_theme = UISettings::values.theme;
     const bool old_discord_presence = UISettings::values.enable_discord_presence.GetValue();
     const auto old_language_index = Settings::values.language_index.GetValue();
@@ -4231,6 +4265,7 @@ void MainWindow::OnConfigure() {
     ConfigureDialog configure_dialog(this, hotkey_registry, input_subsystem.get(),
                                      vk_device_records, *QtCommon::system,
                                      !multiplayer_state->IsHostingPublicRoom());
+    configure_dialog.OcarinaSelectGroup(ocarina_group);
     connect(&configure_dialog, &ConfigureDialog::LanguageChanged, this,
             &MainWindow::OnLanguageChanged);
     connect(&configure_dialog, &ConfigureDialog::ExternalContentDirsChanged, this,
@@ -5998,6 +6033,35 @@ void MainWindow::OpenQuickMenu() {
     });
     menu->exec();
     quick_menu_open = false;
+}
+
+void MainWindow::OpenConsoleSettings() {
+    // L3+R3 → the OC quick menu stays this function's sibling; the dock Settings button drives
+    // the fullscreen console settings instead.
+    if (auto* open = qobject_cast<Ocarina2Ui::ConsoleSettings*>(QApplication::activeModalWidget())) {
+        open->close();
+        return;
+    }
+    const bool was_running =
+        emulation_running && QtCommon::emu_thread && QtCommon::emu_thread->IsRunning();
+    if (was_running) {
+        OnPauseGame();
+    }
+    const auto apply_live = [this] {
+        UpdateStatusButtons();
+#ifdef HAS_RESHADE
+        UpdatePostShaderText();
+#endif
+        QtCommon::system->ApplySettings();
+        config->SaveAllValues();
+    };
+    Ocarina2Ui::ConsoleSettingsHooks hooks;
+    hooks.apply_live = apply_live;
+    hooks.emulation_running = [this] { return emulation_running; };
+    hooks.open_configure = [this](int page) { OpenOcarinaSettings(page); };
+    auto* settings = new Ocarina2Ui::ConsoleSettings(this, hooks);
+    settings->setAttribute(Qt::WA_DeleteOnClose);
+    settings->exec();
 }
 
 bool MainWindow::IsOotRunning() const {

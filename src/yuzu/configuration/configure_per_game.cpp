@@ -76,6 +76,7 @@
 #include "yuzu/configuration/configure_system.h"
 #include "yuzu/util/util.h"
 #include "yuzu/ocarina2/ocarina2_ui.h"
+#include "yuzu/ocarina2/controller_dialog.h"
 
 namespace {
 
@@ -390,6 +391,12 @@ ConfigurePerGame::ConfigurePerGame(QWidget* parent, u64 title_id_, const std::st
     applets_tab = std::make_unique<ConfigureApplets>(system_, tab_group, *builder, this);
 
     ui->setupUi(this);
+    {
+        // Gamepad/keyboard drives the whole per-game settings screen, like Settings.
+        auto* ui_filter = new Ocarina2Ui::ControllerDialogFilter(this);
+        ui_filter->escape = [this] { reject(); };
+        Ocarina2Ui::ControllerDialogFilter::InstallRecursive(this, ui_filter);
+    }
 
     // Ocarina2: each tab scrolls (as in Settings), so the dialog fits a screen shorter than its
     // tallest tab; before, the window could not be made smaller and only moved.

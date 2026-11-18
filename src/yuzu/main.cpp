@@ -3,6 +3,7 @@
 
 #include <QApplication>
 #include <QMessageBox>
+#include <QPixmapCache>
 #include <cstdlib>
 #include <exception>
 
@@ -132,6 +133,11 @@ int main(int argc, char* argv[]) {
     // is a Control Panel setting newer drivers no longer show ("Shader Cache Size"); the driver
     // also reads these variables, for this process only (nothing system-wide changes). A value
     // already set (the player's, or nx2_switches.txt) wins.
+    // The OC home keeps several full-screen blurred backdrops cached (OoT, Bananza); Qt's
+    // default pixmap cache is ~10 MiB, which would evict them and force a re-blur on every paint.
+    if (Ocarina2Ui::Enabled()) {
+        QPixmapCache::setCacheLimit(256 * 1024); // 256 MiB
+    }
     if (Ocarina2Ui::Enabled()) {
         if (!qEnvironmentVariableIsSet("__GL_SHADER_DISK_CACHE_SKIP_CLEANUP")) {
             qputenv("__GL_SHADER_DISK_CACHE_SKIP_CLEANUP", "1");

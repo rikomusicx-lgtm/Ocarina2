@@ -476,6 +476,12 @@ void Stop() {
         logging_instance->ForEachBackend([](Backend& backend) { backend.Flush(); });
 }
 
+/// Writes buffered lines to the log file, so a copy of it is complete.
+void Flush() {
+    if (logging_instance)
+        logging_instance->ForEachBackend([](Backend& backend) { backend.Flush(); });
+}
+
 std::filesystem::path FilePath(bool* primary_locked) {
     if (primary_locked) {
         *primary_locked = false;

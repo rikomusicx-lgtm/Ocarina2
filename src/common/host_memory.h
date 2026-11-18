@@ -101,6 +101,9 @@ public:
     /// The last SampleResident result (zeros before the first).
     [[nodiscard]] static ResidentSample LastResidentSample();
 
+    /// Bytes Map, Unmap and Protect have covered since start.
+    static u64 MappedBytes() noexcept;
+
     /// Pages the kernel hands out (cleared or not).
     void MarkUsed(size_t physical_offset, size_t length);
 

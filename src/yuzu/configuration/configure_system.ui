@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
  <class>ConfigureSystem</class>
  <widget class="QWidget" name="ConfigureSystem">
@@ -16,7 +16,7 @@
   <property name="accessibleName">
    <string>System</string>
   </property>
-  <layout class="QHBoxLayout" name="horizontalLayout">
+  <layout class="QHBoxLayout" name="horizontalLayout" stretch="1">
    <item>
     <layout class="QVBoxLayout" name="verticalLayout">
      <item>

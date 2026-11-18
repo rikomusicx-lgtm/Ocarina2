@@ -25,7 +25,7 @@ public:
     bool IsGhost() const { return ghost; }
     void AnimateFocus(bool focused);
 
-    QSize sizeHint() const override { return {252, 168}; }
+    QSize sizeHint() const override { return {228, 228}; }
 
 signals:
     void Activated(const QString& path, u64 program_id);
@@ -49,8 +49,9 @@ private:
 
 /// A horizontal scrolling strip of game tiles: pressing Left/Right moves the selection (the
 /// strip scrolls so the selected tile stays on screen, like the Switch home menu), Enter or
-/// A activates the selected game. Honest to the Switch design - tiles slide left as you move
-/// right, nothing ever jumps off the screen.
+/// A activates the selected game. The empty "add a game" slots are selectable too - pressing
+/// A on one goes straight into the add-a-games-folder picker. Honest to the Switch design -
+/// tiles slide left as you move right, nothing ever jumps off the screen.
 class TileStrip : public QWidget {
     Q_OBJECT
 public:
@@ -67,9 +68,22 @@ public:
     void SetGames(const std::vector<TileRow>& games);
 
     int SelectedIndex() const { return selected; }
-    QString SelectedPath() const { return selected >= 0 ? games_[selected].path : QString(); }
-    u64 SelectedProgramId() const { return selected >= 0 ? games_[selected].program_id : 0; }
-    QString SelectedTitle() const { return selected >= 0 ? games_[selected].title : QString(); }
+    QString SelectedPath() const {
+        return selected >= 0 && selected < static_cast<int>(games_.size()) ? games_[selected].path
+                                                                          : QString();
+    }
+    u64 SelectedProgramId() const {
+        return selected >= 0 && selected < static_cast<int>(games_.size()) ? games_[selected].program_id
+                                                                          : 0;
+    }
+    QString SelectedTitle() const {
+        return selected >= 0 && selected < static_cast<int>(games_.size()) ? games_[selected].title
+                                                                          : QString();
+    }
+    /// True while the strip owns the focus chain (its selection ring shows only then).
+    bool HasFocus() const { return has_focus_; }
+    /// How many slots are selectable: real games plus the empty "add a game" slots.
+    int SlotCount() const { return static_cast<int>(tiles_.size() + ghosts_.size()); }
 
 signals:
     void Activated(const QString& path, u64 program_id);
@@ -83,16 +97,20 @@ public slots:
 protected:
     void keyPressEvent(QKeyEvent* event) override;
     void focusInEvent(QFocusEvent* event) override;
+    void focusOutEvent(QFocusEvent* event) override;
     bool focusNextPrevChild(bool next) override;
 
 private:
     void SyncToSelection();
+    /// The tile at a slot index (real game or empty slot, in strip order).
+    GameTile* SlotTile(int index) const;
 
     std::vector<TileRow> games_;
     std::vector<GameTile*> tiles_;   ///< one per game, in strip order
     std::vector<GameTile*> ghosts_;  ///< empty "add game" slots filling the row
     int selected = -1;
     size_t last_signature_ = 0;  ///< FNV of the games (path|program_id) to avoid rebuilding tiles
+    bool has_focus_ = false;     ///< the strip owns the focus chain; ring only then
 };
 
 } // namespace Ocarina2Ui

@@ -124,7 +124,7 @@ QuickMenu::QuickMenu(QWidget* parent, QuickMenuHooks hooks_) : QDialog(parent), 
                            hooks.toggle_docked_mode();
                        }
                    });
-    // renderer_locked says "locked while a game runs" — the row's enabled predicate is
+    // renderer_locked says "locked while a game runs" - the row's enabled predicate is
     // "may be used", so invert it here.
     const auto renderer_enabled = std::function<bool()>(
         [locked = hooks.renderer_locked] { return !locked || !locked(); });
@@ -176,7 +176,7 @@ QuickMenu::QuickMenu(QWidget* parent, QuickMenuHooks hooks_) : QDialog(parent), 
     InstallRecursive(this, this);
 
     // In-game the emulated CPU is paused and the HID callback chain stalls, so the menu polls
-    // the raw npad button mask on the GUI thread instead — the same mask the L3+R3 shortcut is
+    // the raw npad button mask on the GUI thread instead - the same mask the L3+R3 shortcut is
     // driven by. Works both in-game and at home.
     if (hooks.in_game && hooks.npad_buttons) {
         controller_timer = new QTimer(this);
@@ -234,7 +234,7 @@ void QuickMenu::RefreshSettingsRows() {
             continue;
         }
         const QString value = row.value_text ? row.value_text() : QString();
-        row.button->setText(row.label + QStringLiteral("  ·  ") + value);
+        row.button->setText(row.label + QStringLiteral("  >  ") + value);
         const bool is_enabled = row.enabled ? row.enabled() : true;
         row.button->setEnabled(is_enabled);
     }
@@ -393,6 +393,10 @@ bool QuickMenu::eventFilter(QObject* watched, QEvent* event) {
                 HandleKey(static_cast<Qt::Key>(key->key()));
                 return true;
             default:
+                // Swallow unmodified leftovers instead of passing them to the window.
+                if ((key->modifiers() & ~Qt::KeypadModifier) == Qt::NoModifier) {
+                    return true;
+                }
                 return QDialog::eventFilter(watched, event);
         }
     }

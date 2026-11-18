@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+﻿// SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 
 #include "yuzu/ocarina2/sound.h"
@@ -29,7 +29,6 @@ struct Tone {
     double gain;
     double attack;    // seconds
     double release;   // seconds
-    double detune = 1.0;
 };
 
 struct EffectSpec {
@@ -40,49 +39,47 @@ struct EffectSpec {
 EffectSpec MakeEffect(SoundPlayer::Effect effect) {
     switch (effect) {
     case SoundPlayer::Effect::Navigate:
-        // A quiet woodblock tick.
-        return {{Tone{2093.0, 0.055, 0.35, 0.002, 0.040, 1.0}, Tone{4186.0, 0.040, 0.10, 0.001, 0.030, 1.0}}, 0.075};
+        // A barely audible tick - at scroll speed it must not rattle (or sound like a fault).
+        return {{Tone{523.25, 0.038, 0.10, 0.002, 0.030}}, 0.045};
     case SoundPlayer::Effect::Confirm:
-        // A short, bright "ding".
-        return {{Tone{1318.5, 0.14, 0.42, 0.004, 0.115, 1.0}, Tone{2637.0, 0.10, 0.18, 0.002, 0.085, 1.0},
-                 Tone{523.25, 0.16, 0.13, 0.002, 0.130, 1.0}}, 0.17};
+        // A warm, clean confirmation - no chirp, no sweep.
+        return {{Tone{659.25, 0.110, 0.45, 0.004, 0.075}}, 0.120};
     case SoundPlayer::Effect::Back:
-        // A low, soft "blip".
-        return {{Tone{659.25, 0.095, 0.38, 0.003, 0.075, 1.0}}, 0.115};
+        // Lower and gentler - backing out.
+        return {{Tone{392.00, 0.095, 0.42, 0.004, 0.060}}, 0.105};
     case SoundPlayer::Effect::Launch:
-        // Rising two-chime arpeggio.
-        return {{Tone{523.25, 0.10, 0.38, 0.002, 0.075, 1.0}, Tone{783.99, 0.10, 0.38, 0.002, 0.075, 1.0},
-                 Tone{1046.5, 0.15, 0.48, 0.002, 0.125, 1.0}, Tone{1568.0, 0.09, 0.22, 0.002, 0.080, 1.0}},
-                0.34};
+        // Two soft rising notes - start playing.
+        return {{Tone{523.25, 0.075, 0.45, 0.004, 0.045}, Tone{784.00, 0.115, 0.45, 0.004, 0.085}},
+                0.205};
     case SoundPlayer::Effect::TabSwitch:
-        // A dry tock for tabs.
-        return {{Tone{1567.98, 0.045, 0.32, 0.001, 0.035, 1.0}}, 0.060};
+        // Short and quiet - moving between tabs.
+        return {{Tone{587.33, 0.055, 0.34, 0.003, 0.035}}, 0.065};
     case SoundPlayer::Effect::Error:
-        // A duller, lower buzz for refused actions.
-        return {{Tone{196.0, 0.21, 0.40, 0.004, 0.170, 1.0}, Tone{185.0, 0.21, 0.27, 0.004, 0.170, 1.0}}, 0.26};
+        // A low, dull refusal.
+        return {{Tone{220.00, 0.140, 0.40, 0.004, 0.100}, Tone{233.08, 0.140, 0.26, 0.004, 0.100}},
+                0.155};
     }
     return {{}, 0.0};
 }
 
-/// A 16-bit signed PCM tone burst with a soft attack and exponential release, optionally with a
-/// quiet octave partial for a chime-like quality.
+/// A 16-bit signed PCM tone with raised-cosine fades at both ends, so every note starts and
+/// ends at exactly zero with zero slope - no clicks, no pops, no glitches.
 void AppendTone(std::vector<int16_t>& pcm, const Tone& tone, int offset) {
     const int total = static_cast<int>(tone.duration * kSampleRate);
     const double two_pi_f = 2.0 * M_PI * tone.frequency;
-    const double two_pi_d = 2.0 * M_PI * tone.frequency * tone.detune;
     for (int i = 0; i < total; ++i) {
         const double t = static_cast<double>(i) / kSampleRate;
         double envelope = 1.0;
         if (t < tone.attack) {
-            envelope = t / tone.attack;
+            envelope = 0.5 - 0.5 * std::cos(M_PI * t / tone.attack);
         } else if (t > tone.duration - tone.release) {
             const double remaining = (tone.duration - t) / tone.release;
-            envelope = std::pow(std::max(0.0, remaining), 1.6);
+            envelope = 0.5 + 0.5 * std::cos(M_PI * (1.0 - remaining));
         }
-        const double fundamental = std::sin(two_pi_f * t);
-        const double partial = 0.24 * std::sin(two_pi_d * t * 2.0);
+        const double phase = two_pi_f * t;
         const double sample =
-            (fundamental * 0.76 + partial) * envelope * tone.gain * 32767.0;
+            (std::sin(phase) * 0.88 + std::sin(phase * 2.0) * 0.07) * envelope * tone.gain *
+            32767.0;
         const int at = offset + i;
         if (at >= 0 && at < static_cast<int>(pcm.size())) {
             pcm[static_cast<size_t>(at)] = static_cast<int16_t>(std::clamp(sample, -32768.0, 32767.0));
@@ -137,10 +134,20 @@ void SoundPlayer::Play(Effect effect) {
     const QByteArray wav = RenderWav(effect);
 #ifdef _WIN32
     if (!wav.isEmpty()) {
-        // Fires asynchronously; the buffer is copied by the sound system, so it can be freed
-        // with the local.
-        if (PlaySoundA(reinterpret_cast<LPCSTR>(wav.constData()), nullptr,
-                       SND_MEMORY | SND_ASYNC | SND_NODEFAULT)) {
+        DWORD flags = SND_MEMORY | SND_ASYNC | SND_NODEFAULT;
+        // The scroll tick re-triggers ~12 times per second; without SND_NOSTOP each tick
+        // cuts the previous one off mid-wave and the scroll sounds like a stutter.
+        const bool nostop = effect == Effect::Navigate || effect == Effect::TabSwitch;
+        if (nostop) {
+            flags |= SND_NOSTOP;
+        }
+        if (PlaySoundA(reinterpret_cast<LPCSTR>(wav.constData()), nullptr, flags)) {
+            return;
+        }
+        // With SND_NOSTOP, a tick that is suppressed because the previous one is still
+        // playing comes back as a failure - that is intentional, not an error, and must
+        // not turn into the Windows ding.
+        if (nostop) {
             return;
         }
     }

@@ -18,6 +18,7 @@
 #include <QBoxLayout>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QEvent>
 #include <QDateTime>
 #include <QDateTimeEdit>
 #include <QIcon>
@@ -32,6 +33,7 @@
 #include <QSlider>
 #include <QSpinBox>
 #include <QStyle>
+#include <QToolButton>
 #include <QValidator>
 #include <QVariant>
 #include <QtCore/qglobal.h>
@@ -48,10 +50,39 @@
 #include "qt_common/config/shared_translation.h"
 #include "qt_common/qt_compat.h"
 #include "yuzu/ocarina2/ocarina2_ui.h"
+#include "yuzu/ocarina2/sound.h"
 
 namespace ConfigurationShared {
 
 static int restore_button_count = 0;
+
+/// A minimal ◄ / ► pill for the sides of value controls (mouse users; the d-pad adjusts
+/// directly with Left/Right). Focus stays off them so the controller never lands on them.
+static QToolButton* CreateArrow(bool left, QWidget* parent) {
+    auto* const button = new QToolButton(parent);
+    button->setText(left ? QStringLiteral("◀") : QStringLiteral("▶"));
+    button->setObjectName(QStringLiteral("Ocarina2SettingArrow"));
+    button->setCursor(Qt::PointingHandCursor);
+    button->setFocusPolicy(Qt::NoFocus);
+    button->setFixedSize(36, 36);
+    return button;
+}
+
+/// Clicking anywhere on a bool row's empty space toggles its checkbox.
+class CheckBoxToggleFilter final : public QObject {
+public:
+    explicit CheckBoxToggleFilter(QCheckBox* box) : QObject(box), box(box) {}
+    bool eventFilter(QObject*, QEvent* event) override {
+        if (event->type() == QEvent::MouseButtonRelease) {
+            box->click();
+            return true;
+        }
+        return false;
+    }
+
+private:
+    QCheckBox* box;
+};
 
 static std::string RelevantDefault(const Settings::BasicSetting& setting) {
     return Settings::IsConfiguringGlobal() ? setting.DefaultToString() : setting.ToStringGlobal();
@@ -96,7 +127,10 @@ QPushButton* Widget::CreateRestoreGlobalButton(bool using_global, QWidget* paren
 
 QLabel* Widget::CreateLabel(const QString& text) {
     QLabel* qt_label = new QLabel(text, this->parent);
+    qt_label->setObjectName(QStringLiteral("Ocarina2SettingLabel"));
     qt_label->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    // Mouse clicks fall through to the row (a bool row toggles on any click).
+    qt_label->setAttribute(Qt::WA_TransparentForMouseEvents, true);
     return qt_label;
 }
 
@@ -104,7 +138,7 @@ QWidget* Widget::CreateCheckBox(Settings::BasicSetting* bool_setting, const QStr
                                 std::function<std::string()>& serializer,
                                 std::function<void()>& restore_func,
                                 const std::function<void()>& touch) {
-    checkbox = new QCheckBox(label, this);
+    checkbox = new QCheckBox(QString(), this);  ///< text comes from the row's header label
     checkbox->setCheckState(bool_setting->ToString() == "true" ? Qt::CheckState::Checked
                                                                : Qt::CheckState::Unchecked);
     checkbox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
@@ -512,8 +546,15 @@ void Widget::SetupComponent(const QString& label, std::function<void()>& load_fu
     created = true;
     const auto type_id = setting.TypeId();
 
-    QHBoxLayout* layout = new QHBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0);
+    // Longshot-style pill row: a dim uppercase caption on top, the value centered below
+    // (flanked by ◄ ► when the control adjusts in steps; an ON/OFF checkbox for bools).
+    setObjectName(QStringLiteral("Ocarina2SettingRow"));
+    setAttribute(Qt::WA_StyledBackground, true);
+    // The row fills the page like a Switch settings row.
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    auto* layout = new QVBoxLayout(this);
+    layout->setContentsMargins(20, 12, 20, 12);
+    layout->setSpacing(8);
 
     if (other_setting == nullptr) {
         // A paired setting without the Paired specialization gets a widget of its own, and
@@ -580,17 +621,20 @@ void Widget::SetupComponent(const QString& label, std::function<void()>& load_fu
         };
     }
 
+    auto* header = new QHBoxLayout;
+    header->setContentsMargins(0, 0, 0, 0);
+    header->setSpacing(10);
     if (require_checkbox) {
-        QWidget* lhs =
-            CreateCheckBox(other_setting, label, checkbox_serializer, checkbox_restore_func, touch);
-        layout->addWidget(lhs, 1);
-    } else if (type_id != "bool") {
-        QLabel* qt_label = CreateLabel(label);
-        layout->addWidget(qt_label, 1);
+        QWidget* lhs = CreateCheckBox(other_setting, QString(), checkbox_serializer,
+                                      checkbox_restore_func, touch);
+        header->addWidget(lhs, 0);
     }
+    auto* header_label = CreateLabel(label.toUpper());
+    header->addWidget(header_label, 1);
+    layout->addLayout(header);
 
     if (type_id == "bool") {
-        data_component = CreateCheckBox(&setting, label, serializer, restore_func, touch);
+        data_component = CreateCheckBox(&setting, QString(), serializer, restore_func, touch);
     } else if (type_id == "string") {
         switch (request) {
         case RequestType::Default:
@@ -658,7 +702,75 @@ void Widget::SetupComponent(const QString& label, std::function<void()>& load_fu
         return;
     }
 
-    layout->addWidget(data_component, 1);
+    const auto adjust = [data_component](int direction) {
+        Ocarina2Ui::SoundPlayer::Instance().Play(Ocarina2Ui::SoundPlayer::Effect::TabSwitch);
+        if (auto* combo = qobject_cast<QComboBox*>(data_component)) {
+            const int count = combo->count();
+            if (count > 1) {
+                combo->setCurrentIndex((combo->currentIndex() + direction + count) % count);
+            }
+            return;
+        }
+        if (auto* spin = qobject_cast<QAbstractSpinBox*>(data_component)) {
+            if (direction > 0) {
+                spin->stepUp();
+            } else {
+                spin->stepDown();
+            }
+            return;
+        }
+        if (auto* slider = qobject_cast<QAbstractSlider*>(data_component)) {
+            slider->setValue(slider->value() + direction * slider->singleStep());
+        }
+    };
+    const bool flankable = qobject_cast<QComboBox*>(data_component) != nullptr ||
+                           qobject_cast<QAbstractSpinBox*>(data_component) != nullptr ||
+                           qobject_cast<QAbstractSlider*>(data_component) != nullptr ||
+                           qobject_cast<QCheckBox*>(data_component) != nullptr;
+    if (flankable) {
+        auto* value_row = new QHBoxLayout;
+        value_row->setContentsMargins(0, 0, 0, 0);
+        value_row->setSpacing(12);
+        auto* left = CreateArrow(true, this);
+        auto* right = CreateArrow(false, this);
+        const auto toggle_checkbox = qobject_cast<QCheckBox*>(data_component);
+        connect(left, &QToolButton::clicked, this,
+                [toggle_checkbox, adjust] {
+                    if (toggle_checkbox) {
+                        Ocarina2Ui::SoundPlayer::Instance().Play(
+                            Ocarina2Ui::SoundPlayer::Effect::TabSwitch);
+                        toggle_checkbox->click();
+                        return;
+                    }
+                    adjust(-1);
+                });
+        connect(right, &QToolButton::clicked, this,
+                [toggle_checkbox, adjust] {
+                    if (toggle_checkbox) {
+                        Ocarina2Ui::SoundPlayer::Instance().Play(
+                            Ocarina2Ui::SoundPlayer::Effect::TabSwitch);
+                        toggle_checkbox->click();
+                        return;
+                    }
+                    adjust(+1);
+                });
+        value_row->addWidget(left);
+        if (qobject_cast<QCheckBox*>(data_component)) {
+            value_row->addWidget(data_component, 0, Qt::AlignCenter);
+        } else {
+            value_row->addWidget(data_component, 1);
+        }
+        value_row->addWidget(right);
+        layout->addLayout(value_row);
+    } else if (type_id == "bool") {
+        layout->addWidget(data_component, 0, Qt::AlignHCenter);
+        // A click anywhere on the pill toggles the checkbox (mouse support).
+        if (auto* box = qobject_cast<QCheckBox*>(data_component)) {
+            this->installEventFilter(new CheckBoxToggleFilter(box));
+        }
+    } else {
+        layout->addWidget(data_component);
+    }
 
     if (!managed) {
         return;
@@ -674,7 +786,7 @@ void Widget::SetupComponent(const QString& label, std::function<void()>& load_fu
             }
         };
     } else {
-        layout->addWidget(restore_button);
+        header->addWidget(restore_button, 0, Qt::AlignVCenter);
 
         restore_button->connect(restore_button, &QAbstractButton::clicked,
                                 [this, restore_func, checkbox_restore_func](bool) {

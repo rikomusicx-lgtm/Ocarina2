@@ -36,6 +36,8 @@ class ConfigureUi;
 class ConfigureWeb;
 
 class HotkeyRegistry;
+class QLabel;
+class QWidget;
 
 namespace InputCommon {
 class InputSubsystem;
@@ -56,6 +58,9 @@ public:
     ~ConfigureDialog() override;
 
     void ApplyConfiguration();
+    /// Selects one of the Ocarina2 selector groups (0=General, 1=Graphics, 2=Controls,
+    /// 3=Audio, 4=System, 5=Advanced) before the dialog shows.
+    void OcarinaSelectGroup(int row);
 
 private slots:
     void OnLanguageChanged(const QString& locale);
@@ -66,8 +71,6 @@ signals:
 
 private:
     void changeEvent(QEvent* event) override;
-    bool eventFilter(QObject* watched, QEvent* event) override;
-    static void InstallRecursive(QWidget* root, QObject* filter);
     void RetranslateUI();
 
     void HandleApplyButtonClicked();
@@ -75,8 +78,20 @@ private:
     void SetConfiguration();
     void UpdateVisibleTabs();
     void PopulateSelectionList();
+    /// The Ocarina2 top row of page chips (replaces the native tab bar, which the controller
+    /// can't reach): one focusable chip per visible page.
+    void RebuildChips();
+    void SyncChips();
+    /// Focus the first focusable control on the visible page, like a console does.
+    void FocusFirstControl();
 
     std::unique_ptr<Ui::ConfigureDialog> ui;
+    /// The breadcrumb label in the header, so the selection list can keep it honest.
+    QLabel* crumb_label = nullptr;
+    /// The chip row's container; chips are rebuilt whenever the visible pages change.
+    QWidget* chip_row = nullptr;
+    /// The controller navigation filter, so chips created after the ctor still receive it.
+    QObject* controller_filter = nullptr;
     HotkeyRegistry& registry;
 
     Core::System& system;

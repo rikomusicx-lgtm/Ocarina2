@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
  <class>ConfigureUi</class>
  <widget class="QWidget" name="ConfigureUi">
@@ -22,7 +22,7 @@
      <property name="title">
       <string>General</string>
      </property>
-     <layout class="QHBoxLayout" name="horizontalLayout">
+     <layout class="QHBoxLayout" name="horizontalLayout" stretch="1">
       <item>
        <layout class="QVBoxLayout" name="verticalLayout_2">
         <item>

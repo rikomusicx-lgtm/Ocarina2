@@ -119,7 +119,7 @@ void MainWindow::SetUpOcarina2Ui() {
         .play = [this](const QString& path, u64 program_id) { OnGameListLoadFile(path, program_id); },
         .add_folder = [this] { OnGameListAddDirectory(); },
         .add_file = [this] { ui->action_Load_File->trigger(); },
-        .open_settings = [this] { OnConfigure(); },
+        .open_settings = [this] { OpenConsoleSettings(); },
         .game_settings =
             [this](u64 program_id, const std::string& path) {
                 OpenPerGameConfiguration(program_id, path);

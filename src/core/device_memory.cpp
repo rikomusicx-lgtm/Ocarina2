@@ -6,6 +6,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
+#include <new>
 
 #include <cstdlib>
 
@@ -46,7 +47,9 @@ DeviceMemory::~DeviceMemory() = default;
 #ifdef _WIN32
 // Windows can't punch holes in the guest memory section, so pages holding only zeros (games clear
 // their heaps while booting: Ocarina leaves ~7 GB) stay resident until they leave the working set.
-// A pass comes every 5 s while they keep turning up, backing off to once a minute.
+// A pass comes every 5 s while they keep turning up, backing off to once every 5 minutes: after
+// boot most passes trim 1-2 MiB for about a second of work. It waits out bulk mapping (loads,
+// spawns), whose map calls stalled 10-14 ms while a pass ran.
 void DeviceMemory::TrimZeroPages(std::stop_token stop) {
     using namespace std::chrono_literals;
     Common::SetCurrentThreadName("ZeroTrim");
@@ -64,15 +67,6 @@ void DeviceMemory::TrimZeroPages(std::stop_token stop) {
         const char* const value = std::getenv("EDEN_NX2_ZERO_TRIM_IDLE");
         return value == nullptr || value[0] != '0';
     }();
-    const auto mapped_bytes = [] {
-        using Common::Nx2Hitch::Cause;
-        u64 total = 0;
-        for (const Cause cause : {Cause::HostMap, Cause::HostUnmap, Cause::HostProtect}) {
-            total += Common::Nx2Hitch::g_counters.amount[static_cast<size_t>(cause)].load(
-                std::memory_order_relaxed);
-        }
-        return total;
-    };
     const std::chrono::seconds max_interval = idle_timing ? 300s : 60s;
     while (true) {
         {
@@ -85,7 +79,7 @@ void DeviceMemory::TrimZeroPages(std::stop_token stop) {
         // Busy: over 32 MiB mapped, unmapped or protected in the last half second. At most 10
         // waits (5 s), then the pass runs anyway.
         for (int wait = 0; idle_timing && wait < 10; ++wait) {
-            const u64 before = mapped_bytes();
+            const u64 before = Common::HostMemory::MappedBytes();
             {
                 std::unique_lock lock{mutex};
                 wake.wait_for(lock, stop, 500ms, [] { return false; });
@@ -93,14 +87,30 @@ void DeviceMemory::TrimZeroPages(std::stop_token stop) {
             if (stop.stop_requested()) {
                 return;
             }
-            if (mapped_bytes() - before < (u64{32} << 20)) {
+            if (Common::HostMemory::MappedBytes() - before < (u64{32} << 20)) {
                 break;
             }
         }
         const auto start = std::chrono::steady_clock::now();
         Common::Nx2Hitch::ZeroTrimBegin();
-        const auto [resident, trimmed] = buffer.TrimZeroPages();
+        std::pair<size_t, size_t> result;
+        try {
+            result = buffer.TrimZeroPages();
+        } catch (const std::bad_alloc&) {
+            // A pass needs 32 MiB and more of scratch. When Windows runs out of commit, the
+            // exception leaving this thread ended the emulator (#1346); the pass is only a saving.
+            Common::Nx2Hitch::ZeroTrimEnd();
+            interval = std::chrono::seconds{60};
+            const Common::ProcessMemoryUsage usage = Common::GetProcessMemoryUsage();
+            LOG_WARNING(HW_Memory,
+                        "Skipped trimming all-zero guest pages: out of memory. Windows commit is "
+                        "{} of {} MiB (this process {} MiB); the limit is RAM plus the page file",
+                        usage.system_commit >> 20, usage.system_commit_limit >> 20,
+                        usage.private_bytes >> 20);
+            continue;
+        }
         Common::Nx2Hitch::ZeroTrimEnd();
+        const auto [resident, trimmed] = result;
         const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                             std::chrono::steady_clock::now() - start)
                             .count();

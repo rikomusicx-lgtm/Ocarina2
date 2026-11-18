@@ -3,7 +3,8 @@
 <RCC>
     <qresource prefix="ocarina2">
         <file>style.qss</file>
-        <file>assets/zelda-bg.png</file>
+        <file>assets/oot-keyart.jpg</file>
+        <file>assets/bananza-keyart.jpg</file>
         <file>whats-new.md</file>
         <file>fonts/Inter-Regular.ttf</file>
         <file>fonts/Inter-Medium.ttf</file>

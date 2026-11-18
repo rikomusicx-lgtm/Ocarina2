@@ -390,6 +390,9 @@ private slots:
     void OnMenuInstallToNAND();
     void OnMenuRecentFile();
     void OnConfigure();
+    /// Opens the OC configuration dialog on a specific group (0=General, 1=Graphics,
+    /// 2=Controls, 3=Audio, 4=System, 5=Advanced).
+    void OpenOcarinaSettings(int ocarina_group);
     /// Asks whether Ocarina of Time runs at 60 or 30 FPS (Settings::values.oot_30fps).
     void AskOotFrameRate();
     /// Applies the Frizti tuned settings once per revision and undoes other builds' changes to
@@ -408,6 +411,9 @@ private slots:
     void OnToggleGpuAccuracy();
     void OnToggleAdaptingFilter();
     void OpenQuickMenu();
+    /// The Ocarina2 console settings screen (ocarina2/console_settings): a fullscreen,
+    /// Switch-2-style list of every setting the emulator exposes.
+    void OpenConsoleSettings();
     void OnConfigurePerGame();
     void OnLoadAmiibo();
     void OnOpenRootDataFolder();

@@ -225,6 +225,8 @@ add_executable(yuzu
     ocarina2/home.h
     ocarina2/home_panel.cpp
     ocarina2/home_panel.h
+    ocarina2/controller_dialog.cpp
+    ocarina2/controller_dialog.h
     ocarina2/sound.cpp
     ocarina2/sound.h
     ocarina2/tile_strip.cpp
@@ -236,6 +238,8 @@ add_executable(yuzu
     ocarina2/perf_overlay.h
     ocarina2/precompile_gate.cpp
     ocarina2/precompile_gate.h
+    ocarina2/console_settings.cpp
+    ocarina2/console_settings.h
     ocarina2/quick_menu.cpp
     ocarina2/quick_menu.h
     ocarina2/saves_window.cpp

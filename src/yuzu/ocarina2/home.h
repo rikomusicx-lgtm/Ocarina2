@@ -62,6 +62,9 @@ public:
     /// The dock's in-page panels (public for the debug auto-open hook).
     Q_INVOKABLE void ShowAddGamesPanel();
     Q_INVOKABLE void ShowWhatsNewPanel();
+    Q_INVOKABLE void ShowHomePanel();
+    Q_INVOKABLE void ShowGamesPanel();
+    Q_INVOKABLE void ShowMorePanel();
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -76,6 +79,8 @@ private:
     void FixHomeLayout();
     /// The per-game context menu (right click / X on the hero image).
     void ShowGameMenu(const QString& path, u64 program_id, const QPoint& global_pos);
+    /// Glides the aqua focus pill to the focused dock button.
+    void MoveDockPill(QWidget* button, bool animate);
 
     QWidget* MakeRail();
     QWidget* MakePage();
@@ -108,6 +113,8 @@ private:
     QToolButton* settings_button = nullptr;
     QToolButton* menu_button = nullptr;
     TileStrip* tile_strip = nullptr;  ///< Switch-2-style tile strip, arrow Left/Right moves
+    QWidget* dock_pill = nullptr;     ///< travelling aqua focus ring behind the focused dock button
+    QWidget* last_dock_focus = nullptr;  ///< the dock button that had focus last, so Down from the tiles returns there
     QList<QWidget*> nav_order_;  ///< Focus order: dock and hero.
     int nav_index_ = 0;
     QTimer* refresh_timer = nullptr;

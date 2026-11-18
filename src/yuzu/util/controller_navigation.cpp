@@ -6,9 +6,14 @@
 #include "hid_core/hid_core.h"
 #include "yuzu/util/controller_navigation.h"
 
+#include <algorithm>
+
 ControllerNavigation::ControllerNavigation(Core::HID::HIDCore& hid_core, QWidget* parent) {
     player1_controller = hid_core.GetEmulatedController(Core::HID::NpadIdType::Player1);
     handheld_controller = hid_core.GetEmulatedController(Core::HID::NpadIdType::Handheld);
+    repeat_timer = new QTimer(this);
+    repeat_timer->setInterval(40);  // 25 Hz while a direction is held
+    connect(repeat_timer, &QTimer::timeout, this, &ControllerNavigation::OnRepeatTick);
     LoadController();
 }
 
@@ -56,6 +61,8 @@ void ControllerNavigation::ControllerUpdateEvent(Core::HID::ControllerTriggerTyp
 
     if (type == Core::HID::ControllerTriggerType::Stick) {
         ControllerUpdateStick();
+        // A held stick behaves like a held d-pad: it feeds the auto-repeat timer.
+        RefreshHeldDirections();
         return;
     }
 }
@@ -100,12 +107,72 @@ void ControllerNavigation::ControllerUpdateButton() {
     default:
         break;
     }
+    RefreshHeldDirections();
+}
+
+void ControllerNavigation::RefreshHeldDirections() {
+    std::vector<Qt::Key> now;
+    const auto controller_type = player1_controller->GetNpadStyleIndex();
+    const bool main_style = controller_type == Core::HID::NpadStyleIndex::Fullkey ||
+                            controller_type == Core::HID::NpadStyleIndex::JoyconDual ||
+                            controller_type == Core::HID::NpadStyleIndex::Handheld ||
+                            controller_type == Core::HID::NpadStyleIndex::GameCube;
+    if (main_style) {
+        const auto held_button = [&](Settings::NativeButton::Values b) {
+            return button_values[b].value;
+        };
+        const auto& s = stick_values[Settings::NativeAnalog::LStick];
+        if (held_button(Settings::NativeButton::DDown) || s.down) {
+            now.push_back(Qt::Key_Down);
+        }
+        if (held_button(Settings::NativeButton::DUp) || s.up) {
+            now.push_back(Qt::Key_Up);
+        }
+        if (held_button(Settings::NativeButton::DLeft) || s.left) {
+            now.push_back(Qt::Key_Left);
+        }
+        if (held_button(Settings::NativeButton::DRight) || s.right) {
+            now.push_back(Qt::Key_Right);
+        }
+    }
+    std::ranges::sort(now);
+    now.erase(std::ranges::unique(now).begin(), now.end());
+
+    std::vector<HeldKey> next;
+    next.reserve(now.size());
+    for (const Qt::Key key : now) {
+        const auto it = std::find_if(held_keys_.begin(), held_keys_.end(),
+                                     [&](const HeldKey& h) { return h.key == key; });
+        next.push_back(it != held_keys_.end() ? *it : HeldKey{key, 0});
+    }
+    held_keys_.swap(next);
+    if (held_keys_.empty()) {
+        if (repeat_timer) {
+            repeat_timer->stop();
+        }
+        return;
+    }
+    if (repeat_timer && !repeat_timer->isActive()) {
+        repeat_timer->start();
+    }
+}
+
+void ControllerNavigation::OnRepeatTick() {
+    std::scoped_lock lock{mutex};
+    for (auto& held : held_keys_) {
+        ++held.ticks;
+        if (held.ticks == kInitialDelayTicks + 1 ||
+            (held.ticks > kInitialDelayTicks &&
+             (held.ticks - kInitialDelayTicks) % kRepeatEveryTicks == 0)) {
+            emit TriggerKeyboardEvent(held.key);
+        }
+    }
 }
 
 void ControllerNavigation::ControllerUpdateStick() {
     const auto controller_type = player1_controller->GetNpadStyleIndex();
     const auto& player1_sticks = player1_controller->GetSticksValues();
-    const auto& handheld_sticks = player1_controller->GetSticksValues();
+    const auto& handheld_sticks = handheld_controller->GetSticksValues();
     bool update = false;
 
     for (std::size_t i = 0; i < player1_sticks.size(); ++i) {

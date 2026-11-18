@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 
 #include "yuzu/ocarina2/home_panel.h"
@@ -16,6 +16,7 @@
 #include <QScrollBar>
 #include <QVBoxLayout>
 #include <QShowEvent>
+#include <QTextBrowser>
 
 #include <algorithm>
 #include <QVariant>
@@ -164,8 +165,24 @@ void HomePanel::SetBodyWidget(QWidget* widget) {
     }
     body_ = widget;
     widget->setObjectName(QStringLiteral("Ocarina2HomePanelBody"));
-    card_layout->insertWidget(card_layout->count() - 2, widget, 1);
-    setFixedWidth(std::min(940, width()));
+    // A roomier card, so the notes have room to actually be read - and the body fills it.
+    widget->setMaximumWidth(1100);
+    widget->setMaximumHeight(760);
+    widget->setMinimumWidth(760);
+    widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    panel->setMaximumWidth(1160);
+    panel->setMinimumWidth(640);
+    if (auto* text = qobject_cast<QTextBrowser*>(widget)) {
+        // The dialog scrolls the notes with a held d-pad/stick; the browser itself takes no
+        // keys at all.
+        text->setFocusPolicy(Qt::NoFocus);
+    }
+    if (auto* browser = qobject_cast<QAbstractScrollArea*>(widget)) {
+        body_scroll_ = browser;
+    } else {
+        body_scroll_ = widget->findChild<QAbstractScrollArea*>();
+    }
+    card_layout->insertWidget(card_layout->count() - 2, widget, /*stretch=*/1);
 }
 
 void HomePanel::SetHints(const QString& text) {
@@ -197,6 +214,41 @@ void HomePanel::showEvent(QShowEvent* event) {
 
 void HomePanel::keyPressEvent(QKeyEvent* event) {
     const int key = event->key();
+
+    // Body mode: the notes screen. D-pad/stick scrolls the notes (held keys repeat, so the
+    // page slides under a held down/up, like a real console), A closes, B goes back.
+    if (body_scroll_) {
+        const int step = 54;
+        const int page = std::max(step, body_scroll_->viewport()->height() - 48);
+        int delta = 0;
+        if (key == Qt::Key_Down) {
+            delta = step;
+        } else if (key == Qt::Key_Up) {
+            delta = -step;
+        } else if (key == Qt::Key_PageDown) {
+            delta = page;
+        } else if (key == Qt::Key_PageUp) {
+            delta = -page;
+        }
+        if (delta != 0) {
+            SoundPlayer::Instance().Play(SoundPlayer::Effect::Navigate);
+            auto* bar = body_scroll_->verticalScrollBar();
+            bar->setValue(bar->value() + delta);
+            return;
+        }
+        if (key == Qt::Key_Return || key == Qt::Key_Enter || key == Qt::Key_Space) {
+            SoundPlayer::Instance().Play(SoundPlayer::Effect::Confirm);
+            accept();
+            return;
+        }
+        if (key == Qt::Key_Escape || key == Qt::Key_Home) {
+            SoundPlayer::Instance().Play(SoundPlayer::Effect::Back);
+            reject();
+            return;
+        }
+        return;
+    }
+
     const bool value_focused =
         std::any_of(value_rows_.begin(), value_rows_.end(), [this](const ValueRow& row) {
             return focusWidget() == row.button;
@@ -241,6 +293,11 @@ void HomePanel::keyPressEvent(QKeyEvent* event) {
         reject();
         return;
     default:
+        // Swallow unmodified leftovers instead of passing them to the window (the Windows
+        // "ding" punishes unhandled keys). Modifier combos keep their OS behavior.
+        if ((event->modifiers() & ~Qt::KeypadModifier) == Qt::NoModifier) {
+            return;
+        }
         QDialog::keyPressEvent(event);
     }
 }
@@ -272,7 +329,7 @@ void HomePanel::focusFirstRow() {
 void HomePanel::refreshValueRows() {
     for (const ValueRow& row : value_rows_) {
         const QString value = row.value ? row.value() : QString();
-        row.button->setText(row.label + QStringLiteral("    â€º    ") + value);
+        row.button->setText(row.label + QStringLiteral("    >    ") + value);
         const bool enabled = row.enabled ? row.enabled() : true;
         row.button->setEnabled(enabled);
     }

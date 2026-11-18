@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
  <class>ConfigureInputProfileDialog</class>
  <widget class="QDialog" name="ConfigureInputProfileDialog">
@@ -33,7 +33,7 @@
     <layout class="QHBoxLayout" name="controllerLayout"/>
    </item>
    <item>
-    <layout class="QHBoxLayout" name="horizontalLayout">
+    <layout class="QHBoxLayout" name="horizontalLayout" stretch="1">
      <item>
       <widget class="QPushButton" name="clear_all_button">
        <property name="text">

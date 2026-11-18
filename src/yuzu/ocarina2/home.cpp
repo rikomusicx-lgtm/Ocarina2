@@ -25,7 +25,13 @@
 #include <QMainWindow>
 #include <QMenu>
 #include <QMenuBar>
+#include <QGraphicsBlurEffect>
+#include <QGraphicsItem>
+#include <QGraphicsPixmapItem>
+#include <QGraphicsScene>
 #include <QLinearGradient>
+#include <QPixmap>
+#include <QRadialGradient>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPushButton>
@@ -201,29 +207,198 @@ std::vector<Game> CollectGames(QStandardItemModel* model, const QPixmap& fallbac
 
 } // namespace
 
-/// The page background: either a user-supplied image in the profile folder — drop a
-/// "background.png" (or .jpg / .jpeg, max 16 MB) into the ocarina2 profile folder and the home
-/// screen uses it, fitted to fill the page — or the built-in Hyrule scene baked in as a qrc
-/// resource. The painted art never gets mouse events, so it can never get in the way.
-static QPixmap ResolveHomeBg() {
-    const QString profile =
-        QString::fromStdString(Common::FS::GetEdenPathString(Common::FS::EdenPath::EdenDir));
-    for (const char* name : {"background.png", "background.jpg", "background.jpeg"}) {
-        const QFileInfo candidate(profile + QLatin1Char('/') + QLatin1String(name));
-        if (!candidate.isFile() || candidate.size() > 16 * 1024 * 1024) {
-            continue;
-        }
-        QPixmap pixmap(candidate.filePath());
-        if (!pixmap.isNull()) {
-            return pixmap;
-        }
+/// Which official key art a game gets, keyed by title. Nothing generative-AI anywhere: the
+/// arts below are official Nintendo key art (see assets/CREDITS.md), and every other game
+/// falls back to a flat purple backdrop. A user-supplied profile background may have been the
+/// AI-generated Hyrule castle, so the OC home does not consult it anymore.
+
+/// Which official key art a game gets, keyed by title. Nothing generative-AI anywhere: the
+/// arts below are official Nintendo key art (see assets/CREDITS.md), and every other game
+/// falls back to a flat purple backdrop.
+static QString BackgroundKeyForTitle(const QString& title) {
+    const QString lower = title.toLower();
+    if (lower.contains(QStringLiteral("ocarina of time")) ||
+        lower.contains(QStringLiteral("oot"))) {
+        return QStringLiteral("oot");
     }
-    return QPixmap(QStringLiteral(":/ocarina2/assets/zelda-bg.png"));
+    if (lower.contains(QStringLiteral("donkey kong")) ||
+        lower.contains(QStringLiteral("bananza"))) {
+        return QStringLiteral("bananza");
+    }
+    return QString(); // flat purple
 }
 
+static const QPixmap& BackgroundArtFor(const QString& key) {
+    static std::unordered_map<QString, QPixmap> cache;
+    const auto it = cache.find(key);
+    if (it != cache.end()) {
+        return it->second;
+    }
+    QPixmap pixmap;
+    if (key.startsWith(QStringLiteral("custom:"))) {
+        pixmap = QPixmap(key.mid(7));
+    } else if (key == QStringLiteral("oot")) {
+        pixmap = QPixmap(QStringLiteral(":/ocarina2/assets/oot-keyart.jpg"));
+    } else if (key == QStringLiteral("bananza")) {
+        pixmap = QPixmap(QStringLiteral(":/ocarina2/assets/bananza-keyart.jpg"));
+    }
+    return cache.emplace(key, std::move(pixmap)).first->second;
+}
+
+/// Soft, heavy blur baked into the cover art once per size - menus read on any backdrop.
+static QPixmap BlurPixmap(const QPixmap& source, qreal radius) {
+    if (source.isNull() || radius <= 0.0) {
+        return source;
+    }
+    QGraphicsScene scene;
+    scene.setSceneRect(QRectF(QPointF(0.0, 0.0), QSizeF(source.size())));
+    auto* item = scene.addPixmap(source);
+    item->setPos(0.0, 0.0);
+    auto* blur = new QGraphicsBlurEffect;
+    blur->setBlurRadius(radius);
+    blur->setBlurHints(QGraphicsBlurEffect::QualityHint);
+    item->setGraphicsEffect(blur);
+    QPixmap out(source.size());
+    out.fill(Qt::transparent);
+    QPainter painter(&out);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform);
+    scene.render(&painter, QRectF(out.rect()), QRectF(QPointF(0.0, 0.0), QSizeF(out.size())));
+    return out;
+}
+
+/// Cover-scale, cached per (key, size) - the frame paint draws one pixmap, not a scaled one.
+static const QPixmap& CoverArtFor(const QString& key, const QSize& size) {
+    static std::unordered_map<QString, QPixmap> cache;
+    const QString cache_key =
+        key + QLatin1Char('@') + QString::number(size.width()) + QLatin1Char('x') +
+        QString::number(size.height());
+    const auto it = cache.find(cache_key);
+    if (it != cache.end()) {
+        return it->second;
+    }
+    const QPixmap scaled =
+        BackgroundArtFor(key).scaled(size, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+    return cache.emplace(cache_key, BlurPixmap(scaled, 16.0)).first->second;
+}
+
+static void DrawCover(QPainter& painter, const QString& key, const QRect& rect, qreal opacity) {
+    const QPixmap& art = CoverArtFor(key, rect.size());
+    if (art.isNull()) {
+        return;
+    }
+    const QPoint pos(rect.center().x() - art.width() / 2, rect.center().y() - art.height() / 2);
+    painter.setOpacity(opacity);
+    painter.drawPixmap(QRect(pos, art.size()), art);
+    painter.setOpacity(1.0);
+}
+
+/// The flat dim veil plus the corner vignette over the backdrop art, prerendered to a
+/// single translucent pixmap per size.
+static const QPixmap& OverlayFor(const QSize& size) {
+    static std::unordered_map<QString, QPixmap> cache;
+    const QString cache_key =
+        QStringLiteral("%1x%2").arg(size.width()).arg(size.height());
+    const auto it = cache.find(cache_key);
+    if (it != cache.end()) {
+        return it->second;
+    }
+    QPixmap out(size);
+    out.fill(Qt::transparent);
+    {
+        QPainter painter(&out);
+        painter.fillRect(out.rect(), QColor(9, 8, 19, 100));
+        const qreal max_side = static_cast<qreal>(std::max(size.width(), size.height()));
+        QRadialGradient vignette(QPointF(size.width() / 2.0, size.height() / 2.0), max_side * 0.75);
+        vignette.setColorAt(0.0, QColor(6, 5, 14, 0));
+        vignette.setColorAt(0.70, QColor(6, 5, 14, 20));
+        vignette.setColorAt(1.0, QColor(6, 5, 14, 148));
+        painter.fillRect(out.rect(), vignette);
+    }
+    return cache.emplace(cache_key, std::move(out)).first->second;
+}
+
+/// The per-game backdrop: official key art when we have it, a flat purple backdrop otherwise.
+static void DrawBackdrop(QPainter& painter, const QString& key, const QRect& rect,
+                         qreal opacity) {
+    if (key.isEmpty() || key == QStringLiteral("purple")) {
+        painter.setOpacity(opacity);
+        painter.fillRect(rect, QColor(0x38, 0x2b, 0x51));
+        painter.setOpacity(1.0);
+        return;
+    }
+    DrawCover(painter, key, rect, opacity);
+}
+
+/// The dock plate: a full round glass pill painted by hand. Half-height radius = always a pill.
+class DockPlate : public QWidget {
+public:
+    using QWidget::QWidget;
+
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        const QRectF r = QRectF(rect()).adjusted(1.0, 1.0, -1.0, -1.0);
+        const qreal radius = r.height() / 2.0;
+
+        // Dark glass fill.
+        QLinearGradient fill(0, r.top(), 0, r.bottom());
+        fill.setColorAt(0.0, QColor(31, 29, 45, 238));
+        fill.setColorAt(1.0, QColor(15, 14, 23, 238));
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(fill);
+        painter.drawRoundedRect(r, radius, radius);
+
+        // Hairline border.
+        painter.setPen(QPen(QColor(255, 255, 255, 30), 1.6));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRoundedRect(r, radius, radius);
+
+        // A soft top sheen for the console look.
+        QLinearGradient sheen(0, r.top(), 0, r.top() + r.height() * 0.5);
+        sheen.setColorAt(0.0, QColor(255, 255, 255, 22));
+        sheen.setColorAt(1.0, QColor(255, 255, 255, 0));
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(sheen);
+        painter.drawRoundedRect(r, radius, radius);
+    }
+};
+
+/// The home page: full-bleed backdrop that crossfades to the selected game's own official
+/// key art (or the flat purple base).
 class Ocarina2HomePage : public QWidget {
 public:
     using QWidget::QWidget;
+
+    /// Fades to the selected game's own backdrop: official key art when we have one
+    /// (that's what crossfades between games), else the flat purple base. The crossfade
+    /// stays.
+    void SetBackgroundForTitle(const QString& title) {
+        QString key = BackgroundKeyForTitle(title);
+        if (key.isEmpty()) {
+            key = QStringLiteral("purple");
+        }
+        if (key == bg_key_) {
+            return;
+        }
+        bg_prev_key_ = bg_key_;
+        bg_key_ = key;
+        bg_blend_ = 0.0;
+        if (!bg_timer_) {
+            bg_timer_ = new QTimer(this);
+            connect(bg_timer_, &QTimer::timeout, this, [this] {
+                bg_blend_ = std::min(1.0, bg_blend_ + 0.0625);  // 260 ms fade
+                if (bg_blend_ >= 1.0) {
+                    bg_timer_->stop();
+                    bg_prev_key_.clear();
+                }
+                update();
+            });
+        }
+        bg_timer_->start(16);
+        update();
+    }
 
 protected:
     void paintEvent(QPaintEvent* event) override {
@@ -233,21 +408,24 @@ protected:
         QStyleOption option{};
         option.initFrom(this);
         style()->drawPrimitive(QStyle::PE_Widget, &option, &painter);
-        const QPixmap& art = ZeldaBg();
-        const QPixmap art_scaled =
-            art.scaled(rect().size(), Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
-        const QPoint pos(rect().center().x() - art_scaled.width() / 2,
-                         rect().center().y() - art_scaled.height() / 2);
-        painter.drawPixmap(QRect(pos, art_scaled.size()), art_scaled);
+        const QString current = bg_key_.isEmpty() ? QStringLiteral("purple") : bg_key_;
+        if (bg_blend_ < 1.0 && !bg_prev_key_.isEmpty()) {
+            DrawBackdrop(painter, bg_prev_key_, rect(), 1.0);
+            DrawBackdrop(painter, current, rect(), bg_blend_);
+        } else {
+            DrawBackdrop(painter, current, rect(), 1.0);
+        }
+        // The dim veil plus corner vignette, prerendered per size; a repaint every focus
+        // move must not re-evaluate a full-screen radial gradient.
+        painter.drawPixmap(QPoint(0, 0), OverlayFor(size()));
     }
 
 private:
-    static const QPixmap& ZeldaBg() {
-        static const QPixmap art = ResolveHomeBg();
-        return art;
-    }
+    QString bg_key_ = QStringLiteral("purple");
+    QString bg_prev_key_;
+    QTimer* bg_timer_ = nullptr;
+    qreal bg_blend_ = 1.0;
 };
-
 Home::Home(QMainWindow* window_, QBoxLayout* central, QWidget* game_list_, QWidget* placeholder_,
            HomeHooks hooks_)
     : QObject(window_), window{window_}, game_list{game_list_}, placeholder{placeholder_},
@@ -313,29 +491,40 @@ Home::Home(QMainWindow* window_, QBoxLayout* central, QWidget* game_list_, QWidg
     QTimer::singleShot(0, this, &Home::Restore);
 }
 
-// The dock is the Switch 2-style home bar: a row of round system buttons centered at the
-// bottom of the window, each with a caption. It drives the same actions as before.
+// The dock is the Switch 2-style home bar: a row of round system buttons riding on the left,
+// level with the tiles; each with a caption. It drives the same actions as before.
 QWidget* Home::MakeRail() {
-    rail = new QWidget;
+    rail = new DockPlate;
     rail->setObjectName(QStringLiteral("Ocarina2Dock"));
-    rail->setAttribute(Qt::WA_StyledBackground);
     rail->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
     auto* layout = new QHBoxLayout(rail);
-    layout->setContentsMargins(18, 12, 18, 12);
-    layout->setSpacing(16);
+    layout->setContentsMargins(22, 12, 22, 12);
+    layout->setSpacing(14);
     layout->setAlignment(Qt::AlignHCenter);
 
-    const auto make = [this](const QString& icon, const QString& caption, const QString& tip,
-                             bool home) {
+    // The travelling focus ring: one soft aqua circle that glides behind the focused button.
+    dock_pill = new QWidget(rail);
+    dock_pill->setObjectName(QStringLiteral("Ocarina2DockPill"));
+    dock_pill->setAttribute(Qt::WA_StyledBackground);
+    dock_pill->setAttribute(Qt::WA_TransparentForMouseEvents);
+    dock_pill->setFixedSize(72, 72);
+    dock_pill->hide();
+    auto* pill_glow = new QGraphicsDropShadowEffect(dock_pill);
+    pill_glow->setBlurRadius(22);
+    pill_glow->setOffset(0, 0);
+    pill_glow->setColor(QColor(63, 216, 255, 150));
+    dock_pill->setGraphicsEffect(pill_glow);
+    dock_pill->lower();  ///< paints behind the buttons
+
+    const auto make = [this](const QString& icon, const QString& caption, const QString& tip) {
         auto* button = new BounceToolButton(rail);
-        button->setObjectName(home ? QStringLiteral("Ocarina2DockHome")
-                                   : QStringLiteral("Ocarina2DockCircle"));
+        button->setObjectName(QStringLiteral("Ocarina2DockCircle"));
         button->setProperty("band", 4);
         button->setProperty("caption", caption);
-        button->setFixedSize(home ? 64 : 56, home ? 64 : 56);
+        button->setFixedSize(56, 56);
         button->setToolButtonStyle(Qt::ToolButtonIconOnly);
-        button->setIcon(Icon(icon, home ? 26 : 22));
-        button->setIconSize(QSize(home ? 26 : 22, home ? 26 : 22));
+        button->setIcon(Icon(icon, 22));
+        button->setIconSize(QSize(22, 22));
         button->setToolTip(tip);
         button->setCursor(Qt::PointingHandCursor);
         button->setFocusPolicy(Qt::StrongFocus);
@@ -345,38 +534,37 @@ QWidget* Home::MakeRail() {
         return button;
     };
 
-    home_button = make(QStringLiteral("home"), tr("Home"), tr("Home screen"), /*home=*/true);
-    connect(home_button, &QToolButton::clicked, this, &Home::ShowHome);
+    home_button = make(QStringLiteral("home"), tr("Home"), tr("Home screen"));
+    connect(home_button, &QToolButton::clicked, this, [this] { ShowHomePanel(); });
 
-    library_button = make(QStringLiteral("list"), tr("Games"), tr("Show every game"), false);
-    connect(library_button, &QToolButton::clicked, this, &Home::ShowList);
+    library_button = make(QStringLiteral("list"), tr("Games"), tr("Show every game"));
+    connect(library_button, &QToolButton::clicked, this, [this] { ShowGamesPanel(); });
 
-    folder_button = make(QStringLiteral("folder"), tr("Add games"), tr("Add games to the list"), false);
+    folder_button = make(QStringLiteral("folder"), tr("Add games"), tr("Add games to the list"));
     connect(folder_button, &QToolButton::clicked, this, [this] { ShowAddGamesPanel(); });
 
     settings_button =
-        make(QStringLiteral("settings"), tr("Settings"), tr("Open settings"), false);
+        make(QStringLiteral("settings"), tr("Settings"), tr("Open settings"));
     connect(settings_button, &QToolButton::clicked, this, [this] { hooks.open_settings(); });
 
     update_button =
-        make(QStringLiteral("star"), tr("What's new"), tr("See what's new in this build"), false);
+        make(QStringLiteral("star"), tr("What's new"), tr("See what's new in this build"));
     connect(update_button, &QToolButton::clicked, this, [this] { ShowWhatsNewPanel(); });
 
-    auto* classic = new QMenu(rail);
-    for (QMenu* menu : hooks.classic_menus) {
-        classic->addMenu(menu);
-    }
-    menu_button = make(QStringLiteral("menu"), tr("More"), tr("Show all menus"), false);
-    connect(menu_button, &QToolButton::clicked, this, [classic, this] {
-        const QSize size = classic->sizeHint();
-        classic->exec(menu_button->mapToGlobal(QPoint(0, menu_button->height() - size.height())));
-    });
+    menu_button = make(QStringLiteral("menu"), tr("More"), tr("Show all menus"));
+    connect(menu_button, &QToolButton::clicked, this, [this] { ShowMorePanel(); });
 
     for (QWidget* button :
          {home_button, library_button, folder_button, settings_button, update_button,
           menu_button}) {
         layout->addWidget(button);
     }
+    // Park the pill on the Home button so its first glide starts from a sane place.
+    QTimer::singleShot(0, rail, [this] {
+        if (dock_pill && home_button) {
+            dock_pill->move(home_button->pos() - QPoint(8, 8));
+        }
+    });
     return rail;
 }
 
@@ -406,8 +594,8 @@ QWidget* Home::MakePage() {
     avatar_button = new QToolButton(topbar);
     avatar_button->setObjectName(QStringLiteral("Ocarina2Avatar"));
     avatar_button->setProperty("band", 0);
-    avatar_button->setIcon(Glyph(QStringLiteral("triforce"), 0x3fd8ff, 12));
-    avatar_button->setIconSize(QSize(12, 12));
+    avatar_button->setIcon(Glyph(QStringLiteral("triforce"), 0x3fd8ff, 15));
+    avatar_button->setIconSize(QSize(15, 15));
     avatar_button->setToolTip(tr("Player 1 - toggle fullscreen"));
     avatar_button->setCursor(Qt::PointingHandCursor);
     avatar_button->setFocusPolicy(Qt::StrongFocus);
@@ -478,15 +666,19 @@ QWidget* Home::MakePage() {
                 hero_path = tile_strip->SelectedPath();
                 hero_id = program_id;
                 hero_title = title;
+                if (auto* home_page = static_cast<Ocarina2HomePage*>(page)) {
+                    home_page->SetBackgroundForTitle(title);
+                }
                 if (game_row_title) {
                     game_row_title->setText(title);
                     game_row_title->setVisible(!title.isEmpty());
                 }
             });
+    // The strip rides right above the dock, like the Switch 2 home screen.
+    layout->addStretch(1);
     layout->addWidget(tile_strip);
 
-    // The dock rides in the middle of the page, like the Switch 2 home screen: a rounded
-    // plate of round buttons; the focused item's name rides underneath it.
+    // The dock rides in the middle of the page, like the Switch 2 home screen.
     layout->addWidget(MakeRail(), 0, Qt::AlignHCenter);
 
     // The focused item's name below the dock (the Switch 2 puts it exactly there).
@@ -504,6 +696,12 @@ QWidget* Home::MakePage() {
     title_font.setWeight(QFont::DemiBold);
     title_font.setPixelSize(17);
     game_row_title->setFont(title_font);
+    // Match the dock ring and the SETTINGS glow: a soft aqua halo behind the caption.
+    auto* caption_glow = new QGraphicsDropShadowEffect(game_row_title);
+    caption_glow->setBlurRadius(16);
+    caption_glow->setOffset(0, 0);
+    caption_glow->setColor(QColor(63, 216, 255, 110));
+    game_row_title->setGraphicsEffect(caption_glow);
     rowl->addWidget(game_row_title, 0, Qt::AlignHCenter);
     layout->addWidget(game_row, 0, Qt::AlignHCenter);
 
@@ -512,7 +710,7 @@ QWidget* Home::MakePage() {
     auto* hint_bar = new QWidget(page);
     hint_bar->setObjectName(QStringLiteral("Ocarina2HomeHintBar"));
     auto* hint_layout = new QHBoxLayout(hint_bar);
-    hint_layout->setContentsMargins(24, 10, 24, 0);
+    hint_layout->setContentsMargins(48, 10, 48, 0);
     hint_layout->setSpacing(8);
     auto* pad = new QLabel(hint_bar);
     pad->setPixmap(Glyph(QStringLiteral("gamepad"), 0x8f8ca6, 16).pixmap(16, 16));
@@ -583,7 +781,7 @@ void Home::Refresh() {
     rows.reserve(games.size());
     for (const Game& game : games) {
         rows.push_back({game.title, game.path, game.program_id,
-                        RoundedCard(game.icon, QSize(176, 176), 18)});
+                        RoundedCard(game.icon, QSize(228, 228), 16)});
     }
     tile_strip->SetGames(rows);
 
@@ -651,12 +849,66 @@ void Home::ShowList() {
     }
 }
 
+void Home::ShowHomePanel() {
+    HomePanel panel(window, QStringLiteral("H O M E"), tr("Home"));
+    panel.AddRow(QStringLiteral("home"), tr("Home screen"), [this] { ShowHome(); });
+    panel.AddRow(QStringLiteral("list"), tr("Show every game"), [this] { ShowList(); });
+    panel.AddRow(QStringLiteral("fullscreen"), tr("Fullscreen"),
+                 [this] { hooks.toggle_fullscreen(); });
+    panel.SetHints(QStringLiteral(
+        "<span style='color:#3fd8ff;font-weight:800'>A</span> Select&nbsp;&nbsp;&nbsp;"
+        "<span style='color:#3fd8ff;font-weight:800'>B</span> Back"));
+    panel.exec();
+}
+
+void Home::ShowGamesPanel() {
+    HomePanel panel(window, QStringLiteral("G A M E S"), tr("Games"));
+    panel.AddRow(QStringLiteral("list"), tr("All games"), [this] { ShowList(); });
+    panel.AddRow(QStringLiteral("folder"), tr("Add games folder..."), [this] { hooks.add_folder(); });
+    if (hooks.add_file) {
+        panel.AddRow(QStringLiteral("plus"), tr("Add a game file..."),
+                     [this] { hooks.add_file(); });
+    }
+    panel.SetHints(QStringLiteral(
+        "<span style='color:#3fd8ff;font-weight:800'>A</span> Select&nbsp;&nbsp;&nbsp;"
+        "<span style='color:#3fd8ff;font-weight:800'>B</span> Back"));
+    panel.exec();
+}
+
+void Home::ShowMorePanel() {
+    HomePanel panel(window, QStringLiteral("M O R E"), tr("More"));
+    // One row per classic menu; the picked one opens right above the dock.
+    const QStringList icons{QStringLiteral("folder"), QStringLiteral("gamepad"),
+                            QStringLiteral("fullscreen"), QStringLiteral("settings"),
+                            QStringLiteral("help")};
+    const QList<QMenu*> menus = hooks.classic_menus;
+    int chosen = -1;
+    for (int i = 0; i < menus.size(); ++i) {
+        QMenu* menu = menus.at(i);
+        if (!menu) {
+            continue;
+        }
+        QString name = menu->title();
+        name.remove(QLatin1Char('&'));
+        panel.AddRow(icons.value(i, QStringLiteral("menu")), name,
+                     [&chosen, i] { chosen = i; });
+    }
+    panel.SetHints(QStringLiteral(
+        "<span style='color:#3fd8ff;font-weight:800'>A</span> Select&nbsp;&nbsp;&nbsp;"
+        "<span style='color:#3fd8ff;font-weight:800'>B</span> Back"));
+    if (panel.exec() == QDialog::Accepted && chosen >= 0 && chosen < menus.size()) {
+        QMenu* menu = menus.at(chosen);
+        const QSize size = menu->sizeHint();
+        menu->exec(menu_button->mapToGlobal(QPoint(0, menu_button->height() - size.height())));
+    }
+}
+
 void Home::ShowAddGamesPanel() {
     HomePanel panel(window, QStringLiteral("A D D   T O   Y O U R   L I B R A R Y"),
                     tr("Add games"));
-    panel.AddRow(QStringLiteral("folder"), tr("Add games folder…"), [this] { hooks.add_folder(); });
+    panel.AddRow(QStringLiteral("folder"), tr("Add games folder..."), [this] { hooks.add_folder(); });
     if (hooks.add_file) {
-        panel.AddRow(QStringLiteral("plus"), tr("Add a game file…"),
+        panel.AddRow(QStringLiteral("plus"), tr("Add a game file..."),
                      [this] { hooks.add_file(); });
     }
     panel.SetHints(QStringLiteral(
@@ -673,6 +925,10 @@ void Home::ShowWhatsNewPanel() {
     notes->setOpenExternalLinks(true);
     notes->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     const QString text = BundledNotes();
+    QFont notes_font = notes->font();
+    notes_font.setPixelSize(16);
+    notes_font.setWeight(QFont::Medium);
+    notes->setFont(notes_font);
     SetNotes(notes, text.isEmpty() ? tr("No notes for this version yet.") : text);
     panel.SetBodyWidget(notes);
     panel.SetHints(QStringLiteral(
@@ -849,7 +1105,7 @@ bool Home::HandleNavKey(QKeyEvent* event) {
     }
 
     // A activates whatever button has focus, like the console's confirm key.
-    if (key == Qt::Key_Return || key == Qt::Key_Enter) {
+    if (key == Qt::Key_Return || key == Qt::Key_Enter || key == Qt::Key_Space) {
         if (auto* button = qobject_cast<QAbstractButton*>(QApplication::focusWidget())) {
             button->click();
             return true;
@@ -957,12 +1213,17 @@ bool Home::HandleNavKey(QKeyEvent* event) {
     const QList<QWidget*> row = row_at(target_band);
     const double from_x = current->mapToGlobal(current->rect().center()).x();
     QWidget* best = row.front();
-    double best_distance = std::numeric_limits<double>::infinity();
-    for (QWidget* w : row) {
-        const double distance = std::abs(w->mapToGlobal(w->rect().center()).x() - from_x);
-        if (distance < best_distance) {
-            best_distance = distance;
-            best = w;
+    if (current == tile_strip && target_band == 4) {
+        // The dock is left-anchored; jump to the remembered dock button, not the nearest one.
+        best = (last_dock_focus && row.contains(last_dock_focus)) ? last_dock_focus : home_button;
+    } else {
+        double best_distance = std::numeric_limits<double>::infinity();
+        for (QWidget* w : row) {
+            const double distance = std::abs(w->mapToGlobal(w->rect().center()).x() - from_x);
+            if (distance < best_distance) {
+                best_distance = distance;
+                best = w;
+            }
         }
     }
     // Jumping into the games view: make sure a row is selected so the arrows keep working.
@@ -1024,15 +1285,44 @@ void Home::RebuildNavOrder() {
     }
 }
 
+void Home::MoveDockPill(QWidget* button, bool animate) {
+    if (!dock_pill || !rail || !button) {
+        return;
+    }
+    const QPoint target = button->pos() - QPoint(8, 8);  ///< (72 - 56) / 2
+    if (dock_pill->isHidden() || !animate) {
+        dock_pill->move(target);
+        dock_pill->show();
+        return;
+    }
+    auto* anim = new QPropertyAnimation(dock_pill, "pos", this);
+    anim->setDuration(220);
+    anim->setEasingCurve(QEasingCurve::OutCubic);
+    anim->setStartValue(dock_pill->pos());
+    anim->setEndValue(target);
+    anim->start(QAbstractAnimation::DeleteWhenStopped);
+}
+
 bool Home::eventFilter(QObject* watched, QEvent* event) {
     // Focus follows the dock/strip, same as the console: the name under the dock is the
-    // focused item's name.
+    // focused item's name, and the aqua pill glides to whichever dock button has focus.
     if (event->type() == QEvent::FocusIn) {
         if (const auto* button = qobject_cast<const QToolButton*>(watched)) {
             const QString caption = button->property("caption").toString();
+            if (button->property("band").toInt() == 4) {
+                MoveDockPill(const_cast<QToolButton*>(button), true);
+                last_dock_focus = const_cast<QToolButton*>(button);
+            } else if (dock_pill) {
+                dock_pill->hide();
+            }
             if (!caption.isEmpty() && game_row_title) {
                 game_row_title->setText(caption);
                 game_row_title->setVisible(true);
+            }
+        } else if (dock_pill) {
+            // Focus left the dock: the pill hides and the strip's ring takes over.
+            if (qobject_cast<QWidget*>(watched) != rail) {
+                dock_pill->hide();
             }
         }
         return false;
@@ -1059,6 +1349,12 @@ bool Home::eventFilter(QObject* watched, QEvent* event) {
             // The games pane drives its own rows for the controller; arrow keys elsewhere
             // wander back into the pane so the screen is never a dead end.
             if (HandleListNavKey(key)) {
+                return true;
+            }
+            // Swallow unmodified leftovers that no widget claims (the search edit keeps its
+            // keys) so nothing reaches DefWindowProc to produce the Windows ding.
+            if (!qobject_cast<QLineEdit*>(watched) &&
+                (key->modifiers() & ~Qt::KeypadModifier) == Qt::NoModifier) {
                 return true;
             }
         }
@@ -1091,7 +1387,17 @@ bool Home::eventFilter(QObject* watched, QEvent* event) {
                     if (HandleNavKey(key)) {
                         return true;
                     }
+                    // The home screen never lets an unmodified key fall through to the
+                    // window: unhandled keys are the Windows "ding".
+                    if ((key->modifiers() & ~Qt::KeypadModifier) == Qt::NoModifier) {
+                        return true;
+                    }
                 }
+            }
+            // Even outside the focus chain, swallow unmodified leftovers so no key
+            // reaches DefWindowProc to dong. Modifier combos keep their OS behavior.
+            if ((key->modifiers() & ~Qt::KeypadModifier) == Qt::NoModifier) {
+                return true;
             }
         }
     }

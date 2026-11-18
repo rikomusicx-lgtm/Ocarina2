@@ -1,4 +1,4 @@
-﻿/* Ocarina2: near-black OLED background, one Switch-style violet accent (#9a7cf5),
+/* Ocarina2: near-black OLED background, one Switch-style violet accent (#9a7cf5),
    soft rounded controls (12-14px), generous spacing and a Spotify-ish title weight. */
 
 QToolTip {
@@ -160,13 +160,13 @@ QProgressBar::chunk { background: #9a7cf5; border-radius: 6px; }
 
 QStatusBar { background: #0d0b16; color: #9a93b8; }
 QStatusBar::item { border: none; }
-QStatusBar QLabel { color: #9a93b8; padding: 0 6px; }
+QStatusBar QLabel { color: #b3abcf; padding: 0 10px; }
 QPushButton#TogglableStatusBarButton, QPushButton#DockingStatusBarButton,
 QPushButton#OotFpsStatusBarButton, QPushButton#GPUStatusBarButton,
 QPushButton#RendererStatusBarButton, QPushButton#RefreshButton {
     background: transparent;
     border: none;
-    color: #9a93b8;
+    color: #b3abcf;
     padding: 4px 12px;
     border-radius: 8px;
 }
@@ -217,11 +217,6 @@ QToolButton#Ocarina2StripButton:hover { background: #322a52; }
 QToolButton#Ocarina2StripButton:pressed { background: #453a70; }
 
 /* Home screen (ocarina2/home.cpp): the Switch 2 top bar, hero image, dock and bottom strip */
-QWidget#Ocarina2Dock {
-    background: rgba(10, 10, 16, 190);
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    border-radius: 30px;
-}
 QToolButton#Ocarina2DockButton {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
         stop: 0 #262433, stop: 1 #1b1a26);
@@ -307,19 +302,18 @@ QPushButton#Ocarina2BackButton:hover {
 }
 QPushButton#Ocarina2BackButton:focus {
     border: 2px solid #3fd8ff;
-    background: rgba(16, 18, 28, 0.85);
+    background: rgba(63, 216, 255, 0.20);
     color: #ffffff;
 }
 /* Gamepad/keyboard focus rings (Switch 2 aqua) */
 QToolButton#Ocarina2DockButton:focus {
     border: 2px solid #3fd8ff;
-    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-        stop: 0 #262b3a, stop: 1 #1d2029);
+    background: rgba(63, 216, 255, 0.20);
     color: #ffffff;
 }
 QToolButton#Ocarina2Hero:focus {
     border: 3px solid #3fd8ff;
-    background: rgba(63, 216, 255, 0.08);
+    background: rgba(63, 216, 255, 0.16);
 }
 QToolButton#Ocarina2Hero:hover {
     border: 3px solid rgba(167, 139, 250, 0.35);
@@ -327,6 +321,7 @@ QToolButton#Ocarina2Hero:hover {
 }
 QToolButton#Ocarina2Avatar:focus {
     border: 2px solid #3fd8ff;
+    background: rgba(63, 216, 255, 0.18);
 }
 
 /* Quick menu (ocarina2/quick_menu.cpp): the L3+R3 emulator pause screen */
@@ -357,7 +352,7 @@ QPushButton#Ocarina2QuickMenuItem:hover {
         stop: 0 #242033, stop: 1 #1e1c2b);
 }
 QPushButton#Ocarina2QuickMenuItem:pressed { background: #1b1826; }
-QPushButton#Ocarina2QuickMenuItem:focus { border: 2px solid #3fd8ff; background: #1d2029; }
+QPushButton#Ocarina2QuickMenuItem:focus { border: 2px solid #3fd8ff; background: rgba(63, 216, 255, 0.20); color: #ffffff; }
 QPushButton#Ocarina2QuickMenuItem:disabled { color: #54525f; }
 QPushButton#Ocarina2QuickMenuItemDanger {
     background: transparent;
@@ -370,7 +365,7 @@ QPushButton#Ocarina2QuickMenuItemDanger {
 }
 QPushButton#Ocarina2QuickMenuItemDanger:hover { background: #2a1e24; }
 QPushButton#Ocarina2QuickMenuItemDanger:pressed { background: #33232b; }
-QPushButton#Ocarina2QuickMenuItemDanger:focus { border: 2px solid #ff8a80; background: #221b20; }
+QPushButton#Ocarina2QuickMenuItemDanger:focus { border: 2px solid #ff8a80; background: rgba(255, 138, 128, 0.20); color: #ffffff; }
 QPushButton#Ocarina2QuickMenuItemDanger:disabled { color: #54525f; }
 QPushButton#Ocarina2QuickMenuResume {
     background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
@@ -384,7 +379,7 @@ QPushButton#Ocarina2QuickMenuResume {
 }
 QPushButton#Ocarina2QuickMenuResume:hover { background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
     stop: 0 #ab7efa, stop: 0.5 #bb9dfb, stop: 1 #d2c4ff); }
-QPushButton#Ocarina2QuickMenuResume:focus { border: 2px solid #3fd8ff; }
+QPushButton#Ocarina2QuickMenuResume:focus { border: 2px solid #3fd8ff; background: rgba(63, 216, 255, 0.20); color: #ffffff; }
 
 /* Bubbly settings (ocarina2: configure dialog + per-game configure dialog) */
 QDialog#ConfigureDialog, QDialog#ConfigurePerGame { background: #151320; }
@@ -451,13 +446,30 @@ QDialog#ConfigurePerGame QTextEdit {
 QDialog#ConfigureDialog QLineEdit:focus, QDialog#ConfigureDialog QComboBox:focus,
 QDialog#ConfigureDialog QAbstractSpinBox:focus, QDialog#ConfigurePerGame QLineEdit:focus,
 QDialog#ConfigurePerGame QComboBox:focus, QDialog#ConfigurePerGame QAbstractSpinBox:focus {
-    border: 2px solid #9a7cf5;
+    border: 2px solid #3fd8ff;
     padding: 7px 11px;
 }
+QDialog#ConfigureDialog QRadioButton:focus::indicator, QDialog#ConfigurePerGame QRadioButton:focus::indicator {
+    width: 17px;
+    height: 17px;
+    border: 2px solid #3fd8ff;
+}
+QDialog#ConfigureDialog QPushButton:focus, QDialog#ConfigureDialog QToolButton:focus,
+QDialog#ConfigurePerGame QPushButton:focus, QDialog#ConfigurePerGame QToolButton:focus {
+    border: 2px solid #3fd8ff;
+}
+QDialog#ConfigureDialog QTabBar::tab:focus, QDialog#ConfigurePerGame QTabBar::tab:focus {
+    border: 2px solid #3fd8ff;
+    color: #ffffff;
+}
+QDialog#ConfigureDialog QSlider:focus::handle, QDialog#ConfigurePerGame QSlider:focus::handle {
+    border: 2px solid #3fd8ff;
+    background: #a78bfa;
+}
 QDialog#ConfigureDialog QCheckBox::indicator, QDialog#ConfigurePerGame QCheckBox::indicator {
-    width: 19px;
-    height: 19px;
-    border-radius: 7px;
+    width: 21px;
+    height: 21px;
+    border-radius: 8px;
     border: 1px solid #4b4867;
     background: #1d1b2b;
 }
@@ -550,9 +562,26 @@ QPushButton#Ocarina2Link:pressed { background: #181720; border-color: #26222e; }
 
 /* ============ Settings, quick-menu style (ocarina2 configure dialog) ============ */
 QDialog#ConfigureDialog {
-    background: #141222;
-    border: 1px solid #35324d;
+    background: rgba(7, 7, 13, 150);
+    border: none;
+    border-radius: 0;
+}
+/* The floating console panel in the middle (configure.ui "card"). */
+QWidget#Ocarina2SettingsCard {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #252138, stop: 1 #181426);
+    border: 1px solid #38354f;
     border-radius: 26px;
+}
+QDialog#ConfigureDialog QLabel:disabled, QDialog#ConfigurePerGame QLabel:disabled {
+    color: #a5a2b6;
+}
+QDialog#ConfigureDialog QCheckBox:disabled, QDialog#ConfigureDialog QRadioButton:disabled,
+QDialog#ConfigurePerGame QCheckBox:disabled, QDialog#ConfigurePerGame QRadioButton:disabled {
+    color: #a5a2b6;
+}
+QDialog#ConfigureDialog QGroupBox:disabled, QDialog#ConfigurePerGame QGroupBox:disabled {
+    color: #8f8ca6;
 }
 QDialog#ConfigureDialog QListWidget#selectorList::item {
     padding: 15px 18px;
@@ -602,7 +631,35 @@ QDialog#ConfigureDialog QDialogButtonBox QPushButton:hover:default {
     background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
         stop: 0 #ab7efa, stop: 0.5 #bb9dfb, stop: 1 #d2c4ff);
 }
-C:\Users\rikom
+
+/* The controller-reachable page chips (configure_dialog.cpp). */
+QWidget#Ocarina2SettingsChips {
+    background: transparent;
+}
+QToolButton#Ocarina2SettingsChip {
+    background: #1e1c2b;
+    border: 1px solid transparent;
+    border-radius: 14px;
+    color: #9896ab;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 8px 20px;
+    min-height: 30px;
+}
+QToolButton#Ocarina2SettingsChip:hover {
+    background: #262333;
+    color: #e6e3ef;
+}
+QToolButton#Ocarina2SettingsChip:checked {
+    background: #332c50;
+    color: #ffffff;
+    border: 1px solid #3d365a;
+}
+QToolButton#Ocarina2SettingsChip:focus {
+    border: 2px solid #3fd8ff;
+    background: rgba(63, 216, 255, 0.20);
+    color: #ffffff;
+}
 
 /* ============ Switch 2 home: circular dock, hint row, panels (2026-11) ============ */
 QWidget#Ocarina2TileStrip { background: transparent; }
@@ -625,12 +682,6 @@ QLabel#Ocarina2HomeHintText {
 }
 QWidget#Ocarina2HomeHintBar { background: transparent; }
 
-QWidget#Ocarina2Dock {
-    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-        stop: 0 rgba(26, 24, 38, 235), stop: 1 rgba(13, 12, 21, 235));
-    border: 1px solid rgba(255, 255, 255, 0.11);
-    border-radius: 46px;
-}
 QToolButton#Ocarina2DockCircle {
     background: qradialgradient(cx: 0.5, cy: 0.38, radius: 0.72, fx: 0.5, fy: 0.34,
         stop: 0 #38354f, stop: 1 #252333);
@@ -646,29 +697,30 @@ QToolButton#Ocarina2DockCircle:hover {
     color: #ffffff;
 }
 QToolButton#Ocarina2DockCircle:pressed { background: #221f2e; border-color: #46425e; }
+QWidget#Ocarina2DockPill {
+    background: rgba(63, 216, 255, 0.10);
+    border: 3px solid #3fd8ff;
+    border-radius: 36px;
+}
 QToolButton#Ocarina2DockCircle:focus {
     background: qradialgradient(cx: 0.5, cy: 0.38, radius: 0.72, fx: 0.5, fy: 0.34,
-        stop: 0 #39435c, stop: 1 #262c3c);
-    border: 3px solid #3fd8ff;
+        stop: 0 rgba(63, 216, 255, 0.32), stop: 1 rgba(63, 216, 255, 0.10));
+    border: 2px solid #3fd8ff;
 }
-QToolButton#Ocarina2DockHome {
-    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,
-        stop: 0 #b39dff, stop: 0.5 #9a7cf5, stop: 1 #7b5cf0);
-    border: 1.5px solid #cabffd;
-    border-radius: 32px;
-    color: #ffffff;
-    padding: 0;
+QToolButton#Ocarina2Avatar {
+    background: #12101c;
+    border: 2px solid rgba(167, 139, 250, 0.60);
+    border-radius: 14px;
+    min-width: 28px;
+    min-height: 28px;
+    max-width: 28px;
+    max-height: 28px;
 }
-QToolButton#Ocarina2DockHome:hover {
-    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,
-        stop: 0 #c2b1ff, stop: 0.5 #a98bfa, stop: 1 #8a6cf5);
-    border-color: #ded5ff;
+QToolButton#Ocarina2Avatar:hover { border-color: #c4b5fd; background: #1a1725; }
+QToolButton#Ocarina2Avatar:focus {
+    border: 2px solid #3fd8ff;
+    background: rgba(63, 216, 255, 0.18);
 }
-QToolButton#Ocarina2DockHome:pressed { background: #6d4fe0; }
-QToolButton#Ocarina2DockHome:focus {
-    border: 3px solid #3fd8ff;
-}
-QToolButton#Ocarina2Avatar { border-radius: 21px; }
 
 /* In-page panels (ocarina2/home_panel.cpp) */
 QWidget#Ocarina2HomePanelCard {
@@ -694,10 +746,10 @@ QPushButton#Ocarina2PanelRow {
 }
 QPushButton#Ocarina2PanelRow:hover {
     background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
-        stop: 0 #27243a, stop: 1 #201e2e);
+        stop: 0 rgba(63, 216, 255, 0.10), stop: 1 rgba(30, 28, 42, 0.0));
 }
 QPushButton#Ocarina2PanelRow:pressed { background: #1c1a28; }
-QPushButton#Ocarina2PanelRow:focus { border: 2px solid #3fd8ff; background: #1d2029; }
+QPushButton#Ocarina2PanelRow:focus { border: 2px solid #3fd8ff; background: rgba(63, 216, 255, 0.20); color: #ffffff; }
 QPushButton#Ocarina2PanelRow:disabled { color: #54525f; }
 QLabel#Ocarina2PanelSection {
     color: #8f8ca6;
@@ -710,3 +762,71 @@ QTextBrowser#Ocarina2Notes {
     border: none;
     color: #d8d5e6;
 }
+/* ============ Longshot-style setting pills (ocarina2/shared_widget.cpp) ============ */
+QWidget#Ocarina2SettingRow {
+    background: rgba(255, 255, 255, 0.035);
+    border: 2px solid rgba(255, 255, 255, 0.07);
+    border-radius: 18px;
+}
+QWidget#Ocarina2SettingRow:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.11);
+}
+QWidget#Ocarina2SettingRow[rowFocused="true"] {
+    background: rgba(63, 216, 255, 0.055);
+    border: 2px solid #3fd8ff;
+}
+QLabel#Ocarina2SettingLabel {
+    color: #8f8ca6;
+    background: transparent;
+    font-size: 11px;
+    font-weight: 800;
+}
+QToolButton#Ocarina2SettingArrow {
+    background: transparent;
+    border: none;
+    color: #3fd8ff;
+    font-size: 20px;
+    border-radius: 12px;
+}
+QToolButton#Ocarina2SettingArrow:hover { color: #a9ecff; background: rgba(63, 216, 255, 0.14); }
+QToolButton#Ocarina2SettingArrow:pressed { color: #0b1520; background: #3fd8ff; }
+
+QDialog#ConfigureDialog QGroupBox, QDialog#ConfigurePerGame QGroupBox {
+    background: transparent;
+    border: none;
+    margin-top: 16px;
+    padding: 0 4px 6px;
+}
+QDialog#ConfigureDialog QGroupBox::title, QDialog#ConfigurePerGame QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 2px;
+    padding: 0 6px 4px;
+    color: #6f6c85;
+    font-weight: 800;
+    font-size: 11px;
+}
+QLabel#Ocarina2SettingsCrumb {
+    color: #3fd8ff;
+    background: transparent;
+    font-size: 10px;
+    font-weight: 800;
+    padding-top: 2px;
+}
+QLabel#Ocarina2SettingsTitle {
+    font-size: 36px;
+    font-weight: 800;
+    color: #f4fbff;
+}
+QLabel#Ocarina2SettingsCrumb {
+    color: #3fd8ff;
+    background: transparent;
+    font-size: 12px;
+    font-weight: 800;
+}
+QLabel#Ocarina2SettingsEyebrow {
+    color: #6f6c85;
+}
+
+QToolButton#Ocarina2SettingArrow:focus { background: rgba(63, 216, 255, 0.18); border: 2px solid #3fd8ff; }

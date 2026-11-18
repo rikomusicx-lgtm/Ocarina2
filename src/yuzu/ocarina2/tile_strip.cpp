@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 
 #include <QApplication>
@@ -221,7 +221,7 @@ QPixmap RenderGlyph(int index, const QColor& color, int px) {
 } // namespace
 
 GameTile::GameTile(QWidget* parent) : QWidget(parent) {
-    setFixedSize(QSize(252, 168));
+    setFixedSize(QSize(228, 228));
     setFocusPolicy(Qt::NoFocus);  ///< the strip owns focus and the arrows
     setAttribute(Qt::WA_Hover);
 }
@@ -262,60 +262,73 @@ void GameTile::paintEvent(QPaintEvent*) {
 
     if (ghost) {
         // An empty slot, like the Switch 2's unfilled tile positions: a faint rounded "card"
-        // with a soft plus sign. Pressing it adds a games folder.
-        painter.fillRect(r, QColor(255, 255, 255, 10));
-        painter.setPen(QPen(QColor(255, 255, 255, 44), 1.5, Qt::SolidLine));
+        // with a soft aqua glow and plus sign. Pressing A on it adds a games folder.
+        painter.fillRect(r, QColor(255, 255, 255, 7));
+        const QPointF gc(r.width() / 2.0, r.height() / 2.0);
+        QRadialGradient aura(gc, r.width() * 0.72);
+        aura.setColorAt(0.0, QColor(63, 216, 255, 26));
+        aura.setColorAt(0.62, QColor(63, 216, 255, 8));
+        aura.setColorAt(1.0, QColor(63, 216, 255, 0));
+        painter.fillRect(r, aura);
+        // Dashed card edge: unmistakably a slot to drop a game into, not a broken tile.
+        QPen pen(QColor(122, 220, 255, 46), 1.5, Qt::DashLine, Qt::RoundCap);
+        pen.setDashPattern({5, 5});
+        painter.setPen(pen);
         painter.setBrush(Qt::NoBrush);
-        painter.drawRoundedRect(QRectF(r).adjusted(1, 1, -1, -1), 15, 15);
-        painter.setPen(QPen(QColor(255, 255, 255, 96), 4, Qt::SolidLine, Qt::RoundCap));
-        const QPointF c(r.width() / 2.0, r.height() / 2.0);
-        const qreal s = 14;
-        painter.drawLine(QPointF(c.x() - s, c.y()), QPointF(c.x() + s, c.y()));
-        painter.drawLine(QPointF(c.x(), c.y() - s), QPointF(c.x(), c.y() + s));
-        return;
-    }
-
-    const Palette& pal = kPalettes[palette];
-
-    // Artwork full-bleed when we have it; otherwise the palette + glyph fallback.
-    if (icon.isNull()) {
-        // Background: two-stop vertical gradient plus a faint radial glow top-right.
-        QLinearGradient gradient(0, 0, 0, r.height());
-        gradient.setColorAt(0.0, pal.top);
-        gradient.setColorAt(1.0, pal.bottom);
-        painter.fillRect(r, gradient);
-        QRadialGradient glow(QPointF(r.width() * 0.75, r.height() * 0.18), r.width() * 0.9);
-        glow.setColorAt(0.0, QColor(pal.accent.red(), pal.accent.green(), pal.accent.blue(), 90));
-        glow.setColorAt(1.0, QColor(0, 0, 0, 0));
-        painter.fillRect(r, glow);
-        const QPixmap glyph_image = RenderGlyph(glyph, pal.accent, 84);
-        painter.drawPixmap((r.width() - 84) / 2, (r.height() - 84) / 2, glyph_image);
+        painter.drawRoundedRect(QRectF(r).adjusted(1.5, 1.5, -1.5, -1.5), 14, 14);
+        painter.setPen(QPen(QColor(150, 232, 255, 96), 2.6, Qt::SolidLine, Qt::RoundCap));
+        const qreal s = 11;
+        painter.drawLine(QPointF(gc.x() - s, gc.y()), QPointF(gc.x() + s, gc.y()));
+        painter.drawLine(QPointF(gc.x(), gc.y() - s), QPointF(gc.x(), gc.y() + s));
     } else {
-        // Cover-fit the art, exactly like the box art fills a Switch 2 tile.
-        QPixmap art = icon;
-        const QPixmap big = art.scaled(r.size(), Qt::KeepAspectRatioByExpanding,
-                                      Qt::SmoothTransformation);
-        painter.drawPixmap((r.width() - big.width()) / 2, (r.height() - big.height()) / 2, big);
-        // A soft vignette at the edges so the art melts into the card.
-        QRadialGradient vignette(QPointF(r.width() / 2.0, r.height() / 2.0), r.width() * 0.75);
-        vignette.setColorAt(0.0, QColor(0, 0, 0, 0));
-        vignette.setColorAt(0.85, QColor(0, 0, 0, 24));
-        vignette.setColorAt(1.0, QColor(0, 0, 0, 70));
-        painter.fillRect(r, vignette);
+        const Palette& pal = kPalettes[palette];
+
+        if (icon.isNull()) {
+            // Background: two-stop vertical gradient plus a faint radial glow top-right.
+            QLinearGradient gradient(0, 0, 0, r.height());
+            gradient.setColorAt(0.0, pal.top);
+            gradient.setColorAt(1.0, pal.bottom);
+            painter.fillRect(r, gradient);
+            QRadialGradient glow(QPointF(r.width() * 0.75, r.height() * 0.18), r.width() * 0.9);
+            glow.setColorAt(0.0, QColor(pal.accent.red(), pal.accent.green(), pal.accent.blue(), 90));
+            glow.setColorAt(1.0, QColor(0, 0, 0, 0));
+            painter.fillRect(r, glow);
+            const QPixmap glyph_image = RenderGlyph(glyph, pal.accent, 84);
+            painter.drawPixmap((r.width() - 84) / 2, (r.height() - 84) / 2, glyph_image);
+        } else {
+            // Fill the tile edge-to-edge: cover scale, centered; the rounded clip trims the
+            // overhang so the picture always fits the card.
+            const QPixmap cover =
+                icon.scaled(r.size(), Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+            painter.drawPixmap((r.width() - cover.width()) / 2, (r.height() - cover.height()) / 2,
+                               cover);
+        }
     }
+
+    const bool strip_focused = [this] {
+        QWidget* w = parentWidget();
+        for (int hops = 0; w && hops < 5; ++hops) {
+            if (auto* strip = qobject_cast<TileStrip*>(w)) {
+                return strip->HasFocus();
+            }
+            w = w->parentWidget();
+        }
+        return false;
+    }();
 
     // A soft diagonal sheen for depth.
     {
         QLinearGradient sheen(0, 0, r.width(), r.height());
-        sheen.setColorAt(0.0, QColor(255, 255, 255, selected ? 38 : 26));
+        sheen.setColorAt(0.0, QColor(255, 255, 255, selected && strip_focused ? 38 : 26));
         sheen.setColorAt(0.22, QColor(255, 255, 255, 0));
         sheen.setColorAt(0.78, QColor(255, 255, 255, 0));
         sheen.setColorAt(1.0, QColor(0, 0, 0, 54));
         painter.fillRect(r, sheen);
     }
 
-    // The selection ring - the Switch 2 aqua focus ring.
-    if (selected) {
+    // The selection ring - the Switch 2 aqua focus ring. Only while the strip owns the focus
+    // chain; otherwise the dock owns the highlight and the tile stays quiet.
+    if (selected && strip_focused) {
         painter.setPen(QPen(QColor(0x3f, 0xd8, 0xff), 3.5));
         painter.setBrush(Qt::NoBrush);
         painter.drawRoundedRect(QRectF(r).adjusted(1.75, 1.75, -1.75, -1.75), 15, 15);
@@ -353,9 +366,6 @@ void GameTile::mousePressEvent(QMouseEvent* event) {
 }
 
 void GameTile::enterEvent(QEnterEvent*) {
-    if (ghost) {
-        return;
-    }
     AnimateFocus(true);
 }
 
@@ -366,7 +376,7 @@ bool GameTile::focusNextPrevChild(bool) {
 // ------------------------------------------------------------------ TileStrip
 TileStrip::TileStrip(QWidget* parent) : QWidget(parent) {
     setFocusPolicy(Qt::StrongFocus);
-    setFixedHeight(240);
+    setFixedHeight(280);
     setAttribute(Qt::WA_StyledBackground);
     setObjectName(QStringLiteral("Ocarina2TileStrip"));
 
@@ -386,7 +396,7 @@ TileStrip::TileStrip(QWidget* parent) : QWidget(parent) {
     content->setObjectName(QStringLiteral("Ocarina2TileContent"));
     content->setFixedHeight(240);
     auto* row = new QHBoxLayout(content);
-    row->setContentsMargins(48, 0, 48, 0);
+    row->setContentsMargins(288, 0, 0, 0);
     row->setSpacing(14);
     row->setAlignment(Qt::AlignLeft);
 
@@ -402,8 +412,7 @@ void TileStrip::SetGames(const std::vector<TileRow>& games) {
     if (!row || !content) {
         return;
     }
-    content->setFixedHeight(240);
-
+    content->setFixedHeight(280);
     // Rebuild the tiles only when the game list actually changed - otherwise keep the existing
     // tiles (and the running focus animations) intact.
     size_t signature = 14695981039346656037ULL;
@@ -442,10 +451,10 @@ void TileStrip::SetGames(const std::vector<TileRow>& games) {
         row->addWidget(tile);
         tiles_.push_back(tile);
     }
-    // Pad the row with empty slots, like the Switch 2's unfilled tile positions; pressing one
-    // adds a games folder.
-    constexpr int kMinSlots = 6;
-    const int ghost_count = (std::max)(0, kMinSlots - static_cast<int>(tiles_.size()));
+    // The empty slots keep the row wider than the screen, so they run off the right edge
+    // like the Switch's home menu.
+    const int min_slots = std::max(9, (width() + 241) / 242 + 1);
+    const int ghost_count = (std::max)(0, min_slots - static_cast<int>(tiles_.size()));
     for (int i = 0; i < ghost_count; ++i) {
         auto* ghost_tile = new GameTile(content);
         ghost_tile->SetGame(QString(), QString(), 0, QPixmap(), /*ghost=*/true);
@@ -454,24 +463,36 @@ void TileStrip::SetGames(const std::vector<TileRow>& games) {
         row->addWidget(ghost_tile);
         ghosts_.push_back(ghost_tile);
     }
-    content->setFixedWidth(static_cast<int>(games.size() + ghost_count) * (252 + 14) + 96);
-    if (!games.empty()) {
+    content->setFixedWidth(288 + static_cast<int>(games.size() + ghost_count) * 242 + 96);
+    if (SlotCount() > 0) {
         selected = 0;
-        tiles_[0]->AnimateFocus(true);
+        SlotTile(0)->AnimateFocus(true);
         SyncToSelection();
-        emit SelectionChanged(games_[0].title, games_[0].program_id);
+        if (!games.empty()) {
+            emit SelectionChanged(games_[0].title, games_[0].program_id);
+        } else {
+            emit SelectionChanged(QString(), 0);
+        }
     }
 }
 
+GameTile* TileStrip::SlotTile(int index) const {
+    const int real = static_cast<int>(tiles_.size());
+    if (index < real) {
+        return tiles_[index];
+    }
+    return ghosts_[index - real];
+}
+
 void TileStrip::SyncToSelection() {
-    if (selected < 0 || selected >= static_cast<int>(tiles_.size())) {
+    if (selected < 0 || selected >= SlotCount()) {
         return;
     }
     auto* scroll = findChild<QScrollArea*>(QStringLiteral("Ocarina2TileScroll"));
     if (!scroll) {
         return;
     }
-    GameTile* tile = tiles_[selected];
+    GameTile* tile = SlotTile(selected);
     const int target = tile->x() - (width() / 2) + (tile->width() / 2);
     QPropertyAnimation* anim = new QPropertyAnimation(scroll->horizontalScrollBar(), "value", this);
     anim->setDuration(240);
@@ -482,43 +503,56 @@ void TileStrip::SyncToSelection() {
 }
 
 void TileStrip::MoveSelection(int delta) {
-    if (games_.empty()) {
+    const int slot_count = SlotCount();
+    if (slot_count == 0) {
         return;
     }
-    const int next =
-        (selected + delta + static_cast<int>(games_.size())) % static_cast<int>(games_.size());
+    const int next = (selected + delta + slot_count) % slot_count;
     if (next == selected) {
         return;
     }
-    if (selected >= 0 && selected < static_cast<int>(tiles_.size())) {
-        tiles_[selected]->AnimateFocus(false);
+    if (selected >= 0) {
+        SlotTile(selected)->AnimateFocus(false);
     }
     selected = next;
-    tiles_[selected]->AnimateFocus(true);
+    SlotTile(selected)->AnimateFocus(true);
     SoundPlayer::Instance().Play(SoundPlayer::Effect::Navigate);
     SyncToSelection();
-    emit SelectionChanged(games_[selected].title, games_[selected].program_id);
+    if (selected < static_cast<int>(games_.size())) {
+        emit SelectionChanged(games_[selected].title, games_[selected].program_id);
+    } else {
+        emit SelectionChanged(QString(), 0);
+    }
 }
 
 void TileStrip::ActivateSelected() {
-    if (selected < 0 || selected >= static_cast<int>(games_.size())) {
+    const int slot_count = SlotCount();
+    if (selected < 0 || selected >= slot_count) {
         return;
     }
-    SoundPlayer::Instance().Play(SoundPlayer::Effect::Confirm);
-    emit Activated(games_[selected].path, games_[selected].program_id);
+    const bool is_ghost = selected >= static_cast<int>(games_.size());
+    SoundPlayer::Instance().Play(is_ghost ? SoundPlayer::Effect::TabSwitch
+                                          : SoundPlayer::Effect::Confirm);
+    emit Activated(is_ghost ? QString() : games_[selected].path,
+                   is_ghost ? 0 : games_[selected].program_id);
 }
 
 void TileStrip::SelectFirst() {
-    if (games_.empty()) {
+    const int slot_count = SlotCount();
+    if (slot_count == 0) {
         return;
     }
-    if (selected >= 0 && selected < static_cast<int>(tiles_.size())) {
-        tiles_[selected]->AnimateFocus(false);
+    if (selected >= 0) {
+        SlotTile(selected)->AnimateFocus(false);
     }
     selected = 0;
-    tiles_[0]->AnimateFocus(true);
+    SlotTile(0)->AnimateFocus(true);
     SyncToSelection();
-    emit SelectionChanged(games_[0].title, games_[0].program_id);
+    if (!games_.empty()) {
+        emit SelectionChanged(games_[0].title, games_[0].program_id);
+    } else {
+        emit SelectionChanged(QString(), 0);
+    }
 }
 
 void TileStrip::keyPressEvent(QKeyEvent* event) {
@@ -541,8 +575,26 @@ void TileStrip::keyPressEvent(QKeyEvent* event) {
 
 void TileStrip::focusInEvent(QFocusEvent* event) {
     QWidget::focusInEvent(event);
-    if (selected < 0 && !games_.empty()) {
+    has_focus_ = true;
+    if (selected < 0 && SlotCount() > 0) {
         SelectFirst();
+    }
+    for (GameTile* tile : tiles_) {
+        tile->update();
+    }
+    for (GameTile* ghost : ghosts_) {
+        ghost->update();
+    }
+}
+
+void TileStrip::focusOutEvent(QFocusEvent* event) {
+    QWidget::focusOutEvent(event);
+    has_focus_ = false;
+    for (GameTile* tile : tiles_) {
+        tile->update();
+    }
+    for (GameTile* ghost : ghosts_) {
+        ghost->update();
     }
 }
 

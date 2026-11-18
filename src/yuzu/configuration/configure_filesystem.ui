@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
  <class>ConfigureFilesystem</class>
  <widget class="QWidget" name="ConfigureFilesystem">
@@ -162,7 +162,7 @@
          </widget>
         </item>
         <item row="2" column="0" colspan="4">
-         <layout class="QHBoxLayout" name="horizontalLayout">
+         <layout class="QHBoxLayout" name="horizontalLayout" stretch="1">
           <item>
            <widget class="QCheckBox" name="dump_nso">
             <property name="text">

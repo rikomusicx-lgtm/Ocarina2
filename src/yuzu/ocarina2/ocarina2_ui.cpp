@@ -34,6 +34,13 @@
 #include <QProcess>
 #include <QUrl>
 #include <QScrollArea>
+#include <QSizePolicy>
+#include <QHBoxLayout>
+#include <QBoxLayout>
+#include <QGridLayout>
+#include <QTimer>
+
+#include "common/logging.h"
 #include <QStyleFactory>
 
 #include "common/fs/fs_paths.h"
@@ -110,7 +117,7 @@ public:
 
 // The ocarina2 icons as QPainter strokes. The minimal Qt packages the project builds against
 // have no SVG module, so the line glyphs are drawn here: each icon is its viewBox coordinates,
-// scaled to px (grid is square). Keep the shapes, the round caps and the 1.8 (24-grid) widths —
+// scaled to px (grid is square). Keep the shapes, the round caps and the 1.8 (24-grid) widths --"
 // the strip, the rail and the play button all use them.
 void DrawIconPath(QPainterPath& path, const QString& name) {
     if (name == QStringLiteral("check")) {
@@ -673,10 +680,33 @@ QWidget* SettingsPage(QWidget* page) {
     if (auto* area = qobject_cast<QScrollArea*>(page->property("Ocarina2Scroll").value<QObject*>())) {
         return area;
     }
-    auto* area = new QScrollArea;
+    // A scroll area that keeps its single child exactly viewport-sized on every resize;
+    // Qt doesn't stretch the widget here (the pages have a smaller size hint than the pane).
+    class ViewportFillScrollArea : public QScrollArea {
+    public:
+        using QScrollArea::QScrollArea;
+
+    protected:
+        void resizeEvent(QResizeEvent* event) override {
+            QScrollArea::resizeEvent(event);
+            if (QWidget* child = widget(); child && child->width() != size().width()) {
+                child->setFixedWidth(size().width());
+            }
+        }
+    };
+    auto* area = new ViewportFillScrollArea;
     area->setFrameShape(QFrame::NoFrame);
     area->setWidgetResizable(true);
     area->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    page->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    // Every page in this dialog is full width when its children are Expanding.
+    for (QWidget* widget : page->findChildren<QWidget*>()) {
+        const QSizePolicy policy = widget->sizePolicy();
+        if (policy.horizontalPolicy() == QSizePolicy::Fixed) {
+            continue;
+        }
+        widget->setSizePolicy(QSizePolicy::Expanding, policy.verticalPolicy());
+    }
     area->setWidget(page);
     area->setAccessibleName(page->accessibleName());
     page->setProperty("Ocarina2Scroll", QVariant::fromValue<QObject*>(area));

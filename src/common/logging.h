@@ -151,6 +151,9 @@ void Start();
 /// Explicitly stops the logger thread and flushes the buffers
 void Stop();
 
+/// Writes buffered lines to the log file, so a copy of it is complete.
+void Flush();
+
 /// The file this session logs to (empty without a file log). `primary_locked` is set when the
 /// usual log file was held by another process, so the session logs to a fallback file.
 std::filesystem::path FilePath(bool* primary_locked = nullptr);

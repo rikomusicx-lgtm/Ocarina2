@@ -12,6 +12,7 @@
 
 class QVBoxLayout;
 class QHBoxLayout;
+class QAbstractScrollArea;
 class QLabel;
 class QPushButton;
 class QScrollArea;
@@ -63,6 +64,7 @@ private:
     QScrollArea* scroll = nullptr;   ///< rows area (rows mode)
     QVBoxLayout* rows = nullptr;     ///< rows area layout (rows mode)
     QWidget* body_ = nullptr;        ///< body widget (body mode)
+    QAbstractScrollArea* body_scroll_ = nullptr;  ///< the scrollable area inside the body, if any
     QVBoxLayout* card_layout = nullptr;
     QLabel* hints_label = nullptr;
     std::vector<QPushButton*> row_buttons_;

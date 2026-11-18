@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
  <class>ConfigureInputPlayer</class>
  <widget class="QWidget" name="ConfigureInputPlayer">
@@ -1037,7 +1037,7 @@
              </property>
              <item>
               <widget class="QWidget" name="buttonShoulderButtonsSLSRLeft" native="true">
-               <layout class="QHBoxLayout" name="horizontalLayout">
+               <layout class="QHBoxLayout" name="horizontalLayout" stretch="1">
                 <property name="spacing">
                  <number>0</number>
                 </property>

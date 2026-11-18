@@ -1,12 +1,20 @@
-// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
+﻿// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // SPDX-FileCopyrightText: 2016 Citra Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <QTimer>
 #include <memory>
 #include <algorithm>
+#include <functional>
 #include <QBoxLayout>
+#include <QGraphicsDropShadowEffect>
+#include <QHBoxLayout>
+#include <QToolButton>
+#include <QGridLayout>
+#include <QTabBar>
+#include <QApplication>
 #include <QLabel>
 #include <QPushButton>
 #include "common/logging.h"
@@ -46,6 +54,7 @@
 #include "yuzu/hotkeys.h"
 #include "yuzu/ocarina2/ocarina2_ui.h"
 #include "yuzu/ocarina2/sound.h"
+#include "yuzu/ocarina2/controller_dialog.h"
 #include <map>
 
 ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
@@ -81,33 +90,103 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
     Settings::SetConfiguringGlobal(true);
 
     ui->setupUi(this);
-    InstallRecursive(this, this);
     if (Ocarina2Ui::Enabled()) {
-        // Full-page overlay instead of a window pull-up: translucent backdrop, rounded card,
-        // covers the whole main window like the quick menu does.
+        // The console settings screen: a Quick menu-style dim backdrop with a floating
+        // "SETTINGS" card in the middle. LB/RB (PageUp/PageDown) cycles the categories, the
+        // D-pad walks the rows, A adjusts, B backs out.
         setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
+        // Quick-menu style: a dim backdrop with a floating opaque card in the middle.
         setAttribute(Qt::WA_TranslucentBackground);
+        setAttribute(Qt::WA_StyledBackground, true);
         if (const QWidget* top = parentWidget()) {
-            setGeometry(top->geometry().adjusted(14, 12, -14, -12));
+            setGeometry(top->geometry());  ///< fullscreen backdrop; the card floats inside it
         }
         ui->tabWidget->setObjectName(QStringLiteral("Ocarina2SettingsTabs"));
-        // A console-style header above the categories, like the quick menu's pause page.
+        ui->tabWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        // The native tab bar can't be reached with a controller and clips long tab names; a
+        // focusable chip row in the header takes its place (RebuildChips).
+        ui->tabWidget->tabBar()->hide();
+        // Hidden and zero-width, so the hidden list takes no room and the pages sit centred.
+        ui->selectorList->setFixedWidth(0);
+        ui->selectorList->setMaximumWidth(0);
+        ui->selectorList->hide();  ///< the breadcrumb carries the category; LB/RB cycles them
+        ui->tabWidget->setMaximumWidth(1100);
+        // The console-style header: centered wordmark with a glow, then the breadcrumb.
         auto* header = new QWidget(this);
         header->setObjectName(QStringLiteral("Ocarina2SettingsHeader"));
         auto* header_layout = new QVBoxLayout(header);
-        header_layout->setContentsMargins(26, 22, 26, 6);
-        header_layout->setSpacing(2);
-        auto* eyebrow = new QLabel(header);
-        eyebrow->setObjectName(QStringLiteral("Ocarina2SettingsEyebrow"));
-        eyebrow->setText(QStringLiteral("O C A R I N A 2   S E T T I N G S"));
+        header_layout->setContentsMargins(0, 26, 0, 4);
+        header_layout->setSpacing(4);
+        header_layout->setAlignment(Qt::AlignHCenter);
         auto* title = new QLabel(header);
         title->setObjectName(QStringLiteral("Ocarina2SettingsTitle"));
-        title->setText(QStringLiteral("Settings"));
-        header_layout->addWidget(eyebrow);
-        header_layout->addWidget(title);
-        if (auto* main = qobject_cast<QVBoxLayout*>(layout())) {
-            main->insertWidget(0, header);
+        title->setText(QStringLiteral("S E T T I N G S"));
+        title->setAlignment(Qt::AlignHCenter);
+        auto* glow = new QGraphicsDropShadowEffect(title);
+        glow->setBlurRadius(38);
+        glow->setOffset(0, 0);
+        glow->setColor(QColor(120, 226, 255, 150));
+        title->setGraphicsEffect(glow);
+        header_layout->addWidget(title, 0, Qt::AlignHCenter);
+
+        const auto cycle_category = [this](int delta) {
+            QTimer::singleShot(0, this, [this, delta]() {
+                const int count = ui->selectorList->count();
+                if (count == 0) {
+                    return;
+                }
+                const int target = (ui->selectorList->currentRow() + delta + count) % count;
+                ui->selectorList->setCurrentRow(target);
+                FocusFirstControl();
+            });
+        };
+        // No arrow buttons here - LB/RB cycles the categories already.
+        auto* crumb = new QLabel(header);
+        crumb->setObjectName(QStringLiteral("Ocarina2SettingsCrumb"));
+        crumb_label = crumb;
+        crumb->setAlignment(Qt::AlignHCenter);
+        header_layout->addWidget(crumb, 0, Qt::AlignHCenter);
+        const auto set_crumb = [crumb](const QString& category) {
+            crumb->setText(QStringLiteral("SETTINGS › ") + category.toUpper());
+        };
+        connect(ui->selectorList, &QListWidget::currentItemChanged, this,
+                [set_crumb](QListWidgetItem*, QListWidgetItem* current) {
+                    if (current) {
+                        set_crumb(current->text());
+                    }
+                });
+        if (auto* item = ui->selectorList->currentItem()) {
+            set_crumb(item->text());
+        } else {
+            // The list is filled later in the ctor; grab the selection once it exists.
+            QTimer::singleShot(0, this, [set_crumb, this] {
+                if (auto* selected = ui->selectorList->currentItem()) {
+                    set_crumb(selected->text());
+                }
+            });
         }
+        auto* card = ui->card;
+        card->setObjectName(QStringLiteral("Ocarina2SettingsCard"));
+        auto* card_layout = ui->cardLayout;
+        card_layout->insertWidget(0, header, 0, Qt::AlignHCenter);
+        header->setMaximumWidth(840);
+        // The footer row: center the note and the OK/Cancel pair.
+        if (auto* h2 = findChild<QHBoxLayout*>(QStringLiteral("horizontalLayout_2"))) {
+            h2->insertStretch(0, 1);
+            h2->addStretch(1);
+        }
+        // The hidden selectorList is zero-width; the tab pane fills the card and the page
+        // inside each tab centres itself with stretches (see SettingsPage).
+
+        // The chip row: every visible page as a focusable pill, laid out in up to two rows.
+        chip_row = new QWidget(card);
+        chip_row->setObjectName(QStringLiteral("Ocarina2SettingsChips"));
+        auto* chip_layout = new QGridLayout(chip_row);
+        chip_layout->setContentsMargins(0, 2, 0, 2);
+        chip_layout->setHorizontalSpacing(8);
+        chip_layout->setVerticalSpacing(8);
+        chip_layout->setAlignment(Qt::AlignHCenter);
+        card_layout->insertWidget(1, chip_row, 0, Qt::AlignHCenter);
     }
 
     ui->tabWidget->addTab(applets_tab.get(), tr("Applets"));
@@ -142,6 +221,7 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
             debug_tab_tab->SetCurrentIndex(0);
         }
     });
+    connect(ui->tabWidget, &QTabWidget::currentChanged, this, [this](int) { SyncChips(); });
     connect(ui_tab.get(), &ConfigureUi::LanguageChanged, this, &ConfigureDialog::OnLanguageChanged);
     connect(general_tab.get(), &ConfigureGeneral::ExternalContentDirsChanged, this,
             &ConfigureDialog::ExternalContentDirsChanged);
@@ -166,10 +246,23 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
         ui->selectorList->setFixedWidth(220);
         layout()->setSizeConstraint(QLayout::SetNoConstraint);
         setMinimumSize(880, 560);
+        // A proper console-menu palette so disabled text stays readable on the dark purple.
+        QPalette pal;
+        pal.setColor(QPalette::Window, QColor(0x1d, 0x1a, 0x2e));
+        pal.setColor(QPalette::WindowText, QColor(0xe6, 0xe3, 0xef));
+        pal.setColor(QPalette::Base, QColor(0x16, 0x14, 0x24));
+        pal.setColor(QPalette::Text, QColor(0xe6, 0xe3, 0xef));
+        pal.setColor(QPalette::Button, QColor(0x22, 0x1f, 0x33));
+        pal.setColor(QPalette::ButtonText, QColor(0xe6, 0xe3, 0xef));
+        pal.setColor(QPalette::BrightText, QColor(0xff, 0x8a, 0x80));
+        pal.setColor(QPalette::Disabled, QPalette::Text, QColor(0xa5, 0xa2, 0xb6));
+        pal.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(0xa5, 0xa2, 0xb6));
+        pal.setColor(QPalette::Disabled, QPalette::WindowText, QColor(0xa5, 0xa2, 0xb6));
+        pal.setColor(QPalette::Highlight, QColor(0x3f, 0xd8, 0xff));
+        pal.setColor(QPalette::HighlightedText, QColor(0x0b, 0x15, 0x20));
+        setPalette(pal);
         if (const QWidget* top = parentWidget()) {
-            setGeometry(top->geometry().adjusted(14, 12, -14, -12));
-        } else {
-            resize(1400, 860);
+            setGeometry(top->geometry());
         }
 
         // OoT's own values (Configure Game) beat these, the usual "my settings didn't apply".
@@ -188,8 +281,9 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
             auto* const use_global = new QPushButton(tr("Use these for OoT too"), banner);
             row->addWidget(text, 1);
             row->addWidget(use_global);
-            if (auto* const main = qobject_cast<QBoxLayout*>(layout())) {
-                main->insertWidget(0, banner);
+            if (auto* const card_layout = ui->cardLayout) {
+                banner->setMaximumWidth(1100);
+                card_layout->insertWidget(0, banner, 0, Qt::AlignHCenter);
             }
             connect(use_global, &QPushButton::clicked, this, [banner] {
                 if (Ocarina2Ui::ClearOcarinaGameOverrides()) {
@@ -199,88 +293,66 @@ ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry_,
         }
     }
 
-    // Selects the leftmost button on the bottom bar (Cancel as of writing)
-    ui->buttonBox->setFocus();
+    // Gamepad/keyboard drives the whole dialog like a console settings screen. Install the
+    // filter after every child exists so nothing can focus-traverse out of it, and so the
+    // banner/header widgets are covered too.
+    {
+        auto* ui_filter = new Ocarina2Ui::ControllerDialogFilter(this);
+        controller_filter = ui_filter;
+        ui_filter->page_cycle = [this](int delta) {
+            const int count = ui->selectorList->count();
+            if (count == 0) {
+                return;
+            }
+            const int target = (ui->selectorList->currentRow() + delta + count) % count;
+            ui->selectorList->setCurrentRow(target);
+        };
+        ui_filter->escape = [this] { reject(); };
+        Ocarina2Ui::ControllerDialogFilter::InstallRecursive(this, ui_filter);
+    }
+
+    // Land on the first real control of the visible page, like a console does.
+    FocusFirstControl();
+}
+
+void ConfigureDialog::FocusFirstControl() {
+    QWidget* page = ui->tabWidget->currentWidget();
+    if (!page || !Ocarina2Ui::Enabled()) {
+        return;
+    }
+    // Ordered traversal of the visible page, depth first, for the first real control.
+    std::function<QWidget*(QWidget*)> find_focusable;
+    find_focusable = [&](QWidget* root) -> QWidget* {
+        for (QObject* child : root->children()) {
+            auto* widget = qobject_cast<QWidget*>(child);
+            if (!widget || !widget->isVisible() || !widget->isEnabled()) {
+                continue;
+            }
+            if ((widget->focusPolicy() & Qt::TabFocus) != 0 &&
+                !widget->inherits("QScrollArea") && !widget->inherits("QFrame")) {
+                return widget;
+            }
+            if (auto* found = find_focusable(widget)) {
+                return found;
+            }
+        }
+        return nullptr;
+    };
+    if (auto* first = find_focusable(page)) {
+        first->setFocus(Qt::OtherFocusReason);
+    }
 }
 
 ConfigureDialog::~ConfigureDialog() = default;
 
-void ConfigureDialog::InstallRecursive(QWidget* root, QObject* filter) {
-    root->installEventFilter(filter);
-    const auto children = root->children();
-    for (QObject* child : children) {
-        if (auto* widget = qobject_cast<QWidget*>(child)) {
-            InstallRecursive(widget, filter);
-        }
+void ConfigureDialog::OcarinaSelectGroup(int row) {
+    const int count = ui->selectorList->count();
+    if (count <= 0) {
+        return;
     }
-}
-
-bool ConfigureDialog::eventFilter(QObject* watched, QEvent* event) {
-    if (event->type() != QEvent::KeyPress) {
-        return QDialog::eventFilter(watched, event);
-    }
-    auto* key = static_cast<QKeyEvent*>(event);
-    QWidget* const focus = focusWidget();
-
-    // The selector list keeps its native arrow-key navigation (it rebuilds the tab widget
-    // from the selection). Scroll areas, combo boxes, sliders and spin boxes also keep
-    // their native arrow-key behavior; Enter on a combo box opens its popup instead.
-    const bool native = qobject_cast<QAbstractScrollArea*>(focus) != nullptr ||
-                        qobject_cast<QComboBox*>(focus) != nullptr ||
-                        qobject_cast<QAbstractSlider*>(focus) != nullptr ||
-                        qobject_cast<QSpinBox*>(focus) != nullptr ||
-                        qobject_cast<QDoubleSpinBox*>(focus) != nullptr ||
-                        qobject_cast<QLineEdit*>(focus) != nullptr;
-    if (key->key() == Qt::Key_PageUp || key->key() == Qt::Key_PageDown) {
-        const int count = ui->selectorList->count();
-        if (count == 0) {
-            return true;
-        }
-        const int delta = key->key() == Qt::Key_PageUp ? -1 : 1;
-        // Cycle the left-hand selector; it rebuilds the tab widget to match.
-        const int target = (ui->selectorList->currentRow() + delta + count) % count;
-        Ocarina2Ui::SoundPlayer::Instance().Play(Ocarina2Ui::SoundPlayer::Effect::TabSwitch);
-        ui->selectorList->setCurrentRow(target);
-        return true;
-    }
-    if (native) {
-        if ((key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter ||
-             key->key() == Qt::Key_Space) &&
-            qobject_cast<QComboBox*>(focus) != nullptr) {
-            auto* combo = qobject_cast<QComboBox*>(focus);
-            combo->showPopup();
-            return true;
-        }
-        return false;
-    }
-    switch (key->key()) {
-        case Qt::Key_Up:
-        case Qt::Key_Left:
-            Ocarina2Ui::SoundPlayer::Instance().Play(Ocarina2Ui::SoundPlayer::Effect::Navigate);
-            focusNextPrevChild(false);
-            return true;
-        case Qt::Key_Down:
-        case Qt::Key_Right:
-            Ocarina2Ui::SoundPlayer::Instance().Play(Ocarina2Ui::SoundPlayer::Effect::Navigate);
-            focusNextPrevChild(true);
-            return true;
-        case Qt::Key_Return:
-        case Qt::Key_Enter:
-        case Qt::Key_Space:
-            Ocarina2Ui::SoundPlayer::Instance().Play(Ocarina2Ui::SoundPlayer::Effect::Confirm);
-            if (auto* button = qobject_cast<QAbstractButton*>(focus)) {
-                button->click();
-                return true;
-            }
-            return true;  // swallow any stray activate in this dialog
-        case Qt::Key_Escape:
-            Ocarina2Ui::SoundPlayer::Instance().Play(Ocarina2Ui::SoundPlayer::Effect::Back);
-            reject();
-            return true;
-        default:
-            break;
-    }
-    return QDialog::eventFilter(watched, event);
+    const int target = std::clamp(row, 0, count - 1);
+    ui->selectorList->setCurrentRow(target);
+    FocusFirstControl();
 }
 
 void ConfigureDialog::SetConfiguration() {}
@@ -421,5 +493,73 @@ void ConfigureDialog::UpdateVisibleTabs() {
     for (auto* const tab : tabs) {
         LOG_DEBUG(Frontend, "{}", tab->accessibleName().toStdString());
         ui->tabWidget->addTab(Ocarina2Ui::SettingsPage(tab), tab->accessibleName());
+    }
+
+    // The console layout: the breadcrumb names the visible group, and the chips above the
+    // pages mirror the pages the controller can reach.
+    if (crumb_label) {
+        crumb_label->setText(QStringLiteral("SETTINGS › ") + items[0]->text().toUpper());
+    }
+    RebuildChips();
+}
+
+void ConfigureDialog::RebuildChips() {
+    if (!chip_row) {
+        return;
+    }
+    auto* grid = qobject_cast<QGridLayout*>(chip_row->layout());
+    if (!grid) {
+        return;
+    }
+    // Track whether a chip holds focus, so LB/RB can't strand it on a dead widget.
+    const QWidget* old_focus = QApplication::focusWidget();
+    bool chip_had_focus = false;
+    while (QLayoutItem* item = grid->takeAt(0)) {
+        if (QWidget* widget = item->widget()) {
+            chip_had_focus = chip_had_focus || widget == old_focus;
+            widget->deleteLater();
+        }
+        delete item;
+    }
+
+    constexpr int kColumns = 5;
+    const int count = ui->tabWidget->count();
+    for (int i = 0; i < count; ++i) {
+        auto* chip = new QToolButton(chip_row);
+        chip->setObjectName(QStringLiteral("Ocarina2SettingsChip"));
+        chip->setText(ui->tabWidget->tabText(i).toUpper());
+        chip->setCheckable(true);
+        chip->setAutoExclusive(true);
+        chip->setChecked(i == ui->tabWidget->currentIndex());
+        chip->setFocusPolicy(Qt::StrongFocus);
+        chip->setCursor(Qt::PointingHandCursor);
+        chip->setProperty("chipIndex", i);
+        connect(chip, &QToolButton::clicked, this, [this, i] { ui->tabWidget->setCurrentIndex(i); });
+        if (controller_filter) {
+            chip->installEventFilter(controller_filter);
+        }
+        grid->addWidget(chip, i / kColumns, i % kColumns, Qt::AlignCenter);
+    }
+    chip_row->setVisible(count > 1);
+
+    if (chip_had_focus && count > 0) {
+        const int current = std::clamp(ui->tabWidget->currentIndex(), 0, count - 1);
+        for (QToolButton* candidate : chip_row->findChildren<QToolButton*>()) {
+            if (candidate->property("chipIndex").toInt() == current) {
+                candidate->setFocus(Qt::OtherFocusReason);
+                break;
+            }
+        }
+    }
+}
+
+void ConfigureDialog::SyncChips() {
+    if (!chip_row) {
+        return;
+    }
+    const int current = ui->tabWidget->currentIndex();
+    const auto chips = chip_row->findChildren<QToolButton*>();
+    for (QToolButton* chip : chips) {
+        chip->setChecked(chip->property("chipIndex").toInt() == current);
     }
 }
